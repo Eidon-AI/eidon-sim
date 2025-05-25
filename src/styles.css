@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Light mode override */
+html[data-theme='light'] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(250 250 250 / var(--tw-bg-opacity));
+  color: #222;
+}
+
+.btn{
+  @apply px-3 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-sm;
+}

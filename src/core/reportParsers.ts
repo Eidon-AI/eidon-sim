@@ -1,0 +1,93 @@
+import { quat, vec3 } from 'gl-matrix';
+import { DeviceKind, DeviceState } from './types';
+import { HUM_LEN, RAD_LEN, HAND_LEN } from './constants';
+
+/* helper to read little-endian u16 and map to −1…+1 float */
+function u16ToFloat(dv: DataView, byte: number) {
+  const raw = dv.getUint16(byte, true);
+  return (raw / 32767) - 1;          // assume firmware already unit-norm
+}
+
+export function parseTracker(state: DeviceState, view: DataView) {
+  // === Quaternion ===
+  const q: quat = [
+    u16ToFloat(view, 0), // i
+    u16ToFloat(view, 2), // j
+    u16ToFloat(view, 4), // k
+    u16ToFloat(view, 6)  // real
+  ];
+  state.quat = q;
+
+  // === Buttons ===
+  const btn = view.getUint8(8);
+  const side  = (btn & 0b00000001) ? 'left' : 'right';
+  const level = (btn & 0b00000010) ? 'upper' : 'lower';
+  state.arm = { side, level };
+
+  // === Derived unit vectors ===
+  const up   = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
+  const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y-fwd
+  const fwd  = [fwdZ[0], fwdZ[2], fwdZ[1]] as vec3;            // swap Y/Z
+
+  state.up  = up;
+  state.fwd = fwd;
+
+  // === Chain positions ===
+  const shoulder: vec3 = side === 'left'
+    ? [-0.25, 0.05,  0.15]
+    : [-0.25, 0.05, -0.15];
+
+  const start = (level === 'upper')
+    ? shoulder
+    : state.chainStart;        // will be filled after upper tracker parsed
+
+  const len = level === 'upper' ? HUM_LEN
+           : level === 'lower' ? RAD_LEN
+           : HAND_LEN;
+
+  const end = vec3.scaleAndAdd(vec3.create(), start, fwd, len);
+
+  state.chainStart = start;
+  state.chainEnd   = end;
+}
+
+export function parseGlove(state: DeviceState, view: DataView) {
+  /* --------- button flags (16-bit) --------- */
+  const buttons16   = view.getUint16(0, true);
+  const configByte  = view.getUint8(1);          // 2nd byte = side/level
+  const side        = (configByte & 0b00000001) ? 'left' : 'right';
+  state.arm = { side, level: 'hand' };
+
+  /* --------- finger angles (16 × u8) -------- */
+  const fingers: number[] = [];
+  for (let i = 0; i < 16; i++) fingers.push(view.getUint8(2 + i));
+  state.finger = fingers;
+
+  /* --------- quaternion (bytes 18-25) ------- */
+  const base = 2 + 16;                           // 18
+  const q: quat = [
+    u16ToFloat(view, base + 0),  // i
+    u16ToFloat(view, base + 2),  // j
+    u16ToFloat(view, base + 4),  // k
+    u16ToFloat(view, base + 6)   // real
+  ];
+  state.quat = q;
+
+  /* --------- derived vectors & chain pos ---- */
+  const up   = vec3.transformQuat(vec3.create(), [0,0,1], q);
+  const fwdZ = vec3.transformQuat(vec3.create(), [0,1,0], q);
+  const fwd  = [fwdZ[0], fwdZ[2], fwdZ[1]] as vec3;   // swap Y/Z
+
+  state.up  = up;
+  state.fwd = fwd;
+
+  const shoulder: vec3 = side === 'left'
+      ? [-0.25, 0.05,  0.15]
+      : [-0.25, 0.05, -0.15];
+
+  const start = state.chainStart || shoulder;          // if trackers missing
+  const end   = vec3.scaleAndAdd(vec3.create(), start, fwd, HAND_LEN);
+
+  state.chainStart = start;
+  state.chainEnd   = end;
+}

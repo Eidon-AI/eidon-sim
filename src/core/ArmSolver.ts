@@ -1,0 +1,64 @@
+import { quat } from 'gl-matrix';
+import { DeviceStore } from './DeviceStore';
+import { eulerZYX, eulerYZX, twistAroundX } from './mathUtils';
+
+export interface SevenAngles {
+  shYaw: number; shPitch: number; shRoll: number;
+  elFlex: number; faRoll: number;
+  wrPitch: number; wrYaw: number;
+}
+
+export class ArmSolver extends EventTarget {
+  private left: SevenAngles | null = null;
+  private right: SevenAngles | null = null;
+
+  constructor(private store: DeviceStore) {
+    super();
+    store.addEventListener('update', () => this.update());
+  }
+
+  getAngles(side: 'left' | 'right') {
+    return side === 'left' ? this.left : this.right;
+  }
+
+  /* -------- core update loop (stub) ---------------- */
+  private update() {
+    this.left  = this.solveSide('left');
+    this.right = this.solveSide('right');
+    this.dispatchEvent(new Event('angles'));
+  }
+
+  private solveSide(side: 'left' | 'right'): SevenAngles | null {
+    const up   = this.store.getBy(side,'upper');
+    const low  = this.store.getBy(side,'lower');
+    if(!up || !low) return null;
+  
+    const handDev = this.store.getBy(side,'hand');         // glove optional
+  
+    const Q_TU = up.quat;
+    const Q_TF = low.quat;
+  
+    /* ---------- shoulder ---------- */
+    const [yaw, pitch, roll] = eulerZYX(Q_TU).map(r=>r*180/Math.PI);
+  
+    /* ---------- elbow hinge + fore-arm roll ---------- */
+    const Q_E = quat.multiply(quat.create(), quat.invert(quat.create(), Q_TU), Q_TF);
+    const [flex] = eulerYZX(Q_E);              // first axis = flex (rad)
+    const flexDeg = flex*180/Math.PI;
+    const faRoll  = twistAroundX(Q_E)*180/Math.PI;
+  
+    /* ---------- wrist ---------- */
+    let wrPitch = 0, wrYaw = 0;
+    if(handDev){
+      const Q_TH = handDev.quat;
+      const Q_W  = quat.multiply(quat.create(), quat.invert(quat.create(), Q_TF), Q_TH);
+      const [wYaw, wPitch] = eulerZYX(Q_W);
+      wrYaw   = wYaw  *180/Math.PI;
+      wrPitch = wPitch*180/Math.PI;
+    }
+  
+    return { shYaw:yaw, shPitch:pitch, shRoll:roll,
+             elFlex:flexDeg, faRoll,
+             wrPitch, wrYaw };
+  }
+}
