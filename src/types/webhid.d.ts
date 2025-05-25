@@ -7,6 +7,8 @@ interface HIDDevice {
   close(): Promise<void>;
   sendReport(reportId: number, data: BufferSource): Promise<void>;
   addEventListener(type: string, listener: EventListener): void;
+  sendFeatureReport(reportId: number, data: BufferSource): Promise<void>;
+  receiveFeatureReport(reportId: number): Promise<DataView>;
 }
 
 interface HIDInputReportEvent extends Event {

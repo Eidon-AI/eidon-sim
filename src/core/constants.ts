@@ -13,7 +13,7 @@ export const EIDON_TRACKER_PID = 0x0002;   // tracker (IMU only)
 export const CALIBRATE_OUT_REPORT_ID = 0x01;
 export const CALIBRATE_PAYLOAD       = Uint8Array.of(0x01, 0x01);
 
-export const COLOR_FEATURE_REPORT_ID = 0x02;   // 3-byte RGB
+export const COLOR_FEATURE_REPORT_ID = 0x01;   // 3-byte RGB
 
 // segment lengths (metres) – user-editable later
 export const HUM_LEN  = 0.30;   // humerus

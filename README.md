@@ -109,7 +109,7 @@ A full derivation will live in `/docs/kinematics.md` (TODO).
 | # | Goal | Status |
 |---|------|--------|
 | **M1** | Vite + TS scaffold (this commit) | ✅ |
-| **M2** | Complete `DeviceStore.parseInto()` math, render vector lines | ☐ |
+| **M2** | Complete `DeviceStore.parseInto()` math, render vector lines | ✅ |
 | **M3** | Load GLTF arm, apply seven angles, show in canvas | ☐ |
 | **M4** | Glove finger decoding & UI bars | ☐ |
 | **M5** | Per-device calibrate + RGB feature | ☐ |

@@ -1,128 +1,98 @@
-# Eidon Sim · HID Protocol Specification
+# Eidon Sim – HID Protocol Specification (v0.2)
 
-This document is the authoritative reference for USB HID traffic between the Eidon Sim web‑app and two device classes:
+## 1 Overview
+Eidon devices use USB HID with VID `0xE1D0`.  
+There are two product IDs:  
 
-* **Glove** ( PID 0x0001 ) — IMU + 16‑finger sensors
-* **Tracker** ( PID 0x0002 ) — IMU only
+| PID | Device | Reports |
+|-----|--------|---------|
+| `0x0002` | **Tracker** (IMU only) | Report ID 1 (10 B) |
+| `0x0001` | **Glove** (IMU + 16 finger angles) | Report ID 1 (26 B) |
 
-All devices share Vendor ID **0xE1D0**.
+All devices share:
+* **Output report ID 1** – `01 01` → enter calibration mode  
+* **Feature report ID 1** – 3-byte RGB (persisted on device)
 
 ---
 
-## 1  Descriptors (v1.0)
+## 2 Tracker (PID 0x0002)
 
-### 1.1  Top‑level summary
+| Byte(s) | Field | Notes |
+|---------|-------|-------|
+| 0-1 | **q.i**  (u16 LE) |
+| 2-3 | **q.j**  (u16 LE) |
+| 4-5 | **q.k**  (u16 LE) |
+| 6-7 | **q.r**  (u16 LE) |
+| 8   | **Button byte 0**<br>bit 0 = side (0 L / 1 R)<br>bit 1 = level (0 upper / 1 lower) |
+| 9   | **Padding** |
 
-| Field                | Glove                             | Tracker |
-| -------------------- | --------------------------------- | ------- |
-| **USB class**        | 0x03 (HID)                        | 0x03    |
-| **Max packet**       | 64 B                              | 64 B    |
-| **Report IDs**       | 0x01 (IN + OUT)  • 0x02 (Feature) | same    |
-| **Polling interval** | 1 ms                              | 1 ms    |
+Total 10 bytes.
 
-The app filters devices with:
-
-```js
-navigator.hid.requestDevice({
-  filters:[
-    { vendorId:0xE1D0, productId:0x0001 },
-    { vendorId:0xE1D0, productId:0x0002 }
-  ]
-});
+Quaternion components map u16 → float:
 ```
-
-### 1.2  Report ID 0x01 — **Quaternion + Data** (IN)
-
-| Offset | Bytes | Glove field         | Tracker field | Notes                                                        |
-| ------ | ----- | ------------------- | ------------- | ------------------------------------------------------------ |
-| 0      | 2     | q<sub>i</sub>       | q<sub>i</sub> | little‑endian u16                                            |
-| 2      | 2     | q<sub>j</sub>       | q<sub>j</sub> |                                                              |
-| 4      | 2     | q<sub>k</sub>       | q<sub>k</sub> |                                                              |
-| 6      | 2     | q<sub>w</sub>       | q<sub>w</sub> |                                                              |
-| **8**  | **2** | 16‑bit button flags | 2‑bit flags   | bit 0 = side (0 L / 1 R) ; bit 1 = level (0 upper / 1 lower) |
-| 10     | 16    | **Finger\[0‑15]**   | —             | 8‑bit angle each (0 flat … 255 bent)                         |
-| 26–63  | —     | reserved (0)        | —             | packets always 64 B, unused = 0                              |
-
-Quaternion decode:
-
-```ts
-const u16 = view.getUint16(off, true);
-const f   = (u16 / 32767) - 1.0; // range [-1,1]
-```
-
-### 1.3  Report ID 0x01 — **Calibrate** (OUT)
-
-Payload `01 01` starts a static calibration on device flash. Timing:
-
-1. Host sends report.
-2. Device flashes LED for 3 s while averaging quats.
-3. Device resumes normal streaming.
-
-The app issues this on **Calibrate All** and on per‑device ↻ buttons.
-
-### 1.4  Report ID 0x02 — **RGB Colour** (Feature)
-
-3‑byte payload `[R, G, B]` persists through power cycle; value appears as LED strip colour.
-
-* **GET** feature → current colour.
-* **SET** feature → update & store to EEPROM.
-
-Example:
-
-```js
-// read
-const data = await device.receiveFeatureReport(0x02, 3);
-// write teal
-await device.sendFeatureReport(0x02, Uint8Array.of(0x00,0xff,0xff));
+float = (raw / 32767) − 1
 ```
 
 ---
 
-## 2  State Machine
+## 3 Glove (PID 0x0001)
 
-```mermaid
-stateDiagram-v2
-    [*] --> Streaming
-    Streaming --> Calibrating : OUT 0x01 "01 01"
-    Calibrating --> Streaming : after 3 s
-```
+| Byte(s) | Field | Notes |
+|---------|-------|-------|
+| 0-1 | **Button byte 0-1** (16 bits)<br>Lower byte is general buttons; **upper byte holds config bits** |
+| 2-17 | **Finger angles** (16 × u8) 0–255 |
+| 18-19 | **q.i** (u16) |
+| 20-21 | **q.j** |
+| 22-23 | **q.k** |
+| 24-25 | **q.r** |
+| 26-… | none (report length 26) |
 
-If the HID interface stalls, the device auto‑reboots after 5 s.
+Config bits (byte 1):
 
----
-
-## 3  Error Handling / Edge Cases
-
-| Condition                   | Device behaviour            | Host expectation                          |
-| --------------------------- | --------------------------- | ----------------------------------------- |
-| Descriptor version mismatch | sets bit 15 in button flags | warn user, allow continue (math may fail) |
-| Quaternion norm ≠ 1 ±0.05   | device renormalises         | host still renormalises as safety         |
-| Finger sensor offline       | sends 0xFF for that byte    | render as undefined (grey bar)            |
+* bit 0 — side (0 L / 1 R)  
+* bit 1 — tracker-level equivalent (0 upper / 1 lower)  
+  *Glove uses `'hand'` level in software but we still read bit 1 for completeness.*
 
 ---
 
-## 4  Descriptor Hex Listing
+## 4 Calibration Output (same for both)
 
-### 4.1  Glove
-
-```text
-05 01 09 05 a1 01 85 01 ... (full 94 bytes, see firmware)
-```
-
-### 4.2  Tracker
-
-```text
-05 20 09 80 a1 01 85 01 ... (full 62 bytes)
-```
+* **Report ID** 1  
+* Payload `01 01`  
+* Device zeros its orientation filter and (optionally) saves offsets.
 
 ---
 
-## 5  Revision History
+## 5 Color Feature Report
 
-| Rev | Date       | Notes                                 |
-| --- | ---------- | ------------------------------------- |
-| 1.0 | 2025‑05‑25 | Initial frozen spec for Eidon Sim 0.2 |
+| Report ID | Length | Payload | Meaning |
+|-----------|--------|---------|---------|
+| **0x01** | 3 B | `R G B` (0–255) | Saved LED / UI color |
+
+* Fetch: `device.receiveFeatureReport(0x01)`  
+* Set:   `device.sendFeatureReport(0x01, Uint8Array.of(r,g,b))`
 
 ---
 
-*Last updated : 2025‑05‑25*
+## 6 USB Descriptors (excerpt)
+
+### 6.1 Tracker
+
+* Report ID 1 descriptor matches **10-byte layout** above.  
+* Vendor page `0xFF00` output & feature items share report ID 1.
+
+### 6.2 Glove
+
+* Report ID 1 descriptor: 16 bits of buttons, 16 × 8-bit usages, quaternion (Sensor page).  
+* Vendor output & feature items also under report ID 1.
+
+Full raw hex descriptors are in `docs/hid-raw-descriptors/…`.
+
+---
+
+## 7 Version history
+
+| v | Date | Notes |
+|---|------|-------|
+| 0.2 | 2025-05-25 | Glove byte map fixed; feature report ID 1 confirmed. |
+| 0.1 | 2025-05-20 | Initial draft for tracker only. |

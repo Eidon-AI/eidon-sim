@@ -5,6 +5,7 @@ import { HidManager }   from '../core/HidManager';
 import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
 import { mountAnglePanel } from './components/AnglePanel';
+import { mountDeviceList } from './components/DeviceList';
 import { initScene }    from './scene/sceneManager';
 
 export function mount(root: HTMLElement) {
@@ -77,7 +78,12 @@ export function mount(root: HTMLElement) {
   mountAnglePanel(sidebar, solver);
 
   /* ------------------------------------------------------------
-   * 7. Three.js scene
+   * 7. Device list
+   * ---------------------------------------------------------- */
+  mountDeviceList(sidebar, hid, store);
+
+  /* ------------------------------------------------------------
+   * 8. Three.js scene
    * ---------------------------------------------------------- */
   initScene(canvas, store);
 }

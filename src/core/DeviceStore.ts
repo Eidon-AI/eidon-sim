@@ -3,6 +3,17 @@ import { parseTracker, parseGlove } from './reportParsers';
 import { DeviceState } from './types';
 
 export class DeviceStore extends EventTarget {
+  constructor(){
+    super();
+
+    document.addEventListener('color', e=>{
+      const {id, hex} = (e as CustomEvent<{id:string;hex:string}>).detail;
+      const s = this.map.get(id); if(!s) return;
+      s.color = hex;
+      this.dispatchEvent(new CustomEvent('update', { detail:s }));
+    });
+  }
+
   private map = new Map<string, DeviceState>();
 
   /** Subscribe to HidManager.report */
