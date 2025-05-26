@@ -2,8 +2,14 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { DeviceStore } from '../../core/DeviceStore';
 import { VectorArm } from './vectorArm';
+import { SkeletalRig } from './skeletalRig';
+import { ArmSolver } from '../../core/ArmSolver';
 
-export function initScene(canvas: HTMLCanvasElement, store: DeviceStore) {
+export function initScene(
+  canvas: HTMLCanvasElement,
+  store: DeviceStore,
+  solver: ArmSolver
+) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
   renderer.setSize(window.innerWidth - 320, window.innerHeight); // sidebar=320
   const scene = new THREE.Scene();
@@ -17,6 +23,11 @@ export function initScene(canvas: HTMLCanvasElement, store: DeviceStore) {
 
   new VectorArm(scene, store, 'left');
   new VectorArm(scene, store, 'right');
+
+  // new SkeletalArm(scene, solver, 'left');
+  // new SkeletalArm(scene, solver, 'right');
+
+  new SkeletalRig(scene, solver);
 
   window.addEventListener('resize', ()=>{
     renderer.setSize(window.innerWidth-320, window.innerHeight);

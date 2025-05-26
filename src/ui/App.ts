@@ -1,4 +1,4 @@
-console.log('App.ts loaded');      // top-most line
+console.log('Eidon Embodied AI Simulator loaded');
 
 // src/ui/App.ts
 import { HidManager }   from '../core/HidManager';
@@ -22,9 +22,6 @@ export function mount(root: HTMLElement) {
     </div>
     <canvas id="gl" class="flex-1"></canvas>
   `;
-
-  console.log('Sidebar HTML injected',
-    !!document.getElementById('btnConnect'));
 
   /* ------------------------------------------------------------
    * 2. Grab the freshly-injected elements
@@ -53,7 +50,6 @@ export function mount(root: HTMLElement) {
    * 4. Buttons
    * ---------------------------------------------------------- */
   btnConnect.addEventListener('click', async () => {
-    console.log('Connect clicked');
     try {
       await hid.connect();
     } catch (err) {
@@ -85,5 +81,5 @@ export function mount(root: HTMLElement) {
   /* ------------------------------------------------------------
    * 8. Three.js scene
    * ---------------------------------------------------------- */
-  initScene(canvas, store);
+  initScene(canvas, store, solver);
 }
