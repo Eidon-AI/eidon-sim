@@ -26,7 +26,7 @@ export class SkeletalRig {
   /* ----------------- initialise once ---------------- */
   private init(root: THREE.Group) {
     // Place the full body once
-    root.position.set(-0.25, 0, 0);
+    root.position.set(0, 0, 0);
     this.scene.add(root);
 
     this.bones.left = {

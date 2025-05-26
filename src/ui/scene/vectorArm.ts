@@ -35,20 +35,38 @@ export class VectorArm {
 
     /* ---- shoulder anchor ---- */
     const shoulder: vec3 = this.side === 'left'
-      ? [-0.25, 0.05,  0.15]
-      : [-0.25, 0.05, -0.15];
+      ? [0.3, 0,  0]
+      : [-0.3, 0, 0];
+
+    // rotation that spins 90° about +Y
+    const rightYaw90Array = new Float32Array([
+      0, 0, 1,
+      0, 1, 0,
+      -1, 0, 0
+    ]);
+    const leftYaw90Array = new Float32Array([
+      0, 0, -1,
+      0, 1, 0,
+      1, 0, 0
+    ]);
+
+    /* helper to maybe rotate fwd for right arm */
+    const rotFwd = (v: vec3) =>
+      this.side === 'right'
+        ? vec3.transformMat3(vec3.create(), v, rightYaw90Array)
+        : vec3.transformMat3(vec3.create(), v, leftYaw90Array);
 
     /* ---- compute chain step-by-step ---- */
     const upperEnd = up
-      ? vec3.scaleAndAdd(vec3.create(), shoulder, up.fwd, HUM_LEN)
+      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(up.fwd), HUM_LEN)
       : vec3.clone(shoulder);
 
     const lowerEnd = low
-      ? vec3.scaleAndAdd(vec3.create(), upperEnd, low.fwd, RAD_LEN)
+      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(low.fwd), RAD_LEN)
       : vec3.clone(upperEnd);
 
     const handEnd  = glove
-      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, glove.fwd, HAND_LEN)
+      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(glove.fwd), HAND_LEN)
       : vec3.clone(lowerEnd);
 
     /* ---- update three line segments ---- */

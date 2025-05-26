@@ -27,15 +27,15 @@ export function parseTracker(state: DeviceState, view: DataView) {
   // === Derived unit vectors ===
   const up   = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
   const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y-fwd
-  const fwd  = [fwdZ[0], fwdZ[2], fwdZ[1]] as vec3;            // swap Y/Z
+  const fwd  = [-fwdZ[0], -fwdZ[2], fwdZ[1]] as vec3;            // swap Y/Z
 
   state.up  = up;
   state.fwd = fwd;
 
   // === Chain positions ===
   const shoulder: vec3 = side === 'left'
-    ? [-0.25, 0.05,  0.15]
-    : [-0.25, 0.05, -0.15];
+    ? [-0.25, 0.05,  3]
+    : [-0.25, 0.05, -3];
 
   const start = (level === 'upper')
     ? shoulder
@@ -76,14 +76,14 @@ export function parseGlove(state: DeviceState, view: DataView) {
   /* --------- derived vectors & chain pos ---- */
   const up   = vec3.transformQuat(vec3.create(), [0,0,1], q);
   const fwdZ = vec3.transformQuat(vec3.create(), [0,1,0], q);
-  const fwd  = [fwdZ[0], fwdZ[2], fwdZ[1]] as vec3;   // swap Y/Z
+  const fwd = [-fwdZ[0], -fwdZ[2], fwdZ[1]] as vec3;   // swap Y/Z and invert vertical component
 
   state.up  = up;
   state.fwd = fwd;
 
   const shoulder: vec3 = side === 'left'
-      ? [-0.25, 0.05,  0.15]
-      : [-0.25, 0.05, -0.15];
+      ? [-0.25, 0.05,  3]
+      : [-0.25, 0.05, -3];
 
   const start = state.chainStart || shoulder;          // if trackers missing
   const end   = vec3.scaleAndAdd(vec3.create(), start, fwd, HAND_LEN);
