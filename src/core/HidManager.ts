@@ -7,11 +7,19 @@ import {
   COLOR_FEATURE_REPORT_ID
 } from './constants';
 
+export type HidId = string;
+
 /* helper to convert [r,g,b] → "#rrggbb" */
 function rgbHex(rgb: [number, number, number]) {
   return '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
 }
 export class HidManager extends EventTarget {
+  /* ---------------- constructor ---------------- */
+  constructor() {
+    super();
+    this.autoReconnect();
+  }
+
   private devices = new Map<string, HIDDevice>();
 
   async connect(): Promise<void> {
@@ -24,9 +32,33 @@ export class HidManager extends EventTarget {
     ports.forEach(d => this.addDevice(d));
   }
 
+  /* disconnectAll calls close but keep permissions */
   disconnectAll() {
     this.devices.forEach(d => d.close());
     this.devices.clear();
+  }
+
+  /** Disconnect + un-pair a single device */
+  async unpair(id: HidId) {
+    const dev = this.devices.get(id);
+    if (!dev) return;
+    await dev.close();
+    // experimental: only some Chrome versions
+    if ('forget' in dev) {
+      try { await (dev as any).forget(); }
+      catch (e) { console.warn('forget() failed', e); }
+    }
+    this.devices.delete(id);
+    document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id } }));
+  }
+
+  /* ---------------- public API ---------------- */
+  async autoReconnect() {
+    const granted = await navigator.hid.getDevices();
+    for (const dev of granted) {
+      await dev.open();
+      this.addDevice(dev);
+    }
   }
 
   sendCalibrate(deviceId: string | null = null) {

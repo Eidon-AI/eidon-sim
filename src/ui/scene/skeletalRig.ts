@@ -61,13 +61,21 @@ export class SkeletalRig {
     const b = this.bones[side];
     const d2r = Math.PI / 180;
 
-    // Shoulder (yaw Z, pitch Y, roll X)
-    b.shoulder.rotation.set(a.shRoll*d2r, a.shPitch*d2r, a.shYaw*d2r);
+    /* -- Shoulder stays the same (sign-flipped Y & Z) -- */
+    b.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -a.shYaw*d2r);
 
-    // Elbow hinge
-    b.elbow.rotation.set(a.elFlex*d2r, 0, 0);
+    /* -- Elbow hinge (still +flex) -- */
+    if (side === 'left') {
+      b.elbow.rotation.set(0, 0,  a.elFlex * d2r);   // +flex bends upward
+    } else {
+      b.elbow.rotation.set(0, 0, -a.elFlex * d2r);   // mirror for right
+    }
 
-    // Wrist (pitch Y, yaw Z) + optional fore-arm roll in Z
-    b.wrist.rotation.set(0, a.wrPitch*d2r, (a.wrYaw + a.faRoll)*d2r);
+    /* -- Wrist: pitch needs the same Y flip, yaw flip on Z -- */
+    b.wrist.rotation.set(
+      -a.wrPitch * d2r,
+      -a.faRoll * d2r,
+      -a.wrYaw * d2r
+    );
   }
 }

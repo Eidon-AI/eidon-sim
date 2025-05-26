@@ -3,6 +3,7 @@ import { HidManager }  from '../../core/HidManager';
 import { DeviceStore } from '../../core/DeviceStore';
 
 export function renderCard(state: DeviceState, hid: HidManager, store: DeviceStore) {
+
   const el = document.createElement('div');
   el.className = 'flex items-center gap-2 border-b border-neutral-700 py-1';
 
@@ -14,6 +15,7 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
 
   const label = document.createElement('span');
   label.textContent = `${state.kind} ${state.arm?.side ?? ''} ${state.arm?.level ?? ''}`;
+  label.className = 'flex-1';
   el.appendChild(label);
 
   const btnCal = document.createElement('button');
@@ -37,12 +39,18 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
     store.dispatchEvent(new CustomEvent('update', { detail: state }));
   };
 
-  btnCal.onclick = () => hid.sendCalibrate(state.id);         // per-device later
-  btnX  .onclick = () => { hid['devices'].get(state.id)?.close(); store['map'].delete(state.id); el.remove(); };
+  btnCal.onclick = () => hid.sendCalibrate(state.id);
+  btnX  .onclick = () => { hid.unpair(state.id); store['map'].delete(state.id); el.remove(); };
 
   document.addEventListener('deviceColor', e =>{
     const { id, hex } = (e as CustomEvent<any>).detail;
     if(id === state.id) colorBox.value = hex;
+  });
+
+  document.addEventListener('deviceRemoved', e => {
+    if ((e as CustomEvent<{id:string}>).detail.id === state.id) {
+      el.remove();
+    }
   });
 
   return el;

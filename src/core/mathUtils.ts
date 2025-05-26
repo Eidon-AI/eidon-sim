@@ -1,4 +1,9 @@
-import { quat, mat3 } from 'gl-matrix';
+import { quat, mat3, vec3 } from 'gl-matrix';
+
+/* Safe acos with clamp */
+function safeAcos(x: number) {
+  return Math.acos(Math.min(1, Math.max(-1, x)));
+}
 
 /* Z-Y-X Euler (yaw-pitch-roll) --------------------------------------- */
 export function eulerZYX(q: quat): [number, number, number] {
@@ -38,4 +43,31 @@ export function twistAroundX(q: quat): number {
   const s = Math.sqrt(1 - q[3] * q[3]);
   const axisX = s < 1e-6 ? 1 : q[0] / s;
   return angle * axisX;
+}
+
+/** Elbow flex (deg) given upper & lower forward vectors */
+export function elbowFlexDeg(fwdUpper: vec3, fwdLower: vec3): number {
+  const u = vec3.normalize(vec3.create(), fwdUpper);
+  const l = vec3.normalize(vec3.create(), fwdLower);
+  const cos = vec3.dot(u, l);
+  return safeAcos(cos) * 180 / Math.PI;
+}
+
+/** Extract twist (deg) of qParent⁻¹·qChild about parent.forward */
+export function rollAroundForward(
+  qParent: quat,
+  qChild: quat,
+  fwdParent: vec3
+): number {
+  // relative rotation child in parent space
+  const qRel = quat.multiply(quat.create(), quat.invert(quat.create(), qParent), qChild);
+
+  // project rotation axis onto forward vector
+  const angle = 2 * Math.acos(qRel[3]);
+  if (angle < 1e-6) return 0;
+
+  const s = Math.sqrt(1 - qRel[3] * qRel[3]);
+  const axis = [qRel[0] / s, qRel[1] / s, qRel[2] / s] as vec3;
+  const sign = vec3.dot(axis, fwdParent) >= 0 ? 1 : -1;
+  return sign * angle * 180 / Math.PI;
 }

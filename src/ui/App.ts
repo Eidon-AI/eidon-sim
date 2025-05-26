@@ -15,7 +15,7 @@ export function mount(root: HTMLElement) {
   root.innerHTML = `
     <div class="sidebar flex flex-col w-80 border-r border-neutral-700 p-4 gap-2">
       <button id="btnConnect"    class="btn">Connect HID</button>
-      <button id="btnDisconnect" class="btn">Disconnect</button>
+      <button id="btnDisconnect" class="btn">Disconnect All</button>
       <button id="btnCal"        class="btn">Calibrate All</button>
 
       <pre id="log" class="flex-1 overflow-auto text-xs mt-2 bg-neutral-900 p-2 rounded"></pre>

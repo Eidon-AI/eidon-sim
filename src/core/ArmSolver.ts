@@ -1,6 +1,6 @@
 import { quat } from 'gl-matrix';
 import { DeviceStore } from './DeviceStore';
-import { eulerZYX, eulerYZX, twistAroundX } from './mathUtils';
+import { eulerZYX, twistAroundX, elbowFlexDeg, rollAroundForward } from './mathUtils';
 import { JOINT_LIMITS, ANGLE_ALPHA } from './constants';
 
 function clamp(name: keyof SevenAngles, v: number): number {
@@ -68,12 +68,18 @@ export class ArmSolver extends EventTarget {
   
     /* ---------- shoulder ---------- */
     const [yaw, pitch, roll] = eulerZYX(Q_TU).map(r=>r*180/Math.PI);
+
+    /* ---------- elbow flex via vector angle ---------- */
+    const flexDeg = elbowFlexDeg(up.fwd, low.fwd);
+
+    /* ---------- fore-arm roll (unchanged) ------------ */
+    const faRoll = rollAroundForward(up.quat, low.quat, up.fwd);
   
     /* ---------- elbow hinge + fore-arm roll ---------- */
-    const Q_E = quat.multiply(quat.create(), quat.invert(quat.create(), Q_TU), Q_TF);
-    const [flex] = eulerYZX(Q_E);              // first axis = flex (rad)
-    const flexDeg = flex*180/Math.PI;
-    const faRoll  = twistAroundX(Q_E)*180/Math.PI;
+    // const Q_E = quat.multiply(quat.create(), quat.invert(quat.create(), Q_TU), Q_TF);
+    // const [flex] = eulerYZX(Q_E);              // first axis = flex (rad)
+    // const flexDeg = flex*180/Math.PI;
+    // const faRoll  = twistAroundX(Q_E)*180/Math.PI;
   
     /* ---------- wrist ---------- */
     let wrPitch = 0, wrYaw = 0;
