@@ -19,3 +19,17 @@ export const COLOR_FEATURE_REPORT_ID = 0x01;   // 3-byte RGB
 export const HUM_LEN  = 0.30;   // humerus
 export const RAD_LEN  = 0.26;   // radius/ulna
 export const HAND_LEN = 0.10;   // hand
+
+/* Joint limits (deg) – simple, anatomically reasonable */
+export const JOINT_LIMITS = {
+  shYaw:   [-180, 180],
+  shPitch: [-120,  90],
+  shRoll:  [-90,   90],
+  elFlex:  [   0, 135],
+  faRoll:  [-180, 180],
+  wrPitch: [-80,   80],
+  wrYaw:   [-80,   80]
+};
+
+/* Exponential moving-average smoothing factor (0–1) */
+export const ANGLE_ALPHA = 0.2;          // 0.2 ⇒ ~5-frame memory

@@ -1,6 +1,16 @@
 import { quat } from 'gl-matrix';
 import { DeviceStore } from './DeviceStore';
 import { eulerZYX, eulerYZX, twistAroundX } from './mathUtils';
+import { JOINT_LIMITS, ANGLE_ALPHA } from './constants';
+
+function clamp(name: keyof SevenAngles, v: number): number {
+  const [min, max] = (JOINT_LIMITS as any)[name];
+  return Math.max(min, Math.min(max, v));
+}
+
+function lerp(a: number, b: number, alpha: number) {
+  return a + (b - a) * alpha;
+}
 
 export interface SevenAngles {
   shYaw: number; shPitch: number; shRoll: number;
@@ -12,20 +22,38 @@ export class ArmSolver extends EventTarget {
   private left: SevenAngles | null = null;
   private right: SevenAngles | null = null;
 
+  private smoothL: SevenAngles | null = null;
+  private smoothR: SevenAngles | null = null;
+
   constructor(private store: DeviceStore) {
     super();
     store.addEventListener('update', () => this.update());
   }
 
   getAngles(side: 'left' | 'right') {
-    return side === 'left' ? this.left : this.right;
+    return side === 'left' ? this.smoothL : this.smoothR;
   }
 
   /* -------- core update loop (stub) ---------------- */
   private update() {
-    this.left  = this.solveSide('left');
-    this.right = this.solveSide('right');
+    const rawL  = this.solveSide('left' );
+    const rawR  = this.solveSide('right');
+  
+    if (rawL) this.smoothL = this.filter(rawL, this.smoothL);
+    if (rawR) this.smoothR = this.filter(rawR, this.smoothR);
+  
     this.dispatchEvent(new Event('angles'));
+  }
+
+  private filter(newA: SevenAngles, prev: SevenAngles | null): SevenAngles {
+    const out: SevenAngles = { ...newA } as any;
+    for (const k of Object.keys(newA) as (keyof SevenAngles)[]) {
+      // clamp
+      out[k] = clamp(k, newA[k]);
+      // smooth
+      if (prev) out[k] = lerp(prev[k], out[k], ANGLE_ALPHA);
+    }
+    return out;
   }
 
   private solveSide(side: 'left' | 'right'): SevenAngles | null {

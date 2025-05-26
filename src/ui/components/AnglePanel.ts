@@ -7,7 +7,9 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
    * ---------------------------------------------------------- */
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
-    <h3 class="mt-4 mb-1 font-medium">Actuator Angles (deg)</h3>
+    <h3 class="mt-4 mb-1 font-medium">
+      Actuator Angles (deg, smoothed)
+    </h3>
 
     <table class="text-xs w-full border-separate border-spacing-x-2" id="tblAngles">
       <thead>
