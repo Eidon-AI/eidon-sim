@@ -6,11 +6,13 @@ export class DeviceStore extends EventTarget {
   constructor(){
     super();
 
-    document.addEventListener('color', e=>{
-      const {id, hex} = (e as CustomEvent<{id:string;hex:string}>).detail;
-      const s = this.map.get(id); if(!s) return;
+    document.addEventListener('deviceColor', e => {
+      const { id, hex } =
+        (e as CustomEvent<{ id: string; hex: string }>).detail;
+      const s = this.map.get(id);
+      if (!s) return;
       s.color = hex;
-      this.dispatchEvent(new CustomEvent('update', { detail:s }));
+      this.dispatchEvent(new CustomEvent('update', { detail: s }));
     });
   }
 

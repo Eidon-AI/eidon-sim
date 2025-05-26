@@ -7,7 +7,10 @@ import {
   COLOR_FEATURE_REPORT_ID
 } from './constants';
 
-// TODO: move constants to ./constants.ts
+/* helper to convert [r,g,b] → "#rrggbb" */
+function rgbHex(rgb: [number, number, number]) {
+  return '#' + rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+}
 export class HidManager extends EventTarget {
   private devices = new Map<string, HIDDevice>();
 
@@ -41,6 +44,13 @@ export class HidManager extends EventTarget {
   /* -------- write 3-byte RGB feature report -------- */
   setColor(dev: HIDDevice, rgb: [number, number, number]) {
     dev.sendFeatureReport(COLOR_FEATURE_REPORT_ID, Uint8Array.from(rgb));
+    const id = [...this.devices.entries()]
+                .find(([_, d]) => d === dev)?.[0];
+    if (id) {
+      document.dispatchEvent(
+        new CustomEvent('deviceColor', { detail: { id, hex: rgbHex(rgb) } })
+      );
+    }
   }
 
   /* internal helpers -------------------------------------------------- */
@@ -51,9 +61,10 @@ export class HidManager extends EventTarget {
     const idParts = [vid, pid, nameSlug];
     const id = idParts.join('-');
 
-    this.getColor(dev).then(rgb=>{
-      const hex = `#${rgb.map(x=>x.toString(16).padStart(2,'0')).join('')}`;
-      this.dispatchEvent(new CustomEvent('color', { detail:{ id, hex }}));
+    this.getColor(dev).then(rgb => {
+      document.dispatchEvent(
+        new CustomEvent('deviceColor', { detail: { id, hex: rgbHex(rgb) } })
+      );
     });
 
     this.devices.set(id, dev);

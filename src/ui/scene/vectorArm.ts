@@ -29,12 +29,19 @@ export class VectorArm {
     const upper = this.store.getBy(this.side, 'upper');
     const lower = this.store.getBy(this.side, 'lower');
     const hand  = this.store.getBy(this.side, 'hand');
+  
     [upper, lower, hand].forEach((d, i) => {
+      const line = this.segs[i];
       if (!d) return;
-      const arr = this.segs[i].geometry.attributes.position.array as Float32Array;
+  
+      /* geometry positions (unchanged) */
+      const arr = line.geometry.attributes.position.array as Float32Array;
       arr[0] = d.chainStart[0]; arr[1] = d.chainStart[1]; arr[2] = d.chainStart[2];
       arr[3] = d.chainEnd[0];   arr[4] = d.chainEnd[1];   arr[5] = d.chainEnd[2];
-      this.segs[i].geometry.attributes.position.needsUpdate = true;
+      line.geometry.attributes.position.needsUpdate = true;
+  
+      /* 🔄 colour sync */
+      (line.material as THREE.LineBasicMaterial).color.set(d.color);
     });
   }
 }

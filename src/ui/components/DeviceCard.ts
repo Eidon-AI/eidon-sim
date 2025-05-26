@@ -28,15 +28,22 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
 
   /* listeners */
   colorBox.oninput = () => {
-    const rgb = colorBox.value.match(/\w\w/g)!.map(x=>parseInt(x,16)) as [number,number,number];
-    const dev = hid['devices'].get(state.id);   // private but fine here
-    if(dev) hid.setColor(dev, rgb);
-    state.color = colorBox.value;
-    // TODO update line colors in scene (future step)
+    const rgb = colorBox.value.match(/\w\w/g)!.map(x => parseInt(x, 16)) as [number, number, number];
+    const dev = hid['devices'].get(state.id);
+    if (dev) hid.setColor(dev, rgb);           // write feature report
+  
+    state.color = colorBox.value;              // update local snapshot
+    /* 🔔 notify store so scene & other UI react */
+    store.dispatchEvent(new CustomEvent('update', { detail: state }));
   };
 
   btnCal.onclick = () => hid.sendCalibrateAll();         // per-device later
   btnX  .onclick = () => { hid['devices'].get(state.id)?.close(); store['map'].delete(state.id); el.remove(); };
+
+  document.addEventListener('deviceColor', e =>{
+    const { id, hex } = (e as CustomEvent<any>).detail;
+    if(id === state.id) colorBox.value = hex;
+  });
 
   return el;
 }
