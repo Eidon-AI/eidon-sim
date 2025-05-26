@@ -45,7 +45,7 @@ A living checklist of implementation tasks, grouped by milestone. Tick items off
 
 ## Milestone 5  (Calibration & RGB feature)
 
-* [ ] `HidManager.sendCalibrate(id)` helper
+* [x] `HidManager.sendCalibrate(id)` helper
 * [ ] Global **Calibrate All** already wired – ensure per‑device ↻ button in card
 * [ ] Implement color picker → writes 3‑byte feature report 0x02
 * [ ] Read color on initial connect, apply as swatch background

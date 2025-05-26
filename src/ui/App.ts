@@ -63,7 +63,7 @@ export function mount(root: HTMLElement) {
   });
 
   btnDisconnect?.addEventListener('click', () => hid.disconnectAll());
-  btnCal?.addEventListener('click', () => hid.sendCalibrateAll());
+  btnCal?.addEventListener('click', () => hid.sendCalibrate());
 
   /* ------------------------------------------------------------
    * 5. Debug log of latest device update

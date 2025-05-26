@@ -37,7 +37,7 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
     store.dispatchEvent(new CustomEvent('update', { detail: state }));
   };
 
-  btnCal.onclick = () => hid.sendCalibrateAll();         // per-device later
+  btnCal.onclick = () => hid.sendCalibrate(state.id);         // per-device later
   btnX  .onclick = () => { hid['devices'].get(state.id)?.close(); store['map'].delete(state.id); el.remove(); };
 
   document.addEventListener('deviceColor', e =>{

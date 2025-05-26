@@ -29,10 +29,19 @@ export class HidManager extends EventTarget {
     this.devices.clear();
   }
 
-  sendCalibrateAll() {
-    this.devices.forEach(d => {
-      d.sendReport(CALIBRATE_OUT_REPORT_ID, CALIBRATE_PAYLOAD);
-    });
+  sendCalibrate(deviceId: string | null = null) {
+    if (deviceId) {
+      const dev = this.devices.get(deviceId);
+      if (dev) {
+        const payload = new Uint8Array([CALIBRATE_PAYLOAD]);
+        dev.sendReport(CALIBRATE_OUT_REPORT_ID, payload);
+      }
+    } else {
+      this.devices.forEach(d => {
+        const payload = new Uint8Array([CALIBRATE_PAYLOAD]);
+        d.sendReport(CALIBRATE_OUT_REPORT_ID, payload);
+      });
+    }
   }
 
   /* -------- read 3-byte RGB feature report -------- */
