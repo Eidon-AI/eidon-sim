@@ -74,7 +74,7 @@ export class SkeletalRig {
     /* -- Wrist: pitch needs the same Y flip, yaw flip on Z -- */
     b.wrist.rotation.set(
       -a.wrPitch * d2r,
-      -a.faRoll * d2r,
+      0,//-a.faRoll * d2r,
       -a.wrYaw * d2r
     );
   }
