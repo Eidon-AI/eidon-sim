@@ -12,3 +12,5 @@ html[data-theme='light'] {
 .btn{
   @apply px-3 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-sm;
 }
+
+.bar { @apply h-1 bg-neutral-700; }

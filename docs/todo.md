@@ -31,9 +31,9 @@ A living checklist of implementation tasks, grouped by milestone. Tick items off
 - [x] Button-listener retention after UI updates
 
 ## Milestone 3  (next up)
-- [ ] Smooth angle filtering + joint limits
-- [ ] RGB feature-report color picker
-- [ ] GLTF humanoid arm skinned to 7 angles
+- [x] Smooth angle filtering + joint limits
+- [x] RGB feature-report color picker
+- [x] GLTF humanoid arm skinned to 7 angles
 - [ ] Sidebar finger bars (glove)
 - [ ] Preferences panel: segment lengths, theme switch
 - [ ] Unit tests for mathUtils & parsers

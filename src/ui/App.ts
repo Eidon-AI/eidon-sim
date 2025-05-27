@@ -1,4 +1,4 @@
-console.log('Eidon Embodied AI Simulator loaded');
+console.log('Eidon Sim loaded..');
 
 // src/ui/App.ts
 import { HidManager }   from '../core/HidManager';
@@ -17,8 +17,12 @@ export function mount(root: HTMLElement) {
       <button id="btnConnect"    class="btn">Connect HID</button>
       <button id="btnDisconnect" class="btn">Disconnect All</button>
       <button id="btnCal"        class="btn">Calibrate All</button>
-
       <pre id="log" class="flex-1 overflow-auto text-xs mt-2 bg-neutral-900 p-2 rounded"></pre>
+    </div>
+    <div id="calOverlay" class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center text-4xl font-bold text-white hidden">
+      <div class="text-8xl mb-8">T</div>
+      <div class="text-2xl mb-4">Hold T-pose position</div>
+      <span id="calCount">5</span>
     </div>
     <canvas id="gl" class="flex-1"></canvas>
   `;
@@ -59,7 +63,7 @@ export function mount(root: HTMLElement) {
   });
 
   btnDisconnect?.addEventListener('click', () => hid.disconnectAll());
-  btnCal?.addEventListener('click', () => hid.sendCalibrate());
+  btnCal?.addEventListener('click', () => hid.startCalibration());
 
   /* ------------------------------------------------------------
    * 5. Debug log of latest device update

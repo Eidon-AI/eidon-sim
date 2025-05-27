@@ -61,7 +61,9 @@ export function parseGlove(state: DeviceState, view: DataView) {
   /* --------- finger angles (16 × u8) -------- */
   const fingers: number[] = [];
   for (let i = 0; i < 16; i++) fingers.push(view.getUint8(2 + i));
-  state.finger = fingers;
+  state.finger = fingers;                        // raw 0-255
+  state.fingerNorm = fingers.map(b => b / 255);  // 0-1
+  state.fingerDeg  = fingers.map(b => b / 255 * 90);
 
   /* --------- quaternion (bytes 18-25) ------- */
   const base = 2 + 16;                           // 18

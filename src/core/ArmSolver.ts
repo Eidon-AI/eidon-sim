@@ -27,6 +27,15 @@ export class ArmSolver extends EventTarget {
 
   constructor(private store: DeviceStore) {
     super();
+
+    // Initialize smooth angles with default values
+    this.smoothL = {
+      shYaw: 0, shPitch: 0, shRoll: 0,
+      elFlex: 0, faRoll: 0,
+      wrPitch: 0, wrYaw: 0
+    };
+    this.smoothR = { ...this.smoothL };
+
     store.addEventListener('update', () => this.update());
   }
 

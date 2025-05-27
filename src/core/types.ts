@@ -8,10 +8,13 @@ export interface DeviceState {
   color: string;                   // "#RRGGBB"
   arm?: { side: 'left' | 'right'; level: 'upper' | 'lower' | 'hand' };
   quat: quat;
-  finger?: number[];               // glove only
   up: vec3;
   fwd: vec3;
   chainStart: vec3;
   chainEnd: vec3;
   lastSeen: number;
+  // glove only
+  finger?: number[];        // raw 0-255
+  fingerNorm?: number[];    // 0-1
+  fingerDeg?:  number[];    // 0-90°
 }

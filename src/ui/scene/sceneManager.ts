@@ -44,7 +44,7 @@ export function initScene(
   /* ------------ visuals ------------------------- */
   new VectorArm(scene, store, 'left');
   new VectorArm(scene, store, 'right');
-  new SkeletalRig(scene, solver);      // single model drives both arms
+  new SkeletalRig(scene, store, solver);      // single model drives both arms
 
   /* ------------ resize + loop ------------------- */
   window.addEventListener('resize', () => {

@@ -5,28 +5,33 @@ import { DeviceStore } from '../../core/DeviceStore';
 export function renderCard(state: DeviceState, hid: HidManager, store: DeviceStore) {
 
   const el = document.createElement('div');
-  el.className = 'flex items-center gap-2 border-b border-neutral-700 py-1';
+  el.className = 'flex flex-col gap-2 border-b border-neutral-700 py-1';
+
+  const topRow = document.createElement('div');
+  topRow.className = 'flex items-center gap-2 w-full';
 
   const colorBox = document.createElement('input');
   colorBox.type  = 'color';
   colorBox.value = state.color;
   colorBox.className = 'w-6 h-6 border-none bg-transparent p-0';
-  el.appendChild(colorBox);
+  topRow.appendChild(colorBox);
 
   const label = document.createElement('span');
   label.textContent = `${state.kind} ${state.arm?.side ?? ''} ${state.arm?.level ?? ''}`;
   label.className = 'flex-1';
-  el.appendChild(label);
+  topRow.appendChild(label);
 
   const btnCal = document.createElement('button');
   btnCal.textContent = '↻';
   btnCal.className   = 'px-2';
-  el.appendChild(btnCal);
+  topRow.appendChild(btnCal);
 
   const btnX = document.createElement('button');
   btnX.textContent = '✕';
   btnX.className   = 'px-2';
-  el.appendChild(btnX);
+  topRow.appendChild(btnX);
+
+  el.appendChild(topRow);
 
   /* listeners */
   colorBox.oninput = () => {
@@ -52,6 +57,60 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
       el.remove();
     }
   });
+
+  // Finger bars
+  if(state.finger){
+    const container = document.createElement('div');
+    container.className = 'w-full mt-2';
+    const grid = document.createElement('div');
+    grid.className = 'grid grid-cols-4 gap-1 w-full';
+    
+    // Create 16 bars total (4 + 3 + 3 + 3 + 3)
+    for(let i=0;i<16;i++){
+      const bar = document.createElement('div');
+      bar.className = 'h-1 bg-neutral-700';
+      bar.dataset['idx'] = String(i);
+      
+      // Position bars in the grid
+      if (i < 4) {
+        // First row: all 4 columns
+        bar.style.gridColumn = `${i + 1}`;
+        bar.style.gridRow = '1';
+      } else if (i < 7) {
+        // Second row: first 3 columns
+        bar.style.gridColumn = `${(i - 4) + 1}`;
+        bar.style.gridRow = '2';
+      } else if (i < 10) {
+        // Third row: first 3 columns
+        bar.style.gridColumn = `${(i - 7) + 1}`;
+        bar.style.gridRow = '3';
+      } else if (i < 13) {
+        // Fourth row: first 3 columns
+        bar.style.gridColumn = `${(i - 10) + 1}`;
+        bar.style.gridRow = '4';
+      } else {
+        // Fifth row: first 3 columns
+        bar.style.gridColumn = `${(i - 13) + 1}`;
+        bar.style.gridRow = '5';
+      }
+      
+      grid.appendChild(bar);
+    }
+    container.appendChild(grid);
+    el.appendChild(container);
+  
+    /* update bars on store update */
+    store.addEventListener('update', ev=>{
+      console.log("update");
+      const s = (ev as CustomEvent<DeviceState>).detail;
+      if(s.id!==state.id||!s.fingerNorm) return;
+      
+      grid.childNodes.forEach((c,j)=>{
+        (c as HTMLElement).style.width = `${Math.round(s.fingerNorm![j]*100)}%`;
+        (c as HTMLElement).style.backgroundColor = state.color;
+      });
+    });
+  }
 
   return el;
 }
