@@ -49,6 +49,8 @@ A living checklist of implementation tasks, grouped by milestone. Tick items off
 - [x] Sidebar finger bars (smoothed %)
 
 ## Milestone 5  (next up)
+- [x] Preferences: stereo camera enable + host
+- [x] StereoCam component with rotated dual streams
 - [ ] Preferences panel  
   - segment lengths  
   - theme toggle  

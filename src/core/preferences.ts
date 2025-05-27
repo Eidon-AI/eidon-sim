@@ -4,6 +4,9 @@ type Prefs = {
   theme: 'dark' | 'light';
   meshSurface: string;   // hex
   meshJoints:  string;   // hex
+  stereoEnabled: boolean;
+  leftURL:  string;
+  rightURL: string;
 };
 
 const DEFAULT: Prefs = {
@@ -11,7 +14,10 @@ const DEFAULT: Prefs = {
   angleAlpha: 0.2, fingerAlpha: 0.25,
   theme: 'dark',
   meshSurface: '#6666ff',
-  meshJoints : '#ff6666'
+  meshJoints : '#ff6666',
+  stereoEnabled: false,
+  leftURL: 'http://eidon-glass-47bc.local:81/stream',
+  rightURL: 'http://eidon-glass-0214.local:81/stream'
 };
 
 export const prefs: Prefs = Object.assign(

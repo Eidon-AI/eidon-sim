@@ -8,7 +8,7 @@ import { mountAnglePanel } from './components/AnglePanel';
 import { mountDeviceList } from './components/DeviceList';
 import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
-import { DeviceState } from '../core/types';
+import { mountStereoCam } from './components/StereoCam';
 
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
@@ -36,7 +36,7 @@ export function mount(root: HTMLElement) {
       <button id="btnConnect"    class="btn">Connect HID</button>
       <button id="btnDisconnect" class="btn">Disconnect All</button>
       <button id="btnCal"        class="btn">Calibrate All</button>
-      <pre id="log" class="flex-1 overflow-auto text-xs mt-2 bg-neutral-900 p-2 rounded"></pre>
+      <pre id="log" class="flex-1 overflow-auto text-xs mt-2 bg-neutral-900 p-2 border-b border-neutral-700"></pre>
     </div>
     <div id="calOverlay" class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center text-4xl font-bold text-white hidden">
       <div class="text-8xl mb-8">T</div>
@@ -100,6 +100,9 @@ export function mount(root: HTMLElement) {
 
   /* ------------ prefs ------------ */
   mountPrefs(root);
+
+  /* ------------ stereo cam ------------ */
+  mountStereoCam(sidebar);
 
   /* ------------------------------------------------------------
    * Device list

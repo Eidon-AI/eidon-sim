@@ -6,7 +6,7 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
    * Build wrapper element and inject table markup
    * ---------------------------------------------------------- */
   const wrapper = document.createElement('div');
-  wrapper.className = 'flex flex-col border-b border-neutral-700 py-1';
+  wrapper.className = 'flex flex-col py-1';
   wrapper.innerHTML = `
     <h3 class="mb-1 font-medium">
       Actuator Angles (deg, smoothed)

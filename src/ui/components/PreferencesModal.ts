@@ -23,6 +23,16 @@ export function mountPrefs(root: HTMLElement) {
       <label>Surface <input id="pSurf" type="color" class="ml-2"></label><br>
       <label>Joints  <input id="pJoint" type="color" class="ml-2"></label><br>
 
+      <label class="flex items-center">
+        <input id="pStereoEn" type="checkbox" class="mr-2"> Stereo headset
+      </label>
+      <label>L-eye URL
+        <input id="pLeftURL" type="text" class="ml-2 w-40">
+      </label><br>
+      <label>R-eye URL
+        <input id="pRightURL" type="text" class="ml-2 w-40">
+      </label>
+
       <button id="pSave" class="btn mt-2">Save</button>
     </div>`;
   root.appendChild(modal);
@@ -44,6 +54,9 @@ export function mountPrefs(root: HTMLElement) {
     (document.getElementById('pTheme')as HTMLSelectElement).value = prefs.theme;
     (document.getElementById('pSurf') as HTMLInputElement).value = prefs.meshSurface;
     (document.getElementById('pJoint')as HTMLInputElement).value = prefs.meshJoints;
+    (document.getElementById('pStereoEn') as HTMLInputElement).checked = prefs.stereoEnabled;
+    (document.getElementById('pLeftURL')  as HTMLInputElement).value = prefs.leftURL;
+    (document.getElementById('pRightURL') as HTMLInputElement).value = prefs.rightURL;
   };
   setValues();
 
@@ -57,6 +70,9 @@ export function mountPrefs(root: HTMLElement) {
     prefs.theme       = (document.getElementById('pTheme') as HTMLSelectElement).value as any;
     prefs.meshSurface = (document.getElementById('pSurf') as HTMLInputElement).value;
     prefs.meshJoints  = (document.getElementById('pJoint')as HTMLInputElement).value;
+    prefs.stereoEnabled = (document.getElementById('pStereoEn') as HTMLInputElement).checked;
+    prefs.leftURL  = (document.getElementById('pLeftURL')  as HTMLInputElement).value;
+    prefs.rightURL = (document.getElementById('pRightURL') as HTMLInputElement).value;
 
     document.documentElement.dataset.theme = prefs.theme;
     savePrefs();
