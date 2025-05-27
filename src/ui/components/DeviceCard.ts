@@ -102,10 +102,12 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
     /* update bars on store update */
     store.addEventListener('update', ev=>{
       const s = (ev as CustomEvent<DeviceState>).detail;
+      const norm = s.fingerSmooth ?? s.fingerNorm!;
+
       if(s.id!==state.id||!s.fingerNorm) return;
       
       grid.childNodes.forEach((c,j)=>{
-        (c as HTMLElement).style.width = `${Math.round(s.fingerNorm![j]*100)}%`;
+        (c as HTMLElement).style.width = `${Math.round(norm[j]*100)}%`;
         (c as HTMLElement).style.backgroundColor = state.color;
       });
     });

@@ -17,4 +17,5 @@ export interface DeviceState {
   finger?: number[];        // raw 0-255
   fingerNorm?: number[];    // 0-1
   fingerDeg?:  number[];    // 0-90°
+  fingerSmooth?: number[];  // EMA-filtered 0-1
 }

@@ -1,6 +1,6 @@
 import { quat, vec3 } from 'gl-matrix';
-import { DeviceKind, DeviceState } from './types';
-import { HUM_LEN, RAD_LEN, HAND_LEN } from './constants';
+import { DeviceState } from './types';
+import { HUM_LEN, RAD_LEN, HAND_LEN, FINGER_ALPHA } from './constants';
 
 /* helper to read little-endian u16 and map to −1…+1 float */
 function u16ToFloat(dv: DataView, byte: number) {
@@ -64,6 +64,12 @@ export function parseGlove(state: DeviceState, view: DataView) {
   state.finger = fingers;                        // raw 0-255
   state.fingerNorm = fingers.map(b => b / 255);  // 0-1
   state.fingerDeg  = fingers.map(b => b / 255 * 90);
+
+  /* after you assign fingerNorm/fingerDeg in parseGlove */
+  if (!state.fingerSmooth) state.fingerSmooth = Array(16).fill(0);
+  state.fingerSmooth = state.fingerSmooth.map((prev,i)=>
+    prev + (state.fingerNorm![i] - prev) * FINGER_ALPHA
+  );
 
   /* --------- quaternion (bytes 18-25) ------- */
   const base = 2 + 16;                           // 18

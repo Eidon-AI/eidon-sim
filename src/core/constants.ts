@@ -33,3 +33,4 @@ export const JOINT_LIMITS = {
 
 /* Exponential moving-average smoothing factor (0–1) */
 export const ANGLE_ALPHA = 0.2;          // 0.2 ⇒ ~5-frame memory
+export const FINGER_ALPHA = 0.25;        // 0.25 ≈ 4-frame memory

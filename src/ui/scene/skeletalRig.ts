@@ -10,6 +10,7 @@ type ArmMap = Record<'shoulder' | 'elbow' | 'wrist', THREE.Bone>;
 
 export class SkeletalRig {
   private armBones:   Record<Side, ArmMap>        = {} as any;
+  private handMesh:   Record<Side, THREE.Mesh[]>  = { left: [], right: [] };
   private fingerMap:  Record<Side, THREE.Bone[]>  = { left: [], right: [] };
   private root: THREE.Group | null = null;
 
@@ -25,6 +26,22 @@ export class SkeletalRig {
       undefined,
       err => console.error('GLTF load error', err)
     );
+
+    document.addEventListener('deviceColor', e=>{
+      console.log('deviceColor', e);
+      const { id, hex } = (e as CustomEvent<any>).detail;
+      const dev = this.store.getBy('right','hand');
+      if (dev && dev.id===id) {
+        this.handMesh.left.forEach(mesh => {
+          if (mesh.material) (mesh.material as THREE.MeshStandardMaterial).color.set(hex);
+        });
+      }
+      if (dev && dev.id===id) {
+        this.handMesh.right.forEach(mesh => {
+          if (mesh.material) (mesh.material as THREE.MeshStandardMaterial).color.set(hex);
+        });
+      }
+    });
   }
 
   private mapFinger(side: Side, digit: string, idx: number): THREE.Bone {
@@ -48,6 +65,26 @@ export class SkeletalRig {
       elbow:    root.getObjectByName('RightForeArm') as THREE.Bone,
       wrist:    root.getObjectByName('RightHand')    as THREE.Bone
     };
+
+    // Find all mesh objects that are children of the hand bones
+    const leftHand = root.getObjectByName('LeftHand') as THREE.Object3D;
+    const rightHand = root.getObjectByName('RightHand') as THREE.Object3D;
+    
+    if (leftHand) {
+      leftHand.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          this.handMesh.left.push(child);
+        }
+      });
+    }
+    
+    if (rightHand) {
+      rightHand.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          this.handMesh.right.push(child);
+        }
+      });
+    }
 
     this.solver.addEventListener('angles', () => {
       this.applySide('left');  this.applySide('right');
@@ -95,11 +132,13 @@ export class SkeletalRig {
 
     /* ----- Fingers mapping ----- */
     const glove = this.store.getBy(side, 'hand');
-    if (glove?.fingerNorm) {
+    const src = glove?.fingerSmooth ?? glove?.fingerNorm;
+
+    if (src) {
       const bones = this.fingerMap[side];
       const sgnYaw = side === 'left' ? 1 : -1;   // outward fan
 
-      glove.fingerNorm.forEach((v, idx) => {
+      src.forEach((v, idx) => {
         const bend = v * 90 * d2r;
 
         switch (idx) {

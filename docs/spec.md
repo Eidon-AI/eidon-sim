@@ -82,7 +82,7 @@ Segment lengths (preferences):
     scene/
       sceneManager  ← Three.js init, rAF loop
       vectorArm     ← Line2 segments
-      skeletalArm   ← GLTF bones
+      skeletalRig   ← GLTF bones
     components/     ← Sidebar, DeviceCard, AnglePanel, PrefsModal
 ```
 
