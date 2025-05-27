@@ -8,6 +8,24 @@ import { mountAnglePanel } from './components/AnglePanel';
 import { mountDeviceList } from './components/DeviceList';
 import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
+import { DeviceState } from '../core/types';
+
+let selectedId: string | null = null;
+let storeRef:  DeviceStore | null = null;
+let logRef:    HTMLPreElement | null = null;
+
+/* export so DeviceCard can import it */
+export function setSelected(id: string | null) {
+  selectedId = id;
+  if (!storeRef || !logRef) return;
+
+  if (id) {
+    const s = storeRef['map'].get(id);
+    logRef.textContent = s ? JSON.stringify(s, null, 2) : '';
+  } else {
+    logRef.textContent = '';
+  }
+}
 
 export function mount(root: HTMLElement) {
   /* ------------------------------------------------------------
@@ -34,9 +52,9 @@ export function mount(root: HTMLElement) {
   const btnConnect    = document.getElementById('btnConnect')    as HTMLButtonElement;
   const btnDisconnect = document.getElementById('btnDisconnect') as HTMLButtonElement;
   const btnCal        = document.getElementById('btnCal')        as HTMLButtonElement;
-  const logEl         = document.getElementById('log')           as HTMLPreElement;
   const canvas        = document.getElementById('gl')            as HTMLCanvasElement;
   const sidebar       = document.querySelector('.sidebar')       as HTMLDivElement;
+  logRef = document.getElementById('log') as HTMLPreElement;
 
   /* ------------------------------------------------------------
    * 3. Core singletons
@@ -44,6 +62,7 @@ export function mount(root: HTMLElement) {
   const hid   = new HidManager();
   const store = new DeviceStore();
   const solver= new ArmSolver(store);
+  storeRef = store;
 
   /* ---------- HID → store pipeline ---------- */
   hid.addEventListener('report', e => {
@@ -66,11 +85,17 @@ export function mount(root: HTMLElement) {
   btnDisconnect?.addEventListener('click', () => hid.disconnectAll());
   btnCal?.addEventListener('click', () => hid.startCalibration());
 
-  /* ------------------------------------------------------------
-   * 5. Debug log of latest device update
-   * ---------------------------------------------------------- */
+  /* ---- log update only for selected device ---- */
   store.addEventListener('update', e => {
-    logEl.textContent = JSON.stringify((e as CustomEvent<any>).detail, null, 2);
+    const s = (e as CustomEvent<any>).detail;
+    if (s.id === selectedId && logRef) {
+      logRef.textContent = JSON.stringify(s, null, 2);
+    }
+  });
+
+  document.addEventListener('deviceRemoved', e => {
+    const id = (e as CustomEvent<{id:string}>).detail.id;
+    if (id === selectedId) setSelected(null);
   });
 
   /* ------------ prefs ------------ */

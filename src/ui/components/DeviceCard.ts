@@ -2,6 +2,7 @@ import { DeviceState } from '../../core/types';
 import { HidManager }  from '../../core/HidManager';
 import { DeviceStore } from '../../core/DeviceStore';
 import { eulerXYZ } from '../../core/mathUtils';
+import { setSelected } from '../App';
 
 function createDial(label: string) {
   const wrap  = document.createElement('div');
@@ -54,6 +55,11 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   label.className = 'flex-1';
   topRow.appendChild(label);
 
+  const btnInfo = document.createElement('button');
+  btnInfo.textContent = 'ⓘ';
+  btnInfo.className = 'px-2';
+  topRow.appendChild(btnInfo);
+
   const btnCal = document.createElement('button');
   btnCal.textContent = '↻';
   btnCal.className   = 'px-2';
@@ -79,6 +85,16 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
 
   btnCal.onclick = () => hid.sendCalibrate(state.id);
   btnX  .onclick = () => { hid.unpair(state.id); store['map'].delete(state.id); el.remove(); };
+
+  btnInfo.onclick = ()=> {
+    const now = btnInfo.classList.toggle('text-blue-400'); // highlight
+    // remove highlight from other cards
+    document.querySelectorAll('.btnInfo').forEach(b=>{
+      if(b!==btnInfo) b.classList.remove('text-blue-400');
+    });
+    setSelected(now ? state.id : null);
+  };
+  btnInfo.classList.add('btnInfo');
 
   document.addEventListener('deviceColor', e =>{
     const { id, hex } = (e as CustomEvent<any>).detail;
@@ -175,7 +191,6 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
     const s = (ev as CustomEvent<DeviceState>).detail;
     if(s.id===state.id) updateDials(s);
   });
-  
 
   return el;
 }
