@@ -18,6 +18,9 @@ A living checklist of implementation tasks, grouped by milestone. Tick items off
 - [x] Vite + TS scaffold, dark Tailwind theme
 - [x] HidManager / DeviceStore skeleton
 - [x] Basic sidebar + Connect / Disconnect / Calibrate buttons
+* [x] Global **Calibrate All** already wired – ensure per‑device ↻ button in card
+* [x] Implement color picker → writes 3‑byte feature report 0x01
+* [x] Read color on initial connect, apply as swatch background
 
 ## Milestone 2  (vector view + math pipeline)
 - [x] Hex-style device IDs with name slug + serial
@@ -29,31 +32,35 @@ A living checklist of implementation tasks, grouped by milestone. Tick items off
 - [x] AnglePanel live table (no listener loss)
 - [x] Event-safe sidebar (insertAdjacentHTML / appendChild)
 - [x] Button-listener retention after UI updates
-
-## Milestone 3  (next up)
-- [x] Smooth angle filtering + joint limits
-- [x] RGB feature-report color picker
-- [x] GLTF humanoid arm skinned to 7 angles
-- [ ] Sidebar finger bars (glove)
-- [ ] Preferences panel: segment lengths, theme switch
-- [ ] Unit tests for mathUtils & parsers
-
-## Milestone 4  (Glove fingers UI)
-
-* [ ] Render 16 finger bars (flex %) per glove card
-* [ ] Optional: simple finger bones on GLTF hand mesh
-
-## Milestone 5  (Calibration & RGB feature)
-
 * [x] `HidManager.sendCalibrate(id)` helper
-* [ ] Global **Calibrate All** already wired – ensure per‑device ↻ button in card
-* [ ] Implement color picker → writes 3‑byte feature report 0x02
-* [ ] Read color on initial connect, apply as swatch background
+
+## Milestone 3  (skeletal arms, UX)
+- [x] Single Y-Bot rig drives both arms
+- [x] Corrected shoulder/elbow/wrist axes
+- [x] Calibration overlay + right-arm yaw flip
+- [x] Vector-arm chaining bug fixed
+
+## Milestone 4  (fingers & polish)  **← completed**
+- [x] Parse 16 glove axes → norm / deg
+- [x] Accurate MCP yaw + PIP flex mapping
+- [x] DIP estimated at ½ PIP
+- [x] EMA finger smoothing (`FINGER_ALPHA`)
+- [x] Hand mesh colour-tinted to tracker RGB
+- [x] Sidebar finger bars (smoothed %)
+
+## Milestone 5  (next up)
+- [ ] Preferences panel  
+  - segment lengths  
+  - theme toggle  
+  - smoothing factors
+- [ ] GLTF wrist-roll bone (optional helper)
+- [ ] Unit tests (mathUtils, parsers, solver)
+- [ ] Troubleshooting doc + screenshots
+- [ ] Deploy workflow (GitHub Pages action)
 
 ## Milestone 6  (Preferences + Themes)
 
 * [ ] `/ui/Preferences` modal
-
   * [ ] segment length inputs (3)
   * [ ] dark/light toggle (sets `data-theme` on `<html>`)
   * [ ] save/load via `PreferencesStore`

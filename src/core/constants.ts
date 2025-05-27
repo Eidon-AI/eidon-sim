@@ -1,4 +1,7 @@
 // src/core/constants.ts
+
+import { prefs } from "./preferences";
+
 /* ------------------------------------------------------------------
  * USB Vendor & Product IDs for Eidon devices
  * ---------------------------------------------------------------- */
@@ -16,9 +19,12 @@ export const CALIBRATE_PAYLOAD       = 0x01;
 export const COLOR_FEATURE_REPORT_ID = 0x01;   // 3-byte RGB
 
 // segment lengths (metres) – user-editable later
-export const HUM_LEN  = 0.30;   // humerus
-export const RAD_LEN  = 0.26;   // radius/ulna
-export const HAND_LEN = 0.10;   // hand
+export const HUM_LEN  = () => prefs.humLen;
+export const RAD_LEN  = () => prefs.radLen;
+export const HAND_LEN = () => prefs.handLen;
+
+export const ANGLE_ALPHA  = prefs.angleAlpha;
+export const FINGER_ALPHA = prefs.fingerAlpha;
 
 /* Joint limits (deg) – simple, anatomically reasonable */
 export const JOINT_LIMITS = {
@@ -30,7 +36,3 @@ export const JOINT_LIMITS = {
   wrPitch: [-80,   80],
   wrYaw:   [-80,   80]
 };
-
-/* Exponential moving-average smoothing factor (0–1) */
-export const ANGLE_ALPHA = 0.2;          // 0.2 ⇒ ~5-frame memory
-export const FINGER_ALPHA = 0.25;        // 0.25 ≈ 4-frame memory

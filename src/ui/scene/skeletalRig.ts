@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { ArmSolver } from '../../core/ArmSolver';
 import { DeviceStore } from '../../core/DeviceStore';
+import { prefs } from '../../core/preferences';
 
 const loader = new GLTFLoader();
 
@@ -12,6 +13,7 @@ export class SkeletalRig {
   private armBones:   Record<Side, ArmMap>        = {} as any;
   private handMesh:   Record<Side, THREE.Mesh[]>  = { left: [], right: [] };
   private fingerMap:  Record<Side, THREE.Bone[]>  = { left: [], right: [] };
+  private extraMeshes!: { surface: THREE.Mesh; joints: THREE.Mesh };
   private root: THREE.Group | null = null;
 
   constructor(
@@ -28,7 +30,6 @@ export class SkeletalRig {
     );
 
     document.addEventListener('deviceColor', e=>{
-      console.log('deviceColor', e);
       const { id, hex } = (e as CustomEvent<any>).detail;
       const dev = this.store.getBy('right','hand');
       if (dev && dev.id===id) {
@@ -54,6 +55,11 @@ export class SkeletalRig {
     root.position.set(0, 0, 0);
     this.scene.add(root);
     this.root = root;
+
+    this.extraMeshes = {
+      surface: root.getObjectByName('Alpha_Surface') as THREE.Mesh,
+      joints : root.getObjectByName('Alpha_Joints')  as THREE.Mesh
+    };
 
     this.armBones.left = {
       shoulder: root.getObjectByName('LeftArm')     as THREE.Bone,
@@ -106,6 +112,14 @@ export class SkeletalRig {
         ])
       ];
     });
+
+    const recolor = ()=>{
+      console.log('recolor');
+      this.extraMeshes.surface.material.color.set(prefs.meshSurface);
+      this.extraMeshes.joints .material.color.set(prefs.meshJoints );
+    };
+    recolor();
+    document.addEventListener('prefsChanged', recolor);
   }
 
   /* ------------ per-frame mapping ----------------------- */

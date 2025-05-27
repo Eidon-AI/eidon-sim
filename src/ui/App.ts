@@ -6,6 +6,7 @@ import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
 import { mountAnglePanel } from './components/AnglePanel';
 import { mountDeviceList } from './components/DeviceList';
+import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
 
 export function mount(root: HTMLElement) {
@@ -71,6 +72,9 @@ export function mount(root: HTMLElement) {
   store.addEventListener('update', e => {
     logEl.textContent = JSON.stringify((e as CustomEvent<any>).detail, null, 2);
   });
+
+  /* ------------ prefs ------------ */
+  mountPrefs(root);
 
   /* ------------------------------------------------------------
    * 6. Angle table
