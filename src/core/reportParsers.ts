@@ -67,9 +67,8 @@ export function parseGlove(state: DeviceState, view: DataView) {
 
   /* after you assign fingerNorm/fingerDeg in parseGlove */
   if (!state.fingerSmooth) state.fingerSmooth = Array(16).fill(0);
-  console.log(FINGER_ALPHA);
   state.fingerSmooth = state.fingerSmooth.map((prev,i)=>
-    prev + (state.fingerNorm![i] - prev) * FINGER_ALPHA
+    prev + (state.fingerNorm![i] - prev) * FINGER_ALPHA()
   );
 
   /* --------- quaternion (bytes 18-25) ------- */

@@ -58,15 +58,15 @@ export class VectorArm {
 
     /* ---- compute chain step-by-step ---- */
     const upperEnd = up
-      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(up.fwd), HUM_LEN)
+      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(up.fwd), HUM_LEN())
       : vec3.clone(shoulder);
 
     const lowerEnd = low
-      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(low.fwd), RAD_LEN)
+      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(low.fwd), RAD_LEN())
       : vec3.clone(upperEnd);
 
     const handEnd  = glove
-      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(glove.fwd), HAND_LEN)
+      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(glove.fwd), HAND_LEN())
       : vec3.clone(lowerEnd);
 
     /* ---- update three line segments ---- */

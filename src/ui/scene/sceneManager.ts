@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { DeviceStore } from '../../core/DeviceStore';
 import { ArmSolver } from '../../core/ArmSolver';
 import { VectorArm } from './vectorArm';
-import { SkeletalRig } from './SkeletalRig';
+import { SkeletalRig } from './skeletalRig';
 
 export function initScene(
   canvas: HTMLCanvasElement,

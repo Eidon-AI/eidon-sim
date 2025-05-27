@@ -60,7 +60,7 @@ export class ArmSolver extends EventTarget {
       // clamp
       out[k] = clamp(k, newA[k]);
       // smooth
-      if (prev) out[k] = lerp(prev[k], out[k], ANGLE_ALPHA);
+      if (prev) out[k] = lerp(prev[k], out[k], ANGLE_ALPHA());
     }
     return out;
   }

@@ -114,7 +114,6 @@ export class SkeletalRig {
     });
 
     const recolor = ()=>{
-      console.log('recolor');
       this.extraMeshes.surface.material.color.set(prefs.meshSurface);
       this.extraMeshes.joints .material.color.set(prefs.meshJoints );
     };
@@ -141,7 +140,7 @@ export class SkeletalRig {
     arm.wrist.rotation.set(
       -a.wrPitch*d2r,
       0,
-      -sgn * (a.wrYaw + a.faRoll) * d2r
+      -a.wrYaw*d2r// -sgn * (a.wrYaw + a.faRoll) * d2r
     );
 
     /* ----- Fingers mapping ----- */

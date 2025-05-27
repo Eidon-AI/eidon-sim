@@ -23,8 +23,8 @@ export const HUM_LEN  = () => prefs.humLen;
 export const RAD_LEN  = () => prefs.radLen;
 export const HAND_LEN = () => prefs.handLen;
 
-export const ANGLE_ALPHA  = prefs.angleAlpha;
-export const FINGER_ALPHA = prefs.fingerAlpha;
+export const ANGLE_ALPHA  = () => prefs.angleAlpha;
+export const FINGER_ALPHA = () => prefs.fingerAlpha;
 
 /* Joint limits (deg) – simple, anatomically reasonable */
 export const JOINT_LIMITS = {
