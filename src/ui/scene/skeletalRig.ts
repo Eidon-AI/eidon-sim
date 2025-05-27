@@ -11,6 +11,7 @@ type ArmMap = Record<'shoulder' | 'elbow' | 'wrist', THREE.Bone>;
 export class SkeletalRig {
   private armBones:   Record<Side, ArmMap>        = {} as any;
   private fingerMap:  Record<Side, THREE.Bone[]>  = { left: [], right: [] };
+  private root: THREE.Group | null = null;
 
   constructor(
     private scene : THREE.Scene,
@@ -26,10 +27,16 @@ export class SkeletalRig {
     );
   }
 
+  private mapFinger(side: Side, digit: string, idx: number): THREE.Bone {
+    if (!this.root) throw new Error('Root not initialized');
+    return this.root.getObjectByName(`${side==='left'?'Left':'Right'}Hand${digit}${idx}`) as THREE.Bone;
+  }
+
   /* ------------ once, both arms in one mesh ------------- */
   private init(root: THREE.Group) {
     root.position.set(0, 0, 0);
     this.scene.add(root);
+    this.root = root;
 
     this.armBones.left = {
       shoulder: root.getObjectByName('LeftArm')     as THREE.Bone,
@@ -42,19 +49,25 @@ export class SkeletalRig {
       wrist:    root.getObjectByName('RightHand')    as THREE.Bone
     };
 
-    const fingerNames = (side: Side) => {
-      const hand = side === 'left' ? 'LeftHand' : 'RightHand';
-      return [
-        ...['Thumb'].flatMap(d => [1,2,3,4].map(i => `${hand}${d}${i}`)), // Thumb1-4
-        ...['Index','Middle','Ring','Pinky'].flatMap(d => [1,2,3].map(i => `${hand}${d}${i}`)) // Other fingers 1-3
-      ];
-    };
-
-    this.fingerMap.left  = fingerNames('left') .map(n => root.getObjectByName(n) as THREE.Bone).filter(Boolean);
-    this.fingerMap.right = fingerNames('right').map(n => root.getObjectByName(n) as THREE.Bone).filter(Boolean);
-
     this.solver.addEventListener('angles', () => {
       this.applySide('left');  this.applySide('right');
+    });
+
+    ['left','right'].forEach(s=>{
+      const side = s as Side;
+    
+      this.fingerMap[side] = [
+        this.mapFinger(side,'Thumb',1),
+        this.mapFinger(side,'Thumb',1), // Z axis same bone
+        this.mapFinger(side,'Thumb',2),
+        this.mapFinger(side,'Thumb',3),
+    
+        ...(['Index','Middle','Ring','Pinky'] as const).flatMap(digit=>[
+          this.mapFinger(side,digit,1),           // flex
+          this.mapFinger(side,digit,1),           // yaw
+          this.mapFinger(side,digit,2)            // PIP
+        ])
+      ];
     });
   }
 
@@ -80,13 +93,46 @@ export class SkeletalRig {
       -sgn * (a.wrYaw + a.faRoll) * d2r
     );
 
-    /* Fingers */
+    /* ----- Fingers mapping ----- */
     const glove = this.store.getBy(side, 'hand');
-    const fingerBones = this.fingerMap[side];
-    if (glove?.fingerNorm && fingerBones.length >= 15) {
-      glove.fingerNorm.forEach((v, i) => {
+    if (glove?.fingerNorm) {
+      const bones = this.fingerMap[side];
+      const sgnYaw = side === 'left' ? 1 : -1;   // outward fan
+
+      glove.fingerNorm.forEach((v, idx) => {
         const bend = v * 90 * d2r;
-        fingerBones[i].rotation.x = -bend;       // curl inwards
+
+        switch (idx) {
+          /* Thumb first joint */
+          case 0:  
+            bones[0].rotation.y = -bend;
+            break;                // flex
+          case 1:  
+            bones[1].rotation.z = (v - 45) * 90 * d2r;
+            break;       // yaw
+          case 2:  
+            bones[2].rotation.z = bend;
+            break;                // Thumb2
+          case 3:  
+            bones[3].rotation.z = bend;
+            break;                // Thumb3
+          default: {
+            const f = Math.floor((idx-4) / 3);   // digit 0..3 (Index..Pinky)
+            const base = 4 + f*3;                // start idx for that digit
+            const bFlex = bones[4 + f*3];        // MCP flex
+            const bYaw  = bones[4 + f*3 + 1];    // MCP yaw
+            const bPIP  = bones[4 + f*3 + 2];    // PIP
+
+            if (idx === base)        bFlex.rotation.z = bend;
+            else if (idx === base+1) bYaw.rotation.x  =  sgnYaw * -bend;
+            else if (idx === base+2) {
+              bPIP.rotation.x = bend;           // PIP
+              /* estimate DIP (third) as half PIP bend */
+              const dipBone = this.mapFinger(side,['Index','Middle','Ring','Pinky'][f],3);
+              dipBone.rotation.x = bend * 0.5;
+            }
+          }
+        }
       });
     }
   }

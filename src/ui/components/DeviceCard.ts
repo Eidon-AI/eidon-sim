@@ -101,7 +101,6 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   
     /* update bars on store update */
     store.addEventListener('update', ev=>{
-      console.log("update");
       const s = (ev as CustomEvent<DeviceState>).detail;
       if(s.id!==state.id||!s.fingerNorm) return;
       
