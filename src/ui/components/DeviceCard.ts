@@ -26,6 +26,13 @@ function drawDial(ctx: CanvasRenderingContext2D, valDeg: number, color: string =
   ctx.strokeStyle = color;               // value arc
   ctx.beginPath(); ctx.arc(20,20,r,-Math.PI/2, -Math.PI/2 + pct*2*Math.PI);
   ctx.stroke();
+
+  // Draw the value text
+  ctx.fillStyle = color;
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(Math.round(valDeg) + '°', 20, 20);
 }
 
 export function renderCard(state: DeviceState, hid: HidManager, store: DeviceStore) {
@@ -39,7 +46,7 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   const colorBox = document.createElement('input');
   colorBox.type  = 'color';
   colorBox.value = state.color;
-  colorBox.className = 'w-6 h-6 border-none bg-transparent p-0';
+  colorBox.className = 'w-5 h-6 border-none bg-transparent p-0';
   topRow.appendChild(colorBox);
 
   const label = document.createElement('span');
@@ -88,41 +95,45 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   if(state.finger){
     const container = document.createElement('div');
     container.className = 'w-full mt-2';
-    const grid = document.createElement('div');
-    grid.className = 'grid grid-cols-4 gap-1 w-full';
     
-    // Create 16 bars total (4 + 3 + 3 + 3 + 3)
-    for(let i=0;i<16;i++){
-      const bar = document.createElement('div');
-      bar.className = 'h-1 bg-neutral-700';
-      bar.dataset['idx'] = String(i);
+    // Create rows with labels
+    const fingerLabels = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'];
+    const rows = fingerLabels.map((label, rowIndex) => {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2';
       
-      // Position bars in the grid
-      if (i < 4) {
-        // First row: all 4 columns
-        bar.style.gridColumn = `${i + 1}`;
-        bar.style.gridRow = '1';
-      } else if (i < 7) {
-        // Second row: first 3 columns
-        bar.style.gridColumn = `${(i - 4) + 1}`;
-        bar.style.gridRow = '2';
-      } else if (i < 10) {
-        // Third row: first 3 columns
-        bar.style.gridColumn = `${(i - 7) + 1}`;
-        bar.style.gridRow = '3';
-      } else if (i < 13) {
-        // Fourth row: first 3 columns
-        bar.style.gridColumn = `${(i - 10) + 1}`;
-        bar.style.gridRow = '4';
-      } else {
-        // Fifth row: first 3 columns
-        bar.style.gridColumn = `${(i - 13) + 1}`;
-        bar.style.gridRow = '5';
+      // Add label
+      const labelEl = document.createElement('span');
+      labelEl.textContent = label;
+      labelEl.className = 'text-[10px] w-8';
+      row.appendChild(labelEl);
+      
+      // Add bars container
+      const barsContainer = document.createElement('div');
+      barsContainer.className = 'flex-1 flex gap-1';
+      
+      // Number of bars for this row (4 for thumb, 3 for others)
+      const numBars = rowIndex === 0 ? 4 : 3;
+      const startIdx = rowIndex === 0 ? 0 : (rowIndex - 1) * 3 + 4;
+      
+      for(let i = 0; i < numBars; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'h-1 bg-neutral-700 flex-1 relative';
+        bar.dataset['idx'] = String(startIdx + i);
+        
+        // Add inner bar for the filled portion
+        const innerBar = document.createElement('div');
+        innerBar.className = 'absolute inset-0';
+        bar.appendChild(innerBar);
+        
+        barsContainer.appendChild(bar);
       }
       
-      grid.appendChild(bar);
-    }
-    container.appendChild(grid);
+      row.appendChild(barsContainer);
+      return row;
+    });
+    
+    rows.forEach(row => container.appendChild(row));
     el.appendChild(container);
   
     /* update bars on store update */
@@ -132,9 +143,12 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
 
       if(s.id!==state.id||!s.fingerNorm) return;
       
-      grid.childNodes.forEach((c,j)=>{
-        (c as HTMLElement).style.width = `${Math.round(norm[j]*100)}%`;
-        (c as HTMLElement).style.backgroundColor = state.color;
+      container.querySelectorAll('[data-idx]').forEach((bar)=>{
+        const idx = parseInt((bar as HTMLElement).dataset['idx']!);
+        const innerBar = bar.firstElementChild as HTMLElement;
+        innerBar.style.width = `${Math.round(norm[idx]*100)}%`;
+        innerBar.style.backgroundColor = state.color;
+        (bar as HTMLElement).style.backgroundColor = '#333'; // Darker background for empty portion
       });
     });
   }
