@@ -37,6 +37,31 @@ export function eulerYZX(q: quat): [number, number, number] {
   return [flex, twist, roll];
 }
 
+// Update quaternion to Euler conversion to match firmware implementation
+export function eulerXYZ(q: quat): [number, number, number] {
+  // const [x, y, z, w] = q;
+  const x = q[0];
+  const y = q[1];
+  const z = q[2];
+  const w = q[3];
+
+  // Different quaternion to euler conversion that might reduce axis coupling
+  const yaw = Math.atan2(2.0 * (w * z + x * y),
+                        1.0 - 2.0 * (y * y + z * z));
+  
+  const pitch = Math.asin(2.0 * (w * y - z * x));
+  
+  const roll = Math.atan2(2.0 * (w * x + y * z),
+                         1.0 - 2.0 * (x * x + y * y));
+
+  // Convert to degrees and swap pitch and roll
+  return [
+    yaw,
+    roll,   // Use roll value for pitch
+    pitch,  // Use pitch value for roll
+  ];
+}
+
 /* Twist around +X ---------------------------------------------------- */
 export function twistAroundX(q: quat): number {
   const angle = 2 * Math.acos(q[3]);

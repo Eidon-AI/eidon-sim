@@ -82,7 +82,7 @@ export class ArmSolver extends EventTarget {
     const flexDeg = elbowFlexDeg(up.fwd, low.fwd);
 
     /* ---------- fore-arm roll (unchanged) ------------ */
-    const faRoll = rollAroundForward(up.quat, low.quat, up.fwd);
+    const faRoll = rollAroundForward(up.quat, low.quat, up.fwd) ?? 0;
   
     /* ---------- elbow hinge + fore-arm roll ---------- */
     // const Q_E = quat.multiply(quat.create(), quat.invert(quat.create(), Q_TU), Q_TF);
@@ -97,7 +97,7 @@ export class ArmSolver extends EventTarget {
       const Q_W  = quat.multiply(quat.create(), quat.invert(quat.create(), Q_TF), Q_TH);
       const [wYaw, wPitch] = eulerZYX(Q_W);
       wrYaw   = wYaw  *180/Math.PI;
-      wrPitch = wPitch*180/Math.PI;
+      wrPitch = (Number.isNaN(wPitch) ? 0 : wPitch)*180/Math.PI;
     }
   
     return { shYaw:yaw, shPitch:pitch, shRoll:roll,

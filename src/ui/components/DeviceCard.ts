@@ -1,6 +1,32 @@
 import { DeviceState } from '../../core/types';
 import { HidManager }  from '../../core/HidManager';
 import { DeviceStore } from '../../core/DeviceStore';
+import { eulerXYZ } from '../../core/mathUtils';
+
+function createDial(label: string) {
+  const wrap  = document.createElement('div');
+  wrap.className = 'flex flex-col items-center';
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 40;
+  const cap    = document.createElement('span');
+  cap.textContent = label;
+  cap.className = 'text-[10px] mt-0.5';
+  wrap.appendChild(canvas);
+  wrap.appendChild(cap);
+  return { wrap, canvas };
+}
+
+function drawDial(ctx: CanvasRenderingContext2D, valDeg: number, color: string = '#1e90ff') {
+  const pct = (valDeg + 180) / 360;          // −180…+180 → 0…1
+  const r = 18;
+  ctx.clearRect(0,0,40,40);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#333';                  // background ring
+  ctx.beginPath(); ctx.arc(20,20,r,0,Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = color;               // value arc
+  ctx.beginPath(); ctx.arc(20,20,r,-Math.PI/2, -Math.PI/2 + pct*2*Math.PI);
+  ctx.stroke();
+}
 
 export function renderCard(state: DeviceState, hid: HidManager, store: DeviceStore) {
 
@@ -112,6 +138,30 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
       });
     });
   }
+
+  /* ----- Euler dials ----- */
+  const dialWrap = document.createElement('div');
+  dialWrap.className = 'flex gap-1 m-auto';          // push to right
+  const dYaw = createDial('Yaw');
+  const dPit = createDial('Pitch');
+  const dRol = createDial('Roll');
+  [dYaw, dPit, dRol].forEach(d => dialWrap.appendChild(d.wrap));
+  el.appendChild(dialWrap);
+
+  const updateDials = (s: DeviceState) =>{
+    const [yaw,pit,rol] = eulerXYZ(s.quat).map(rad=>rad*180/Math.PI);
+    drawDial(dYaw.canvas.getContext('2d')!, yaw, s.color);
+    drawDial(dPit.canvas.getContext('2d')!, pit, s.color);
+    drawDial(dRol.canvas.getContext('2d')!, rol, s.color);
+  };
+  
+  /* run immediately and on every device update */
+  updateDials(state);
+  store.addEventListener('update', ev=>{
+    const s = (ev as CustomEvent<DeviceState>).detail;
+    if(s.id===state.id) updateDials(s);
+  });
+  
 
   return el;
 }

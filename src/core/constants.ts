@@ -36,3 +36,5 @@ export const JOINT_LIMITS = {
   wrPitch: [-80,   80],
   wrYaw:   [-80,   80]
 };
+
+export const RAD_TO_DEG = 180 / Math.PI;
