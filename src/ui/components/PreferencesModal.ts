@@ -33,6 +33,12 @@ export function mountPrefs(root: HTMLElement) {
         <input id="pRightURL" type="text" class="ml-2 w-40">
       </label>
 
+      <label class="flex items-center">
+        <input id="pRoEn" type="checkbox" class="mr-2"> Ro-Arm control
+      </label>
+      <label>L-arm URL <input id="pRoL" type="text" class="ml-2 w-40"></label><br>
+      <label>R-arm URL <input id="pRoR" type="text" class="ml-2 w-40"></label>
+
       <button id="pSave" class="btn mt-2">Save</button>
     </div>`;
   root.appendChild(modal);
@@ -57,6 +63,10 @@ export function mountPrefs(root: HTMLElement) {
     (document.getElementById('pStereoEn') as HTMLInputElement).checked = prefs.stereoEnabled;
     (document.getElementById('pLeftURL')  as HTMLInputElement).value = prefs.leftURL;
     (document.getElementById('pRightURL') as HTMLInputElement).value = prefs.rightURL;
+    (document.getElementById('pRoEn') as HTMLInputElement).checked = prefs.roArmEnabled;
+    (document.getElementById('pRoL') as HTMLInputElement).value   = prefs.roLeftURL;
+    (document.getElementById('pRoR') as HTMLInputElement).value   = prefs.roRightURL;
+
   };
   setValues();
 
@@ -73,6 +83,9 @@ export function mountPrefs(root: HTMLElement) {
     prefs.stereoEnabled = (document.getElementById('pStereoEn') as HTMLInputElement).checked;
     prefs.leftURL  = (document.getElementById('pLeftURL')  as HTMLInputElement).value;
     prefs.rightURL = (document.getElementById('pRightURL') as HTMLInputElement).value;
+    prefs.roArmEnabled = (document.getElementById('pRoEn')  as HTMLInputElement).checked;
+    prefs.roLeftURL    = (document.getElementById('pRoL') as HTMLInputElement).value;
+    prefs.roRightURL   = (document.getElementById('pRoR') as HTMLInputElement).value;
 
     document.documentElement.dataset.theme = prefs.theme;
     savePrefs();

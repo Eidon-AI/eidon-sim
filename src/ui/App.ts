@@ -7,8 +7,11 @@ import { ArmSolver }    from '../core/ArmSolver';
 import { mountAnglePanel } from './components/AnglePanel';
 import { mountDeviceList } from './components/DeviceList';
 import { mountPrefs } from './components/PreferencesModal';
+import { mountRoArmCard } from './components/RoArmCard';
 import { initScene }    from './scene/sceneManager';
 import { mountStereoCam } from './components/StereoCam';
+import { RoArmController } from '../core/RoArmController';
+import { prefs } from '../core/preferences';
 
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
@@ -62,6 +65,7 @@ export function mount(root: HTMLElement) {
   const hid   = new HidManager();
   const store = new DeviceStore();
   const solver= new ArmSolver(store);
+  const roCtrl = new RoArmController(store);
   storeRef = store;
 
   /* ---------- HID → store pipeline ---------- */
@@ -113,6 +117,18 @@ export function mount(root: HTMLElement) {
    * Angle table
    * ---------------------------------------------------------- */
   mountAnglePanel(sidebar, solver);
+
+  /* ------------------------------------------------------------
+   * Ro-Arm control
+   * ---------------------------------------------------------- */
+  if (prefs.roArmEnabled) {
+    mountRoArmCard('left', sidebar, roCtrl);
+    mountRoArmCard('right', sidebar, roCtrl);
+  }
+  document.addEventListener('prefsChanged', ()=>{
+    // simple reload approach
+    location.reload();
+  });
 
   /* ------------------------------------------------------------
    * Three.js scene

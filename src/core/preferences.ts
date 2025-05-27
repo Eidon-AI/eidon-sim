@@ -7,6 +7,9 @@ type Prefs = {
   stereoEnabled: boolean;
   leftURL:  string;
   rightURL: string;
+  roArmEnabled: boolean;
+  roLeftURL : string;
+  roRightURL: string;
 };
 
 const DEFAULT: Prefs = {
@@ -17,7 +20,10 @@ const DEFAULT: Prefs = {
   meshJoints : '#ff6666',
   stereoEnabled: false,
   leftURL: 'http://eidon-glass-47bc.local:81/stream',
-  rightURL: 'http://eidon-glass-0214.local:81/stream'
+  rightURL: 'http://eidon-glass-0214.local:81/stream',
+  roArmEnabled: false,
+  roLeftURL: 'http://192.168.4.54',
+  roRightURL: 'http://192.168.4.55'
 };
 
 export const prefs: Prefs = Object.assign(
