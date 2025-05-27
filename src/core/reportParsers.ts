@@ -41,9 +41,9 @@ export function parseTracker(state: DeviceState, view: DataView) {
     ? shoulder
     : state.chainStart;        // will be filled after upper tracker parsed
 
-  const len = level === 'upper' ? HUM_LEN
-           : level === 'lower' ? RAD_LEN
-           : HAND_LEN;
+  const len = level === 'upper' ? HUM_LEN()
+           : level === 'lower' ? RAD_LEN()
+           : HAND_LEN();
 
   const end = vec3.scaleAndAdd(vec3.create(), start, fwd, len);
 
@@ -94,7 +94,7 @@ export function parseGlove(state: DeviceState, view: DataView) {
       : [-0.25, 0.05, -3];
 
   const start = state.chainStart || shoulder;          // if trackers missing
-  const end   = vec3.scaleAndAdd(vec3.create(), start, fwd, HAND_LEN);
+  const end   = vec3.scaleAndAdd(vec3.create(), start, fwd, HAND_LEN());
 
   state.chainStart = start;
   state.chainEnd   = end;
