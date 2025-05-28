@@ -1,10 +1,11 @@
 // src/ui/scene/sceneManager.ts
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { DeviceStore } from '../../core/DeviceStore';
 import { ArmSolver } from '../../core/ArmSolver';
 import { VectorArm } from './vectorArm';
 import { SkeletalRig } from './skeletalRig';
+import { CameraControl } from '../components/CameraControl';
 
 export function initScene(
   canvas: HTMLCanvasElement,
@@ -14,8 +15,8 @@ export function initScene(
   /* ------------ renderer & basic scene ---------- */
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setSize(window.innerWidth - 0, window.innerHeight);
-  renderer.outputEncoding = THREE.sRGBEncoding;       // <-- crucial
-  renderer.toneMapping   = THREE.ACESFilmicToneMapping;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;       // <-- crucial
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x111111);
@@ -36,10 +37,40 @@ export function initScene(
     0.1,
     10
   );
-  cam.position.set(2, 3, 3);
+  cam.position.set(-2, 3, 5);
   const controls = new OrbitControls(cam, renderer.domElement);
-  controls.target.set(0.15, 0.95, 0);
+  controls.target.set(0.15, 0.9, 0);
   controls.update();
+
+  /* ------------ camera control cube ------------ */
+  const cameraControl = new CameraControl(({ position, target }) => {
+    // Animate camera to new position
+    const duration = 500; // ms
+    const startPosition = cam.position.clone();
+    const startTarget = controls.target.clone();
+    const endPosition = new THREE.Vector3(...position);
+    const endTarget = new THREE.Vector3(...target);
+    const startTime = performance.now();
+
+    function animate() {
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Ease in-out
+      const t = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      
+      cam.position.lerpVectors(startPosition, endPosition, t);
+      controls.target.lerpVectors(startTarget, endTarget, t);
+      controls.update();
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    }
+
+    animate();
+  }, cam);
+  cameraControl.mount();
 
   /* ------------ visuals ------------------------- */
   new VectorArm(scene, store, 'left');
