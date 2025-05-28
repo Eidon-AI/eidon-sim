@@ -3,12 +3,12 @@ import { prefs } from '../../core/preferences';
 export function mountStereoCam(parent: HTMLElement) {
   const wrap = document.createElement('div');
   wrap.id = 'stereoCam';
-  wrap.className = 'flex flex-col gap-1 pb-1 border-b border-neutral-700';
+  wrap.className = 'flex flex-col gap-1 border-b border-neutral-700';
   
   // Add title
   wrap.innerHTML = `
     <h3 class="mb-1 font-medium">
-      🥽 Stereo Camera Vision
+      🥽 First Person View
     </h3>
   `;
   

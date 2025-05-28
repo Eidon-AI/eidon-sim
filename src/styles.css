@@ -9,6 +9,10 @@ html[data-theme='light'] {
   color: #222;
 }
 
+input, select {
+  color: #000;
+}
+
 .btn{
   @apply px-3 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-sm;
 }

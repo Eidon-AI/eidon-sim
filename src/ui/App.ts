@@ -102,16 +102,23 @@ export function mount(root: HTMLElement) {
     if (id === selectedId) setSelected(null);
   });
 
+  document.addEventListener('prefsChanged', ()=>{
+    // simple reload approach
+    location.reload();
+  });
+
   /* ------------ prefs ------------ */
   mountPrefs(root);
 
+  /* ------------------------------------------------------------
+   * Ro-Arm control
+   * ---------------------------------------------------------- */
+  if (prefs.roArmEnabled) {
+    mountRoArmCard(sidebar, roCtrl);
+  }
+
   /* ------------ stereo cam ------------ */
   mountStereoCam(sidebar);
-
-  /* ------------------------------------------------------------
-   * Device list
-   * ---------------------------------------------------------- */
-  mountDeviceList(sidebar, hid, store);
 
   /* ------------------------------------------------------------
    * Angle table
@@ -119,16 +126,9 @@ export function mount(root: HTMLElement) {
   mountAnglePanel(sidebar, solver);
 
   /* ------------------------------------------------------------
-   * Ro-Arm control
+   * Device list
    * ---------------------------------------------------------- */
-  if (prefs.roArmEnabled) {
-    mountRoArmCard('left', sidebar, roCtrl);
-    mountRoArmCard('right', sidebar, roCtrl);
-  }
-  document.addEventListener('prefsChanged', ()=>{
-    // simple reload approach
-    location.reload();
-  });
+  mountDeviceList(sidebar, hid, store);
 
   /* ------------------------------------------------------------
    * Three.js scene

@@ -62,7 +62,7 @@ export class RoArmController {
   
     const url = (side==='left'?prefs.roLeftURL:prefs.roRightURL) +
                 `/js?json=${encodeURIComponent(JSON.stringify({
-                  T:1041, x:tip[0], y:tip[1], z:tip[2], t:3.14
+                  T:1041, x:tip[0], y:tip[2], z:tip[1], t:3.14
                 }))}`;
   
     fetch(url, { method:'GET', mode:'no-cors' }).catch(()=>{});

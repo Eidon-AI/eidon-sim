@@ -14,11 +14,11 @@ export function mountPrefs(root: HTMLElement) {
       <label>Angle α <input id="pAng" type="number" step="0.05" class="w-16 ml-2"></label><br>
       <label>Finger α<input id="pFin" type="number" step="0.05" class="w-16 ml-2"></label><br>
 
-      <label>Theme
+      <!-- <label>Theme
         <select id="pTheme" class="ml-2">
           <option value="dark">Dark</option><option value="light">Light</option>
         </select>
-      </label><br>
+      </label><br> -->
 
       <label>Surface <input id="pSurf" type="color" class="ml-2"></label><br>
       <label>Joints  <input id="pJoint" type="color" class="ml-2"></label><br>
@@ -57,7 +57,7 @@ export function mountPrefs(root: HTMLElement) {
     (document.getElementById('pHand') as HTMLInputElement).value = String(prefs.handLen);
     (document.getElementById('pAng')  as HTMLInputElement).value = String(prefs.angleAlpha);
     (document.getElementById('pFin')  as HTMLInputElement).value = String(prefs.fingerAlpha);
-    (document.getElementById('pTheme')as HTMLSelectElement).value = prefs.theme;
+    // (document.getElementById('pTheme')as HTMLSelectElement).value = prefs.theme;
     (document.getElementById('pSurf') as HTMLInputElement).value = prefs.meshSurface;
     (document.getElementById('pJoint')as HTMLInputElement).value = prefs.meshJoints;
     (document.getElementById('pStereoEn') as HTMLInputElement).checked = prefs.stereoEnabled;
@@ -77,7 +77,7 @@ export function mountPrefs(root: HTMLElement) {
     prefs.handLen     = parseFloat((document.getElementById('pHand') as HTMLInputElement).value);
     prefs.angleAlpha  = parseFloat((document.getElementById('pAng')  as HTMLInputElement).value);
     prefs.fingerAlpha = parseFloat((document.getElementById('pFin')  as HTMLInputElement).value);
-    prefs.theme       = (document.getElementById('pTheme') as HTMLSelectElement).value as any;
+    // prefs.theme       = (document.getElementById('pTheme') as HTMLSelectElement).value as any;
     prefs.meshSurface = (document.getElementById('pSurf') as HTMLInputElement).value;
     prefs.meshJoints  = (document.getElementById('pJoint')as HTMLInputElement).value;
     prefs.stereoEnabled = (document.getElementById('pStereoEn') as HTMLInputElement).checked;
@@ -85,7 +85,7 @@ export function mountPrefs(root: HTMLElement) {
     prefs.rightURL = (document.getElementById('pRightURL') as HTMLInputElement).value;
     prefs.roArmEnabled = (document.getElementById('pRoEn')  as HTMLInputElement).checked;
     prefs.roLeftURL    = (document.getElementById('pRoL') as HTMLInputElement).value;
-    prefs.roRightURL   = (document.getElementById('pRoR') as HTMLInputElement).value;
+    prefs.roRightURL   = pRoR.value;
 
     document.documentElement.dataset.theme = prefs.theme;
     savePrefs();
