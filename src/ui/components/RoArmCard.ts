@@ -6,7 +6,7 @@ export function mountRoArmCard(side: 'left'|'right', parent: HTMLElement, ctrl: 
   wrap.className = 'border-t border-neutral-700 pt-1 mt-1';
   wrap.innerHTML = `
     <div class="flex items-center gap-2">
-      <span class="font-semibold">${side.toUpperCase()} Ro-Arm</span>
+      <span class="font-semibold text-sm">${side.toUpperCase()} Ro-Arm</span>
       <button class="btn px-1" id="p">${ctrl['paused']?.[side]?'▶':'⏸'}</button>
       <span id="xyz" class="text-xs ml-auto">x:- y:- z:-</span>
     </div>`;
