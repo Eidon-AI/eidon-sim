@@ -20,8 +20,8 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
         </tr>
       </thead>
       <tbody>
-        <tr id="rowL"><td>L</td>${'<td>-</td>'.repeat(7)}</tr>
-        <tr id="rowR"><td>R</td>${'<td>-</td>'.repeat(7)}</tr>
+        <tr id="rowL"><td>L</td>${'<td class="text-right">-</td>'.repeat(7)}</tr>
+        <tr id="rowR"><td>R</td>${'<td class="text-right">-</td>'.repeat(7)}</tr>
       </tbody>
     </table>
   `;
@@ -44,7 +44,7 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
     const left  = solver.getAngles('left');
     const right = solver.getAngles('right');
 
-    if (left)  Object.values(left ).forEach((v, i) => tdL(i).textContent = v.toFixed(0));
-    if (right) Object.values(right).forEach((v, i) => tdR(i).textContent = v.toFixed(0));
+    if (left)  Object.values(left ).forEach((v, i) => tdL(i).textContent = `${v.toFixed(0)}°`);
+    if (right) Object.values(right).forEach((v, i) => tdR(i).textContent = `${v.toFixed(0)}°`);
   });
 }

@@ -17,11 +17,17 @@ interface DeviceUpdate {
 
 export class RoArmController {
   private lastSent: Record<Side, number> = { left: 0, right: 0 };
-  private paused : Record<Side, boolean> = { left: false, right: false };
+  private paused : Record<Side, boolean>;
   private lastXYZ : Record<Side, vec3>   = { left:[NaN,NaN,NaN], right:[NaN,NaN,NaN] };
   private rightIndexAngle: number = 0;
 
   constructor(private store: DeviceStore) {
+    // Load pause state from localStorage
+    this.paused = {
+      left: localStorage.getItem('roArmPaused_left') === 'true',
+      right: localStorage.getItem('roArmPaused_right') === 'true'
+    };
+
     store.addEventListener('update', e=>{
       const s = (e as CustomEvent<DeviceUpdate>).detail;
       if (!prefs.roArmEnabled) return;
@@ -34,7 +40,6 @@ export class RoArmController {
         // 0 (open) -> 0, 220 (closed) -> 3.14
         const cappedValue = Math.min(rightHand.finger[5], 220);
         this.rightIndexAngle = (cappedValue / 220) * Math.PI;
-        console.log('finger value:', rightHand.finger[5], 'capped:', cappedValue, 't value:', this.rightIndexAngle);
       }
       
       this.sendTip('left'); this.sendTip('right');
@@ -42,7 +47,11 @@ export class RoArmController {
     document.addEventListener('prefsChanged', ()=>{}); // placeholder if needed
   }
 
-  togglePause(side: Side) { this.paused[side] = !this.paused[side]; }
+  togglePause(side: Side) { 
+    this.paused[side] = !this.paused[side];
+    // Save pause state to localStorage
+    localStorage.setItem(`roArmPaused_${side}`, this.paused[side].toString());
+  }
 
   private calcTip(side: Side): vec3 | null {
     const up   = this.store.getBy(side, 'upper');
