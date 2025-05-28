@@ -11,7 +11,7 @@ type Prefs = {
   roDelta: number;
   roLeftURL : string;
   roRightURL: string;
-  roScale: string;
+  roScale: number;
 };
 
 const DEFAULT: Prefs = {

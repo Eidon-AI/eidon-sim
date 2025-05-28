@@ -9,7 +9,7 @@ export class IconOverlay {
     this.container.style.position = 'fixed';
     this.container.style.top = '20px';
     this.container.style.left = '20px';
-    this.container.style.opacity = '0.8';
+    this.container.style.opacity = '9';
     this.container.style.pointerEvents = 'none';
     this.container.className = 'z-5';
 
