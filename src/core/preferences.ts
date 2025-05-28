@@ -8,6 +8,7 @@ type Prefs = {
   leftURL:  string;
   rightURL: string;
   roArmEnabled: boolean;
+  roDelta: number;
   roLeftURL : string;
   roRightURL: string;
 };
@@ -22,6 +23,7 @@ const DEFAULT: Prefs = {
   leftURL: 'http://eidon-glass-47bc.local:81/stream',
   rightURL: 'http://eidon-glass-0214.local:81/stream',
   roArmEnabled: false,
+  roDelta: 0.005,   // 5 mm
   roLeftURL: 'http://192.168.4.54',
   roRightURL: 'http://192.168.4.55'
 };
