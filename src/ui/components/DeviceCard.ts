@@ -17,6 +17,19 @@ function createDial(label: string) {
   return { wrap, canvas };
 }
 
+function createForwardVectorCanvas() {
+  const wrap = document.createElement('div');
+  wrap.className = 'flex flex-col items-center';
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 40;
+  const cap = document.createElement('span');
+  cap.textContent = 'Forward';
+  cap.className = 'text-[10px] mt-0.5';
+  wrap.appendChild(canvas);
+  wrap.appendChild(cap);
+  return { wrap, canvas };
+}
+
 function drawDial(ctx: CanvasRenderingContext2D, valDeg: number, color: string = '#1e90ff') {
   const pct = (valDeg + 180) / 360;          // −180…+180 → 0…1
   const r = 18;
@@ -34,6 +47,68 @@ function drawDial(ctx: CanvasRenderingContext2D, valDeg: number, color: string =
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(Math.round(valDeg) + '°', 20, 20);
+}
+
+function drawForwardVector(ctx: CanvasRenderingContext2D, quat: number[], color: string) {
+  const size = 40;
+  const center = size / 2;
+  const radius = center - 2; // Radius of the sphere
+  const arrowLength = radius; // Fixed arrow length
+  const aspectRatio = 0.5; // Match the circle's perspective ratio
+
+  // Clear the canvas
+  ctx.clearRect(0, 0, size, size);
+
+  // Draw the background circle with perspective
+  ctx.beginPath();
+  ctx.ellipse(center, center + 2, radius, radius * aspectRatio, 0, Math.PI * 2, 0);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Get Euler angles from quaternion
+  const [yaw, pitch, roll] = eulerXYZ(new Float32Array(quat));
+
+  // Calculate 3D vector with constant length
+  const x = Math.sin(yaw) * Math.cos(pitch) * arrowLength;
+  const y = Math.sin(pitch) * arrowLength;
+  const z = Math.cos(yaw) * Math.cos(pitch) * arrowLength;
+
+  // Project to 2D with perspective
+  // Only scale the depth (z) component to maintain constant length
+  const perspX = x;
+  const perspY = -z * aspectRatio - y;
+
+  // Draw the vector
+  ctx.beginPath();
+  ctx.moveTo(center, center);
+  ctx.lineTo(center + perspX, center + perspY);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Draw the arrow head
+  const angle = Math.atan2(perspY, perspX);
+  const arrowSize = 4;
+  ctx.beginPath();
+  ctx.moveTo(center + perspX, center + perspY);
+  ctx.lineTo(
+    center + perspX - arrowSize * Math.cos(angle - Math.PI / 6),
+    center + perspY - arrowSize * Math.sin(angle - Math.PI / 6)
+  );
+  ctx.lineTo(
+    center + perspX - arrowSize * Math.cos(angle + Math.PI / 6),
+    center + perspY - arrowSize * Math.sin(angle + Math.PI / 6)
+  );
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  // Add depth indicator based on pitch
+  const depthAlpha = Math.max(0.3, 1 - (Math.abs(pitch)));
+  ctx.globalAlpha = depthAlpha;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 export function renderCard(state: DeviceState, hid: HidManager, store: DeviceStore) {
@@ -175,7 +250,9 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   const dYaw = createDial('Yaw');
   const dPit = createDial('Pitch');
   const dRol = createDial('Roll');
+  const fVec = createForwardVectorCanvas();
   [dYaw, dPit, dRol].forEach(d => dialWrap.appendChild(d.wrap));
+  dialWrap.appendChild(fVec.wrap);
   el.appendChild(dialWrap);
 
   const updateDials = (s: DeviceState) =>{
@@ -183,6 +260,7 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
     drawDial(dYaw.canvas.getContext('2d')!, yaw, s.color);
     drawDial(dPit.canvas.getContext('2d')!, pit, s.color);
     drawDial(dRol.canvas.getContext('2d')!, rol, s.color);
+    drawForwardVector(fVec.canvas.getContext('2d')!, Array.from(s.quat), s.color);
   };
   
   /* run immediately and on every device update */
