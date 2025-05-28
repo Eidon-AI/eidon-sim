@@ -12,6 +12,7 @@ import { initScene }    from './scene/sceneManager';
 import { mountStereoCam } from './components/StereoCam';
 import { RoArmController } from '../core/RoArmController';
 import { prefs } from '../core/preferences';
+import { IconOverlay } from './components/IconOverlay';
 
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
@@ -132,4 +133,8 @@ export function mount(root: HTMLElement) {
 
   /* ------------ Three.js scene ------------ */
   initScene(canvas, store, solver);
+
+  /* ------------ Icon Overlay ------------ */
+  const iconOverlay = new IconOverlay();
+  iconOverlay.mount();
 }
