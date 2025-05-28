@@ -42,6 +42,8 @@ export function mountPrefs(root: HTMLElement) {
       <label>L-arm URL <input id="pRoL" type="text" class="ml-2 w-50"></label>
       <label>R-arm URL <input id="pRoR" type="text" class="ml-2 w-50"></label>
 
+      <label>Scale <input id="pRoScale" type="number" step="0.05" class="w-16 ml-2"></label>
+
       <div class="flex justify-end gap-2 mt-4">
         <button id="pCancel" class="btn">Cancel</button>
         <button id="pSave" class="btn">Save</button>
@@ -72,7 +74,8 @@ export function mountPrefs(root: HTMLElement) {
           rightURL: prefs.rightURL,
           roArmEnabled: prefs.roArmEnabled,
           roLeftURL: prefs.roLeftURL,
-          roRightURL: prefs.roRightURL
+          roRightURL: prefs.roRightURL,
+          roScale: prefs.roScale
         };
         setValues();
       }
@@ -95,6 +98,7 @@ export function mountPrefs(root: HTMLElement) {
     (document.getElementById('pRoEn') as HTMLInputElement).checked = prefs.roArmEnabled;
     (document.getElementById('pRoL') as HTMLInputElement).value   = prefs.roLeftURL;
     (document.getElementById('pRoR') as HTMLInputElement).value   = prefs.roRightURL;
+    (document.getElementById('pRoScale') as HTMLInputElement).value   = prefs.roScale.toString();
   };
 
   /* restore original values */

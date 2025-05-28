@@ -11,6 +11,7 @@ type Prefs = {
   roDelta: number;
   roLeftURL : string;
   roRightURL: string;
+  roScale: string;
 };
 
 const DEFAULT: Prefs = {
@@ -25,7 +26,8 @@ const DEFAULT: Prefs = {
   roArmEnabled: false,
   roDelta: 0.005,   // 5 mm
   roLeftURL: 'http://192.168.4.54',
-  roRightURL: 'http://192.168.4.55'
+  roRightURL: 'http://192.168.4.55',
+  roScale: 1000
 };
 
 export const prefs: Prefs = Object.assign(

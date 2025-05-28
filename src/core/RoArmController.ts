@@ -5,16 +5,38 @@ import { HUM_LEN, RAD_LEN, HAND_LEN } from './constants';
 
 type Side = 'left' | 'right';
 
+interface HandData {
+  finger?: number[];
+}
+
+interface DeviceUpdate {
+  arm?: {
+    side: Side;
+  };
+}
+
 export class RoArmController {
   private lastSent: Record<Side, number> = { left: 0, right: 0 };
   private paused : Record<Side, boolean> = { left: false, right: false };
   private lastXYZ : Record<Side, vec3>   = { left:[NaN,NaN,NaN], right:[NaN,NaN,NaN] };
+  private rightIndexAngle: number = 0;
 
   constructor(private store: DeviceStore) {
     store.addEventListener('update', e=>{
-      const s = (e as CustomEvent<any>).detail;
+      const s = (e as CustomEvent<DeviceUpdate>).detail;
       if (!prefs.roArmEnabled) return;
       if (Date.now() - this.lastSent[s.arm?.side ?? 'left'] < 50) return; // 20 Hz
+      
+      // Update right index finger angle if we have hand data
+      const rightHand = this.store.getBy('right', 'hand') as HandData | undefined;
+      if (rightHand?.finger?.[5] !== undefined) {
+        // Map finger value (0-220) to t value (0-3.14)
+        // 0 (open) -> 0, 220 (closed) -> 3.14
+        const cappedValue = Math.min(rightHand.finger[5], 220);
+        this.rightIndexAngle = (cappedValue / 220) * Math.PI;
+        console.log('finger value:', rightHand.finger[5], 'capped:', cappedValue, 't value:', this.rightIndexAngle);
+      }
+      
       this.sendTip('left'); this.sendTip('right');
     });
     document.addEventListener('prefsChanged', ()=>{}); // placeholder if needed
@@ -58,12 +80,21 @@ export class RoArmController {
     const dist = Math.hypot(tip[0]-prev[0], tip[1]-prev[1], tip[2]-prev[2]);
     if (!isNaN(prev[0]) && dist < prefs.roDelta) return;
   
-    this.lastXYZ[side] = [...tip];
+    this.lastXYZ[side] = vec3.clone(tip);
+
+    let zTip = tip[1];
+    if (zTip < -0.11) zTip = -0.11;
+
+    const payload = {
+      T: 1041,
+      x: Math.round(tip[0] * prefs.roScale),
+      y: Math.round(-tip[2] * prefs.roScale),
+      z: Math.round(zTip * prefs.roScale),
+      t: side === 'right' ? this.rightIndexAngle : 3.14 // Use right index angle for right arm, default for left
+    };
   
     const url = (side==='left'?prefs.roLeftURL:prefs.roRightURL) +
-                `?json=${encodeURIComponent(JSON.stringify({
-                  T:1041, x:tip[0], y:tip[2], z:tip[1], t:3.14
-                }))}`;
+                `?json=${encodeURIComponent(JSON.stringify(payload))}`;
   
     fetch(url, { method:'GET', mode:'no-cors' }).catch(()=>{});
   }
