@@ -18,3 +18,13 @@ input, select {
 }
 
 .bar { @apply h-1 bg-neutral-700; }
+
+.sidebar {
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+.modal label {
+  display: flex;
+  margin: 0;
+}

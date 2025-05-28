@@ -35,18 +35,21 @@ export function mount(root: HTMLElement) {
    * 1. Inject sidebar + canvas markup
    * ---------------------------------------------------------- */
   root.innerHTML = `
-    <div class="sidebar flex flex-col w-80 border-r border-neutral-700 p-4 gap-2">
-      <button id="btnConnect"    class="btn">Connect HID</button>
-      <button id="btnDisconnect" class="btn">Disconnect All</button>
-      <button id="btnCal"        class="btn">Calibrate All</button>
-      <pre id="log" class="flex-1 overflow-auto text-xs mt-2 bg-neutral-900 p-2 border-b border-neutral-700"></pre>
+    <div class="sidebar fixed bottom-0 right-0 w-80 flex flex-col bg-neutral-900/80 backdrop-blur-sm border-neutral-700 p-4 gap-2 overflow-y-auto z-10">
+      <div class="flex gap-2 justify-start">
+        <button id="btnConnect"    class="btn" style="font-size: 1.2rem;">✛</button>
+        <button id="btnCal"        class="btn">Calibrate All</button>
+        <div class="flex-1"></div>
+        <button id="btnPrefs"      class="btn" style="font-size: 1.4rem; padding-top: 2px;">⛭</button>
+      </div>
+      <pre id="log" class="flex-1 overflow-auto text-xs bg-neutral-900/50 ph-2 border-neutral-700"></pre>
     </div>
-    <div id="calOverlay" class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center text-4xl font-bold text-white hidden">
+    <div id="calOverlay" class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center text-4xl font-bold text-white z-50 hidden">
       <div class="text-8xl mb-8">T</div>
       <div class="text-2xl mb-4">Hold T-pose position</div>
       <span id="calCount">5</span>
     </div>
-    <canvas id="gl" class="flex-1"></canvas>
+    <canvas id="gl" class="fixed inset-0 w-screen h-full"></canvas>
   `;
 
   /* ------------------------------------------------------------
@@ -55,6 +58,7 @@ export function mount(root: HTMLElement) {
   const btnConnect    = document.getElementById('btnConnect')    as HTMLButtonElement;
   const btnDisconnect = document.getElementById('btnDisconnect') as HTMLButtonElement;
   const btnCal        = document.getElementById('btnCal')        as HTMLButtonElement;
+  const btnPrefs      = document.getElementById('btnPrefs')      as HTMLButtonElement;
   const canvas        = document.getElementById('gl')            as HTMLCanvasElement;
   const sidebar       = document.querySelector('.sidebar')       as HTMLDivElement;
   logRef = document.getElementById('log') as HTMLPreElement;
@@ -88,6 +92,10 @@ export function mount(root: HTMLElement) {
 
   btnDisconnect?.addEventListener('click', () => hid.disconnectAll());
   btnCal?.addEventListener('click', () => hid.startCalibration());
+  btnPrefs?.addEventListener('click', () => {
+    // Implement preferences button functionality
+    console.log('Preferences button clicked');
+  });
 
   /* ---- log update only for selected device ---- */
   store.addEventListener('update', e => {
@@ -110,28 +118,18 @@ export function mount(root: HTMLElement) {
   /* ------------ prefs ------------ */
   mountPrefs(root);
 
-  /* ------------------------------------------------------------
-   * Ro-Arm control
-   * ---------------------------------------------------------- */
-  if (prefs.roArmEnabled) {
-    mountRoArmCard(sidebar, roCtrl);
-  }
+  /* ------------ Device list ------------ */
+  mountDeviceList(sidebar, hid, store);
 
   /* ------------ stereo cam ------------ */
   mountStereoCam(sidebar);
 
-  /* ------------------------------------------------------------
-   * Angle table
-   * ---------------------------------------------------------- */
+  /* ------------ Ro-Arm control ------------ */
+  if (prefs.roArmEnabled) mountRoArmCard(sidebar, roCtrl);
+
+  /* ------------ Angle table ------------ */
   mountAnglePanel(sidebar, solver);
 
-  /* ------------------------------------------------------------
-   * Device list
-   * ---------------------------------------------------------- */
-  mountDeviceList(sidebar, hid, store);
-
-  /* ------------------------------------------------------------
-   * Three.js scene
-   * ---------------------------------------------------------- */
+  /* ------------ Three.js scene ------------ */
   initScene(canvas, store, solver);
 }

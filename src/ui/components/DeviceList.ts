@@ -5,6 +5,7 @@ import { renderCard }  from './DeviceCard';
 export function mountDeviceList(parent: HTMLElement, hid: HidManager, store: DeviceStore){
   const wrapper = document.createElement('div');
   wrapper.id = 'deviceList';
+  wrapper.className = 'border-b border-neutral-700';
   parent.appendChild(wrapper);
 
   store.addEventListener('update', e=>{

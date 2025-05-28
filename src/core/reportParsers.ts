@@ -1,5 +1,5 @@
 import { quat, vec3 } from 'gl-matrix';
-import { DeviceState } from './types';
+import { DeviceState } from '../types/types';
 import { HUM_LEN, RAD_LEN, HAND_LEN, FINGER_ALPHA } from './constants';
 
 /* helper to read little-endian u16 and map to −1…+1 float */

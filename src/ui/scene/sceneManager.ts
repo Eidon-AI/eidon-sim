@@ -13,7 +13,7 @@ export function initScene(
 ) {
   /* ------------ renderer & basic scene ---------- */
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setSize(window.innerWidth - 320, window.innerHeight);
+  renderer.setSize(window.innerWidth - 0, window.innerHeight);
   renderer.outputEncoding = THREE.sRGBEncoding;       // <-- crucial
   renderer.toneMapping   = THREE.ACESFilmicToneMapping;
 
@@ -32,13 +32,13 @@ export function initScene(
   /* ------------ camera + controls -------------- */
   const cam = new THREE.PerspectiveCamera(
     25,
-    (window.innerWidth - 320) / window.innerHeight,
+    (window.innerWidth - 0) / window.innerHeight,
     0.1,
     10
   );
   cam.position.set(2, 3, 3);
   const controls = new OrbitControls(cam, renderer.domElement);
-  controls.target.set(-0.1, 0.9, 0);
+  controls.target.set(0.15, 0.95, 0);
   controls.update();
 
   /* ------------ visuals ------------------------- */
@@ -48,8 +48,8 @@ export function initScene(
 
   /* ------------ resize + loop ------------------- */
   window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth - 320, window.innerHeight);
-    cam.aspect = (window.innerWidth - 320) / window.innerHeight;
+    renderer.setSize(window.innerWidth - 0, window.innerHeight);
+    cam.aspect = (window.innerWidth - 0) / window.innerHeight;
     cam.updateProjectionMatrix();
   });
 

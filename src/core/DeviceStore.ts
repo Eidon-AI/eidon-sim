@@ -1,6 +1,6 @@
 import { quat, vec3, vec3 as v3 } from 'gl-matrix';
 import { parseTracker, parseGlove } from './reportParsers';
-import { DeviceState } from './types';
+import { DeviceState } from '../types/types';
 
 export class DeviceStore extends EventTarget {
   constructor(){

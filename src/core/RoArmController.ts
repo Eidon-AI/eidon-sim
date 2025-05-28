@@ -61,7 +61,7 @@ export class RoArmController {
     this.lastXYZ[side] = [...tip];
   
     const url = (side==='left'?prefs.roLeftURL:prefs.roRightURL) +
-                `/js?json=${encodeURIComponent(JSON.stringify({
+                `?json=${encodeURIComponent(JSON.stringify({
                   T:1041, x:tip[0], y:tip[2], z:tip[1], t:3.14
                 }))}`;
   

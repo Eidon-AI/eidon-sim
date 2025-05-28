@@ -1,4 +1,4 @@
-import { DeviceState } from '../../core/types';
+import { DeviceState } from '../../types/types';
 import { HidManager }  from '../../core/HidManager';
 import { DeviceStore } from '../../core/DeviceStore';
 import { eulerXYZ } from '../../core/mathUtils';

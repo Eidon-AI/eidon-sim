@@ -2,53 +2,82 @@ import { prefs, savePrefs } from '../../core/preferences';
 
 export function mountPrefs(root: HTMLElement) {
   const modal = document.createElement('div');
-  modal.className = 'fixed inset-0 bg-black/60 hidden items-center justify-center';
+  modal.className = 'flex fixed inset-0 bg-black/60 hidden items-center justify-center z-50';
   modal.innerHTML = `
-    <div class="bg-neutral-800 p-4 rounded w-64 space-y-3">
-      <h3 class="font-bold text-lg mb-2">Preferences</h3>
+    <div class="modal bg-neutral-800/70 backdrop-blur-sm p-5 rounded-lg w-128 space-y-3">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-bold text-lg">Preferences</h3>
+        <button id="pClose" class="text-neutral-400 hover:text-white">✕</button>
+      </div>
 
-      <label>Humerus (m)<input id="pHum" type="number" step="0.01" class="w-16 ml-2 color-black"></label><br>
-      <label>Radius (m) <input id="pRad" type="number" step="0.01" class="w-16 ml-2"></label><br>
-      <label>Hand  (m) <input id="pHand" type="number" step="0.01" class="w-16 ml-2"></label><br>
+      <label>Humerus (m)<input id="pHum" type="number" step="0.01" class="w-16 ml-2 color-black"></label>
+      <label>Radius (m) <input id="pRad" type="number" step="0.01" class="w-16 ml-2"></label>
+      <label>Hand  (m) <input id="pHand" type="number" step="0.01" class="w-16 ml-2"></label>
 
-      <label>Angle α <input id="pAng" type="number" step="0.05" class="w-16 ml-2"></label><br>
-      <label>Finger α<input id="pFin" type="number" step="0.05" class="w-16 ml-2"></label><br>
+      <label>Angle α <input id="pAng" type="number" step="0.05" class="w-16 ml-2"></label>
+      <label>Finger α<input id="pFin" type="number" step="0.05" class="w-16 ml-2"></label>
 
       <!-- <label>Theme
         <select id="pTheme" class="ml-2">
           <option value="dark">Dark</option><option value="light">Light</option>
         </select>
-      </label><br> -->
+      </label> -->
 
-      <label>Surface <input id="pSurf" type="color" class="ml-2"></label><br>
-      <label>Joints  <input id="pJoint" type="color" class="ml-2"></label><br>
+      <label>Surface <input id="pSurf" type="color" class="ml-2"></label>
+      <label>Joints  <input id="pJoint" type="color" class="ml-2"></label>
 
       <label class="flex items-center">
-        <input id="pStereoEn" type="checkbox" class="mr-2"> Stereo headset
+        <input id="pStereoEn" type="checkbox" class="mr-2"> Enable POV
       </label>
       <label>L-eye URL
-        <input id="pLeftURL" type="text" class="ml-2 w-40">
-      </label><br>
+        <input id="pLeftURL" type="text" class="ml-2 w-50">
+      </label>
       <label>R-eye URL
-        <input id="pRightURL" type="text" class="ml-2 w-40">
+        <input id="pRightURL" type="text" class="ml-2 w-50">
       </label>
 
       <label class="flex items-center">
-        <input id="pRoEn" type="checkbox" class="mr-2"> Ro-Arm control
+        <input id="pRoEn" type="checkbox" class="mr-2"> Enable Teleoperation
       </label>
-      <label>L-arm URL <input id="pRoL" type="text" class="ml-2 w-40"></label><br>
-      <label>R-arm URL <input id="pRoR" type="text" class="ml-2 w-40"></label>
+      <label>L-arm URL <input id="pRoL" type="text" class="ml-2 w-50"></label>
+      <label>R-arm URL <input id="pRoR" type="text" class="ml-2 w-50"></label>
 
-      <button id="pSave" class="btn mt-2">Save</button>
+      <div class="flex justify-end gap-2 mt-4">
+        <button id="pCancel" class="btn">Cancel</button>
+        <button id="pSave" class="btn">Save</button>
+      </div>
     </div>`;
   root.appendChild(modal);
 
-  /* open button */
-  const gear = document.createElement('button');
-  gear.textContent = '⚙';
-  gear.className = 'btn absolute top-2 right-2';
-  gear.onclick = ()=> modal.classList.toggle('hidden');
-  root.appendChild(gear);
+  // Store original values when opening modal
+  let originalValues: any = null;
+
+  // Set up the preferences button click handler
+  const btnPrefs = document.getElementById('btnPrefs');
+  if (btnPrefs) {
+    btnPrefs.onclick = () => {
+      modal.classList.toggle('hidden');
+      if (!modal.classList.contains('hidden')) {
+        // Store original values when opening
+        originalValues = {
+          humLen: prefs.humLen,
+          radLen: prefs.radLen,
+          handLen: prefs.handLen,
+          angleAlpha: prefs.angleAlpha,
+          fingerAlpha: prefs.fingerAlpha,
+          meshSurface: prefs.meshSurface,
+          meshJoints: prefs.meshJoints,
+          stereoEnabled: prefs.stereoEnabled,
+          leftURL: prefs.leftURL,
+          rightURL: prefs.rightURL,
+          roArmEnabled: prefs.roArmEnabled,
+          roLeftURL: prefs.roLeftURL,
+          roRightURL: prefs.roRightURL
+        };
+        setValues();
+      }
+    };
+  }
 
   /* fill inputs */
   const setValues = () => {
@@ -66,9 +95,13 @@ export function mountPrefs(root: HTMLElement) {
     (document.getElementById('pRoEn') as HTMLInputElement).checked = prefs.roArmEnabled;
     (document.getElementById('pRoL') as HTMLInputElement).value   = prefs.roLeftURL;
     (document.getElementById('pRoR') as HTMLInputElement).value   = prefs.roRightURL;
-
   };
-  setValues();
+
+  /* restore original values */
+  const restoreValues = () => {
+    if (!originalValues) return;
+    Object.assign(prefs, originalValues);
+  };
 
   /* save */
   document.getElementById('pSave')!.onclick = () => {
@@ -85,10 +118,22 @@ export function mountPrefs(root: HTMLElement) {
     prefs.rightURL = (document.getElementById('pRightURL') as HTMLInputElement).value;
     prefs.roArmEnabled = (document.getElementById('pRoEn')  as HTMLInputElement).checked;
     prefs.roLeftURL    = (document.getElementById('pRoL') as HTMLInputElement).value;
-    prefs.roRightURL   = pRoR.value;
+    prefs.roRightURL   = (document.getElementById('pRoR') as HTMLInputElement).value;
 
     document.documentElement.dataset.theme = prefs.theme;
     savePrefs();
+    modal.classList.add('hidden');
+  };
+
+  /* cancel */
+  document.getElementById('pCancel')!.onclick = () => {
+    restoreValues();
+    modal.classList.add('hidden');
+  };
+
+  /* close */
+  document.getElementById('pClose')!.onclick = () => {
+    restoreValues();
     modal.classList.add('hidden');
   };
 }
