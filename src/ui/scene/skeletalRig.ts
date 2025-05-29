@@ -5,6 +5,7 @@ import { DeviceStore } from '../../core/DeviceStore';
 import { prefs } from '../../core/preferences';
 
 const loader = new GLTFLoader();
+const d2r = Math.PI / 180;
 
 type Side = 'left' | 'right';
 type ArmMap = Record<'shoulder' | 'elbow' | 'wrist', THREE.Bone>;
@@ -52,7 +53,8 @@ export class SkeletalRig {
 
   /* ------------ once, both arms in one mesh ------------- */
   private init(root: THREE.Group) {
-    root.position.set(0, 0, 0);
+    root.position.set(0, -1, 0);
+    root.rotation.set(0, 180 * d2r, 0);
     this.scene.add(root);
     this.root = root;
 
@@ -127,11 +129,10 @@ export class SkeletalRig {
     if (!a) return;
 
     const arm = this.armBones[side];
-    const d2r = Math.PI / 180;
     const sgn = side === 'left' ? 1 : -1;      // mirroring sign
 
     /* Shoulder (yaw Z, pitch Y, roll X) */
-    arm.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -a.shYaw*d2r);
+    arm.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -(a.shYaw - 180)*d2r);
 
     /* Elbow: hinge around local Z */
     arm.elbow.rotation.set(0, 0, sgn * a.elFlex * d2r);

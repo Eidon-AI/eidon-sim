@@ -8,27 +8,27 @@ interface CameraPosition {
 const VIEWS: Record<string, CameraPosition> = {
   top: {
     position: [0.15, 5, 0],
-    target: [0.15, 0.9, 0]
+    target: [0.15, 0, 0]
   },
   front: {
-    position: [0.15, 0.9, 5],
-    target: [0.15, 0.9, 0]
+    position: [0.15, 0, 5],
+    target: [0.15, 0, 0]
   },
   right: {
-    position: [5, 0.9, 0],
-    target: [0.15, 0.9, 0]
+    position: [5, 0, 0],
+    target: [0.15, 0, 0]
   },
   back: {
-    position: [0.15, 0.9, -5],
-    target: [0.15, 0.9, 0]
+    position: [0.15, 0, -5],
+    target: [0.15, 0, 0]
   },
   left: {
-    position: [-5, 0.9, 0],
-    target: [0.15, 0.9, 0]
+    position: [-5, 0, 0],
+    target: [0.15, 0, 0]
   },
   bottom: {
     position: [0.15, -5, 0],
-    target: [0.15, 0.9, 0]
+    target: [0.15, 0, 0]
   }
 };
 
@@ -135,8 +135,9 @@ export class CameraControl {
       new THREE.Euler(-Math.PI / 2, 0, 0)
     );
     
-    // Apply camera quaternion with correction
-    this.cube.quaternion.copy(this.mainCamera.quaternion).multiply(correction);
+    // Apply inverse of camera quaternion with correction
+    // The cube should show world orientation relative to camera, so it rotates opposite to camera
+    this.cube.quaternion.copy(this.mainCamera.quaternion).invert().multiply(correction);
     
     this.renderer.render(this.scene, this.camera);
   }
@@ -184,7 +185,7 @@ export class CameraControl {
           lookAtMatrix.lookAt(
             new THREE.Vector3(...VIEWS[view].position),
             new THREE.Vector3(...VIEWS[view].target),
-            new THREE.Vector3(0, 1, 0)
+            new THREE.Vector3(0, 0.05, 0)
           );
           this.cube.quaternion.setFromRotationMatrix(lookAtMatrix);
           console.log('Updated cube quaternion:', this.cube.quaternion);

@@ -37,9 +37,9 @@ export function initScene(
     0.1,
     10
   );
-  cam.position.set(-2, 3, 5);
+  cam.position.set(1.5, 1.5, -3);
   const controls = new OrbitControls(cam, renderer.domElement);
-  controls.target.set(0.15, 0.9, 0);
+  controls.target.set(-0.3, 0.15, 0);
   controls.update();
 
   /* ------------ camera control cube ------------ */
