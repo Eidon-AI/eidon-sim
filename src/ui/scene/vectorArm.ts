@@ -184,6 +184,7 @@ export class VectorArm {
     /* ---- update up vector segments ---- */
     const devices = [up, low, glove];
     const startPoints = [shoulder, upperEnd, lowerEnd];
+    const segmentLengths = [HUM_LEN(), RAD_LEN(), HAND_LEN()]; // Forward vector segment lengths
     
     startPoints.forEach((startPt, idx) => {
       const dev = devices[idx];
@@ -198,7 +199,9 @@ export class VectorArm {
       }
       
       const upVector = rotUp(dev.up);
-      const upEnd = vec3.scaleAndAdd(vec3.create(), startPt, upVector, 0.05); // shorter length for up vectors
+      // Make up vector length proportional to forward vector segment length (20% of segment length)
+      const upVectorLength = segmentLengths[idx] * 0.2;
+      const upEnd = vec3.scaleAndAdd(vec3.create(), startPt, upVector, upVectorLength);
       
       // Show and update up tube
       upTube.visible = true;

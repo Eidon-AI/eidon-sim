@@ -3,6 +3,7 @@ import { GLTFLoader, GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { ArmSolver } from '../../core/ArmSolver';
 import { DeviceStore } from '../../core/DeviceStore';
 import { prefs } from '../../core/preferences';
+import { quat } from 'gl-matrix';
 
 const loader = new GLTFLoader();
 const d2r = Math.PI / 180;
@@ -16,6 +17,7 @@ export class SkeletalRig {
   private fingerMap:  Record<Side, THREE.Bone[]>  = { left: [], right: [] };
   private extraMeshes!: { surface: THREE.Mesh; joints: THREE.Mesh };
   private root: THREE.Group | null = null;
+  private useActuatorAngles: boolean = false;
 
   constructor(
     private scene : THREE.Scene,
@@ -43,6 +45,13 @@ export class SkeletalRig {
           if (mesh.material) (mesh.material as THREE.MeshStandardMaterial).color.set(hex);
         });
       }
+    });
+
+    // Listen for angle mode changes
+    document.addEventListener('angleModeChanged', (e) => {
+      const { useActuatorAngles } = (e as CustomEvent<any>).detail;
+      console.log('SkeletalRig: Mode changed to', useActuatorAngles ? 'Actuator Angles' : 'Quaternions');
+      this.useActuatorAngles = useActuatorAngles;
     });
   }
 
@@ -125,26 +134,13 @@ export class SkeletalRig {
 
   /* ------------ per-frame mapping ----------------------- */
   private applySide(side: Side) {
-    const a = this.solver.getAngles(side);
-    if (!a) return;
+    if (this.useActuatorAngles) {
+      this.applySideActuatorAngles(side);
+    } else {
+      this.applySideQuaternion(side);
+    }
 
-    const arm = this.armBones[side];
-    const sgn = side === 'left' ? 1 : -1;      // mirroring sign
-
-    /* Shoulder (yaw Z, pitch Y, roll X) */
-    arm.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -(a.shYaw - 180)*d2r);
-
-    /* Elbow: hinge around local Z */
-    arm.elbow.rotation.set(0, 0, sgn * a.elFlex * d2r);
-
-    /* Wrist: pitch about X? yaw about Z; add full fore-arm roll */
-    arm.wrist.rotation.set(
-      -a.wrPitch*d2r,
-      0,
-      -a.wrYaw*d2r// -sgn * (a.wrYaw + a.faRoll) * d2r
-    );
-
-    /* ----- Fingers mapping ----- */
+    /* ----- Fingers mapping (same for both modes) ----- */
     const glove = this.store.getBy(side, 'hand');
     const src = glove?.fingerSmooth ?? glove?.fingerNorm;
 
@@ -188,5 +184,127 @@ export class SkeletalRig {
         }
       });
     }
+  }
+
+  /* ------------ Quaternion-based rotation (smooth) ---- */
+  private applySideQuaternion(side: Side) {
+    const a = this.solver.getAngles(side);
+    if (!a) return;
+
+    const arm = this.armBones[side];
+
+    /* Shoulder: Use quaternion directly to avoid angle wrapping */
+    const upperDevice = this.store.getBy(side, 'upper');
+    if (upperDevice) {
+      const deviceQuat = upperDevice.quat;
+      
+      // Convert gl-matrix quat to THREE.js quaternion
+      const threeQuat = new THREE.Quaternion(deviceQuat[0], deviceQuat[1], deviceQuat[2], deviceQuat[3]);
+      
+      // Convert to Euler angles and apply EXACT same corrections as actuator mode
+      const euler = new THREE.Euler().setFromQuaternion(threeQuat, 'XYZ');
+      
+      // Apply same coordinate corrections as actuator mode for shoulder:
+      // arm.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -(a.shYaw - 180)*d2r);
+      const correctedRoll = -euler.x;   // X = roll
+      const correctedPitch = euler.y; // Y = pitch (negated)
+      const correctedYaw = -(euler.z * 180/Math.PI) * Math.PI/180; // Z = yaw (offset and negated)
+      
+      // Convert back to quaternion with corrected Euler angles
+      const correctedEuler = new THREE.Euler(correctedRoll, correctedPitch, correctedYaw, 'XYZ');
+      const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
+      
+      // Reset Euler rotation and use quaternion
+      arm.shoulder.rotation.set(0, 0, 0);
+      arm.shoulder.quaternion.copy(correctedQuat);
+    } else {
+      // Fallback to Euler if no device quaternion available
+      arm.shoulder.quaternion.set(0, 0, 0, 1); // Reset quaternion
+      arm.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -(a.shYaw - 180)*d2r);
+    }
+
+    /* Elbow: Use quaternion-based calculation when devices available */
+    const lowerDevice = this.store.getBy(side, 'lower');
+    if (upperDevice && lowerDevice) {
+      // Calculate relative rotation between upper and lower arm
+      const upperQuat = upperDevice.quat;
+      const lowerQuat = lowerDevice.quat;
+      
+      // Calculate relative quaternion: lower relative to upper
+      const upperInverse = quat.invert(quat.create(), upperQuat);
+      const relativeQuat = quat.multiply(quat.create(), upperInverse, lowerQuat);
+      
+      // Convert to THREE.js quaternion and then to Euler to extract Z rotation (elbow flex)
+      const threeRelQuat = new THREE.Quaternion(relativeQuat[0], relativeQuat[1], relativeQuat[2], relativeQuat[3]);
+      const relativeEuler = new THREE.Euler().setFromQuaternion(threeRelQuat, 'XYZ');
+      
+      // Extract elbow flex (Z rotation) and apply mirroring
+      const elbowFlex = -relativeEuler.z;
+      
+      arm.elbow.quaternion.set(0, 0, 0, 1); // Reset quaternion
+      arm.elbow.rotation.set(0, 0, elbowFlex);
+    } else {
+      // Fallback to actuator angle if devices not available
+      arm.elbow.quaternion.set(0, 0, 0, 1); // Reset quaternion
+      arm.elbow.rotation.set(0, 0, (side === 'left' ? 1 : -1) * a.elFlex * d2r);
+    }
+
+    /* Wrist: Use quaternion if hand device available, otherwise Euler */
+    const handDevice = this.store.getBy(side, 'hand');
+    if (handDevice) {
+      const deviceQuat = handDevice.quat;
+      
+      // Convert gl-matrix quat to THREE.js quaternion
+      const threeQuat = new THREE.Quaternion(deviceQuat[0], deviceQuat[1], deviceQuat[2], deviceQuat[3]);
+      
+      // Convert to Euler angles and apply EXACT same corrections as actuator mode
+      const euler = new THREE.Euler().setFromQuaternion(threeQuat, 'XYZ');
+      
+      // Apply same coordinate corrections as actuator mode for wrist:
+      // arm.wrist.rotation.set(-a.wrPitch*d2r, 0, -a.wrYaw*d2r);
+      const correctedPitch = -euler.y; // Y = pitch (negated)
+      const correctedYaw = -euler.z + 90*d2r;   // Z = yaw (negated)
+      
+      // Convert back to quaternion with corrected Euler angles
+      const correctedEuler = new THREE.Euler(0, correctedPitch, correctedYaw, 'XYZ');
+      const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
+      
+      // Reset Euler rotation and use quaternion
+      arm.wrist.rotation.set(0, 0, 0);
+      arm.wrist.quaternion.copy(correctedQuat);
+    } else {
+      // Fallback to Euler angles
+      arm.wrist.quaternion.set(0, 0, 0, 1); // Reset quaternion
+      arm.wrist.rotation.set(
+        -a.wrPitch*d2r,
+        0,
+        -a.wrYaw*d2r
+      );
+    }
+  }
+
+  /* ------------ Actuator angle-based rotation (validation) ---- */
+  private applySideActuatorAngles(side: Side) {
+    const a = this.solver.getAngles(side);
+    if (!a) return;
+
+    const arm = this.armBones[side];
+    const sgn = side === 'left' ? 1 : -1;      // mirroring sign
+
+    /* Shoulder: Use calculated actuator angles */
+    arm.shoulder.quaternion.set(0, 0, 0, 1); // Reset quaternion
+    arm.shoulder.rotation.set(-(a.shRoll - 0)*d2r, (a.shPitch - 0)*d2r, -(a.shYaw - 0)*d2r);
+
+    /* Elbow: Use calculated actuator angle */
+    arm.elbow.quaternion.set(0, 0, 0, 1); // Reset quaternion
+    arm.elbow.rotation.set(0, 0, sgn * a.elFlex * d2r);
+
+    /* Wrist: Use calculated actuator angles */
+    arm.wrist.quaternion.set(0, 0, 0, 1); // Reset quaternion
+    arm.wrist.rotation.set(
+      -a.wrPitch*d2r,
+      0,
+      -a.wrYaw*d2r
+    );
   }
 }

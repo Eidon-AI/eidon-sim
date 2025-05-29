@@ -490,9 +490,9 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   const fVec = createForwardVectorCanvas();
   const uVec = createUpVectorCanvas();
   dialWrap.appendChild(prism.wrap);
-  [dYaw, dPit, dRol].forEach(d => dialWrap.appendChild(d.wrap));
   dialWrap.appendChild(fVec.wrap);
   dialWrap.appendChild(uVec.wrap);
+  [dYaw, dPit, dRol].forEach(d => dialWrap.appendChild(d.wrap));
   el.appendChild(dialWrap);
 
   const updateDials = (s: DeviceState) =>{

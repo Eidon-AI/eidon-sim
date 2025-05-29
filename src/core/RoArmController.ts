@@ -92,15 +92,18 @@ export class RoArmController {
     this.lastXYZ[side] = vec3.clone(tip);
 
     let zTip = tip[1];
-    if (zTip < -0.11) zTip = -0.11;
+    // if (zTip < -0.11) zTip = -0.11;
+    // if (zTip < 0) zTip = 0;
 
     const payload = {
       T: 1041,
-      x: Math.round(tip[0] * prefs.roScale),
-      y: Math.round(-tip[2] * prefs.roScale),
+      x: Math.round(-tip[2] * prefs.roScale),
+      y: Math.round(-tip[0] * prefs.roScale),
       z: Math.round(zTip * prefs.roScale),
       t: side === 'right' ? this.rightIndexAngle : 3.14 // Use right index angle for right arm, default for left
     };
+
+    console.log(payload);
   
     const url = (side==='left'?prefs.roLeftURL:prefs.roRightURL) +
                 `?json=${encodeURIComponent(JSON.stringify(payload))}`;

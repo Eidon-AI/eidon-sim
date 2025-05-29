@@ -26,9 +26,9 @@ export function parseTracker(state: DeviceState, view: DataView) {
 
   // === Derived unit vectors ===
   const upZ   = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
-  const up   = [-upZ[0], upZ[2], upZ[1]] as vec3;
+  const up   = [upZ[0], upZ[2], -upZ[1]] as vec3;
   const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y-fwd
-  const fwd  = [-fwdZ[0], fwdZ[2], fwdZ[1]] as vec3;            // swap Y/Z
+  const fwd  = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;            // swap Y/Z
 
   state.up  = up;
   state.fwd = fwd;
@@ -84,9 +84,9 @@ export function parseGlove(state: DeviceState, view: DataView) {
 
   /* --------- derived vectors & chain pos ---- */
   const upZ  = vec3.transformQuat(vec3.create(), [1,0,1], q);
-  const up   = [-upZ[0], upZ[2], upZ[1]] as vec3;
+  const up   = [upZ[0], upZ[2], -upZ[1]] as vec3;
   const fwdZ = vec3.transformQuat(vec3.create(), [0,1,0], q);
-  const fwd  = [-fwdZ[0], fwdZ[2], fwdZ[1]] as vec3;   // swap Y/Z and invert vertical component
+  const fwd  = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;   // swap Y/Z and invert vertical component
 
   state.up  = up;
   state.fwd = fwd;

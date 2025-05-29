@@ -123,6 +123,7 @@ export function mountPrefs(root: HTMLElement) {
     prefs.roArmEnabled = (document.getElementById('pRoEn')  as HTMLInputElement).checked;
     prefs.roLeftURL    = (document.getElementById('pRoL') as HTMLInputElement).value;
     prefs.roRightURL   = (document.getElementById('pRoR') as HTMLInputElement).value;
+    prefs.roScale      = parseFloat((document.getElementById('pRoScale') as HTMLInputElement).value);
 
     document.documentElement.dataset.theme = prefs.theme;
     savePrefs();

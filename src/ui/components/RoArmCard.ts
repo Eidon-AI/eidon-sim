@@ -12,14 +12,14 @@ export function mountRoArmCard(parent: HTMLElement, ctrl: RoArmController){
         </h3>
       </div>
       <div class="flex items-center gap-2">
-        <button style="width: 40px;" class="btn px-1" id="p-left">${ctrl['paused']?.['left']?'▶':'◻️'}</button>
         <span class="font-semibold text-sm">LEFT Ro-Arm</span>
         <span id="xyz-left" class="text-xs ml-auto">x:- y:- z:-</span>
+        <button style="width: 40px;" class="px-1" id="p-left">${ctrl['paused']?.['left']?'▶':'◻️'}</button>
       </div>
       <div class="flex items-center gap-2">
-        <button style="width: 40px;" class="btn px-1" id="p-right">${ctrl['paused']?.['right']?'▶':'◻️'}</button>
         <span class="font-semibold text-sm">RIGHT Ro-Arm</span>
         <span id="xyz-right" class="text-xs ml-auto">x:- y:- z:-</span>
+        <button style="width: 40px;" class="px-1" id="p-right">${ctrl['paused']?.['right']?'▶':'◻️'}</button>
       </div>
     </div>`;
   parent.appendChild(wrap);
