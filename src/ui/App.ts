@@ -39,7 +39,7 @@ export function mount(root: HTMLElement) {
     <div class="sidebar fixed bottom-0 right-0 w-80 flex flex-col bg-neutral-900/80 backdrop-blur-sm border-neutral-700 p-4 gap-2 overflow-y-auto z-10">
       <div class="flex gap-2 justify-start">
         <button id="btnConnect"    class="btn" style="font-size: 1.2rem;">✛</button>
-        <button id="btnCal"        class="btn">Calibrate All</button>
+        <button id="btnCal"        class="btn">♺</button>
         <div class="flex-1"></div>
         <button id="btnPrefs"      class="btn" style="font-size: 1.4rem; padding-top: 2px;">⛭</button>
       </div>
@@ -132,7 +132,94 @@ export function mount(root: HTMLElement) {
   mountAnglePanel(sidebar, solver);
 
   /* ------------ Three.js scene ------------ */
-  initScene(canvas, store, solver);
+  const gamepadController = initScene(canvas, store, solver);
+
+  /* ------------ Gamepad button in sidebar ------------ */
+  const btnGamepad = document.createElement('button');
+  btnGamepad.textContent = '🎮';
+  btnGamepad.className = 'btn';
+  btnGamepad.title = 'Gamepad Controls';
+  btnGamepad.style.display = 'none'; // Hidden by default
+
+  // Insert after btnCal
+  btnCal.parentNode!.insertBefore(btnGamepad, btnCal.nextSibling);
+
+  // Check gamepad status and show/hide button
+  const updateGamepadButton = () => {
+    const info = gamepadController.getGamepadInfo();
+    btnGamepad.style.display = info.connected ? 'inline-block' : 'none';
+  };
+
+  // Check periodically for gamepad connection changes
+  setInterval(updateGamepadButton, 1000);
+  updateGamepadButton(); // Initial check
+
+  // Create gamepad modal
+  const gamepadModal = document.createElement('div');
+  gamepadModal.className = 'fixed inset-0 bg-black/60 hidden items-center justify-center z-50';
+  gamepadModal.innerHTML = `
+    <div class="modal bg-neutral-800/70 backdrop-blur-sm p-5 rounded-lg w-128 space-y-3">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="font-bold text-lg">🎮 Gamepad Controls</h3>
+        <button id="gamepadModalClose" class="text-neutral-400 hover:text-white">✕</button>
+      </div>
+      
+      <div id="gamepadStatus" class="bg-neutral-900/50 p-3 rounded mb-4">
+        <div><strong>Status:</strong> <span id="connectionStatus">Checking...</span></div>
+        <div><strong>Controller:</strong> <span id="controllerName">None</span></div>
+        <div><strong>Mode:</strong> <span id="currentMode">orbit</span></div>
+        <div><strong>Enabled:</strong> <span id="enabledStatus">Yes</span></div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div>
+          <strong>Orbit Mode:</strong><br>
+          • Left Stick: Pan camera<br>
+          • Right Stick: Rotate around target<br>
+          • Left Trigger: Zoom in • Right Trigger: Zoom out
+        </div>
+        <div>
+          <strong>Free Look Mode:</strong><br>
+          • Left Stick: Move forward/strafe<br>
+          • Right Stick: Look around<br>
+          • Left Trigger: Move up • Right Trigger: Move down
+        </div>
+      </div>
+      
+      <div style="margin-top: 15px; text-align: center; padding-top: 10px; border-top: 1px solid #444;">
+        <strong>Button Controls:</strong><br>
+        A: Toggle camera mode • B: Reset camera • Y: Enable/disable gamepad
+      </div>
+    </div>
+  `;
+  root.appendChild(gamepadModal);
+
+  // Gamepad button click handler
+  btnGamepad.onclick = () => {
+    const info = gamepadController.getGamepadInfo();
+    
+    // Update status in modal
+    document.getElementById('connectionStatus')!.textContent = info.connected ? 'Connected' : 'Disconnected';
+    document.getElementById('controllerName')!.textContent = info.name || 'Unknown';
+    document.getElementById('currentMode')!.textContent = info.mode;
+    document.getElementById('enabledStatus')!.textContent = info.enabled ? 'Yes' : 'No';
+    
+    gamepadModal.classList.remove('hidden');
+    gamepadModal.classList.add('flex');
+  };
+
+  // Close modal handlers
+  document.getElementById('gamepadModalClose')!.onclick = () => {
+    gamepadModal.classList.add('hidden');
+    gamepadModal.classList.remove('flex');
+  };
+
+  gamepadModal.onclick = (e) => {
+    if (e.target === gamepadModal) {
+      gamepadModal.classList.add('hidden');
+      gamepadModal.classList.remove('flex');
+    }
+  };
 
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();

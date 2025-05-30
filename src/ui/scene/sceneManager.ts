@@ -46,85 +46,6 @@ export function initScene(
   /* ------------ gamepad controller ----------------- */
   const gamepadController = new GamepadController(cam, controls);
 
-  /* ------------ gamepad help overlay -------------- */
-  const createGamepadHelp = () => {
-    const helpOverlay = document.createElement('div');
-    helpOverlay.id = 'gamepadHelp';
-    helpOverlay.style.position = 'fixed';
-    helpOverlay.style.top = '50%';
-    helpOverlay.style.left = '50%';
-    helpOverlay.style.transform = 'translate(-50%, -50%)';
-    helpOverlay.style.background = 'rgba(0,0,0,0.9)';
-    helpOverlay.style.color = 'white';
-    helpOverlay.style.padding = '20px';
-    helpOverlay.style.borderRadius = '8px';
-    helpOverlay.style.fontSize = '14px';
-    helpOverlay.style.zIndex = '30';
-    helpOverlay.style.display = 'none';
-    helpOverlay.style.maxWidth = '400px';
-    helpOverlay.innerHTML = `
-      <h3 style="margin-bottom: 15px; text-align: center;">🎮 Gamepad Camera Controls</h3>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-        <div>
-          <strong>Orbit Mode:</strong><br>
-          • Left Stick: Rotate around target<br>
-          • Right Stick: Pan camera<br>
-          • Triggers: Zoom in/out
-        </div>
-        <div>
-          <strong>Free Look Mode:</strong><br>
-          • Left Stick: Move forward/strafe<br>
-          • Right Stick: Look around<br>
-          • Triggers: Move up/down
-        </div>
-      </div>
-      <div style="margin-top: 15px; text-align: center; padding-top: 10px; border-top: 1px solid #444;">
-        <strong>Button Controls:</strong><br>
-        A: Toggle camera mode • B: Reset camera • Y: Enable/disable gamepad
-      </div>
-      <div style="text-align: center; margin-top: 10px;">
-        <button id="closeGamepadHelp" style="background: #444; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Close</button>
-      </div>
-    `;
-    document.body.appendChild(helpOverlay);
-
-    // Close button
-    document.getElementById('closeGamepadHelp')!.onclick = () => {
-      helpOverlay.style.display = 'none';
-    };
-
-    // Close on Escape key
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && helpOverlay.style.display !== 'none') {
-        helpOverlay.style.display = 'none';
-      }
-    });
-
-    return helpOverlay;
-  };
-
-  const gamepadHelp = createGamepadHelp();
-
-  // Add gamepad help button
-  const gamepadHelpBtn = document.createElement('button');
-  gamepadHelpBtn.innerHTML = '🎮';
-  gamepadHelpBtn.title = 'Gamepad Controls Help';
-  gamepadHelpBtn.style.position = 'fixed';
-  gamepadHelpBtn.style.top = '10px';
-  gamepadHelpBtn.style.right = '130px';
-  gamepadHelpBtn.style.background = 'rgba(0,0,0,0.7)';
-  gamepadHelpBtn.style.color = 'white';
-  gamepadHelpBtn.style.border = 'none';
-  gamepadHelpBtn.style.padding = '8px 12px';
-  gamepadHelpBtn.style.borderRadius = '4px';
-  gamepadHelpBtn.style.cursor = 'pointer';
-  gamepadHelpBtn.style.fontSize = '16px';
-  gamepadHelpBtn.style.zIndex = '20';
-  gamepadHelpBtn.onclick = () => {
-    gamepadHelp.style.display = gamepadHelp.style.display === 'none' ? 'block' : 'none';
-  };
-  document.body.appendChild(gamepadHelpBtn);
-
   /* ------------ camera control cube ------------ */
   const cameraControl = new CameraControl(({ position, target }) => {
     // Animate camera to new position
@@ -172,4 +93,6 @@ export function initScene(
     renderer.render(scene, cam);
   };
   loop();
+
+  return gamepadController;
 }

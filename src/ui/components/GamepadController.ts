@@ -3,12 +3,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 export class GamepadController {
   private gamepadIndex: number | null = null;
-  private isEnabled: boolean = false;
+  private isEnabled: boolean = true;
   private camera: THREE.PerspectiveCamera;
   private controls: OrbitControls;
   private sensitivity: number = 2.0;
-  private moveSpeed: number = 0.02;
-  private zoomSpeed: number = 0.05;
+  private moveSpeed: number = 0.5;
+  private zoomSpeed: number = 2;
   private deadZone: number = 0.15;
   private mode: 'orbit' | 'freeLook' = 'orbit';
   private isConnected: boolean = false;
@@ -32,7 +32,7 @@ export class GamepadController {
       console.log('Gamepad connected:', e.gamepad.id);
       this.gamepadIndex = e.gamepad.index;
       this.isConnected = true;
-      this.showGamepadStatus('Connected: ' + e.gamepad.id);
+      this.showGamepadStatus('Connected: ' + e.gamepad.id + ' (enabled)');
     });
 
     window.addEventListener('gamepaddisconnected', (e) => {
@@ -50,40 +50,15 @@ export class GamepadController {
       if (gamepads[i]) {
         this.gamepadIndex = i;
         this.isConnected = true;
-        this.showGamepadStatus('Connected: ' + gamepads[i]!.id);
+        this.showGamepadStatus('Connected: ' + gamepads[i]!.id + ' (enabled)');
         break;
       }
     }
   }
 
   private showGamepadStatus(message: string) {
-    // Create or update gamepad status indicator
-    let indicator = document.getElementById('gamepadStatus');
-    if (!indicator) {
-      indicator = document.createElement('div');
-      indicator.id = 'gamepadStatus';
-      indicator.style.position = 'fixed';
-      indicator.style.top = '110px';
-      indicator.style.right = '10px';
-      indicator.style.background = 'rgba(0,0,0,0.7)';
-      indicator.style.color = 'white';
-      indicator.style.padding = '8px 12px';
-      indicator.style.borderRadius = '4px';
-      indicator.style.fontSize = '12px';
-      indicator.style.zIndex = '20';
-      indicator.style.transition = 'opacity 0.3s';
-      document.body.appendChild(indicator);
-    }
-    
-    indicator.textContent = message;
-    indicator.style.opacity = '1';
-    
-    // Fade out after 3 seconds if connected, keep visible if disconnected
-    if (this.isConnected) {
-      setTimeout(() => {
-        if (indicator) indicator.style.opacity = '0.3';
-      }, 3000);
-    }
+    // Status will now be shown in sidebar modal instead
+    console.log('Gamepad status:', message);
   }
 
   private applyDeadZone(value: number): number {
@@ -91,16 +66,17 @@ export class GamepadController {
   }
 
   private updateOrbitMode(gamepad: Gamepad, deltaTime: number) {
-    // Left stick: rotate around target
-    const leftX = this.applyDeadZone(gamepad.axes[0]);
-    const leftY = this.applyDeadZone(gamepad.axes[1]);
+    // Right stick: rotate around target (standard video game controls)
+    const rightX = this.applyDeadZone(gamepad.axes[2]);
+    const rightY = this.applyDeadZone(gamepad.axes[3]);
     
-    if (leftX !== 0 || leftY !== 0) {
+    if (rightX !== 0 || rightY !== 0) {
+      console.log('Orbit mode: rotating camera', { rightX, rightY });
       const spherical = new THREE.Spherical();
       spherical.setFromVector3(this.camera.position.clone().sub(this.controls.target));
       
-      spherical.theta -= leftX * this.sensitivity * deltaTime;
-      spherical.phi += leftY * this.sensitivity * deltaTime;
+      spherical.theta -= rightX * this.sensitivity * deltaTime;
+      spherical.phi -= rightY * this.sensitivity * deltaTime; // Inverted Y for standard FPS controls
       
       // Constrain phi to avoid flipping
       spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi));
@@ -109,11 +85,11 @@ export class GamepadController {
       this.controls.update();
     }
 
-    // Right stick: pan
-    const rightX = this.applyDeadZone(gamepad.axes[2]);
-    const rightY = this.applyDeadZone(gamepad.axes[3]);
+    // Left stick: pan/translate camera (standard video game controls)
+    const leftX = this.applyDeadZone(gamepad.axes[0]);
+    const leftY = this.applyDeadZone(gamepad.axes[1]);
     
-    if (rightX !== 0 || rightY !== 0) {
+    if (leftX !== 0 || leftY !== 0) {
       const panDirection = new THREE.Vector3();
       this.camera.getWorldDirection(panDirection);
       
@@ -125,8 +101,8 @@ export class GamepadController {
       
       const panAmount = this.moveSpeed * deltaTime;
       const panVector = new THREE.Vector3()
-        .addScaledVector(right, rightX * panAmount)
-        .addScaledVector(up, -rightY * panAmount);
+        .addScaledVector(right, -leftX * panAmount)
+        .addScaledVector(up, leftY * panAmount);
       
       this.controls.target.add(panVector);
       this.camera.position.add(panVector);
@@ -138,7 +114,7 @@ export class GamepadController {
     const rightTrigger = gamepad.buttons[7]?.value || 0;
     
     if (leftTrigger > 0.1 || rightTrigger > 0.1) {
-      const zoomDelta = (rightTrigger - leftTrigger) * this.zoomSpeed * deltaTime;
+      const zoomDelta = (leftTrigger - rightTrigger) * this.zoomSpeed * deltaTime;
       const direction = new THREE.Vector3();
       direction.subVectors(this.camera.position, this.controls.target).normalize();
       
@@ -161,8 +137,8 @@ export class GamepadController {
       
       const moveAmount = this.moveSpeed * deltaTime;
       const movement = new THREE.Vector3()
-        .addScaledVector(forward, -leftY * moveAmount)
-        .addScaledVector(right, leftX * moveAmount);
+        .addScaledVector(forward, leftY * moveAmount)
+        .addScaledVector(right, -leftX * moveAmount);
       
       this.camera.position.add(movement);
     }
@@ -175,8 +151,11 @@ export class GamepadController {
       const euler = new THREE.Euler(0, 0, 0, 'YXZ');
       euler.setFromQuaternion(this.camera.quaternion);
       
-      euler.y -= rightX * this.sensitivity * deltaTime;
-      euler.x -= rightY * this.sensitivity * deltaTime;
+      // Reduced sensitivity for free look mode (50% of normal)
+      const freeLookSensitivity = this.sensitivity * 0.5;
+      
+      euler.y -= rightX * freeLookSensitivity * deltaTime;
+      euler.x += rightY * freeLookSensitivity * deltaTime; // Inverted Y for standard FPS controls
       
       // Constrain pitch
       euler.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, euler.x));
@@ -274,6 +253,15 @@ export class GamepadController {
         const gamepad = gamepads[this.gamepadIndex];
         
         if (gamepad) {
+          // Debug logging for first few seconds
+          if (currentTime < 10000) {
+            const rightX = this.applyDeadZone(gamepad.axes[2]);
+            const rightY = this.applyDeadZone(gamepad.axes[3]);
+            if (rightX !== 0 || rightY !== 0) {
+              console.log('Gamepad input detected:', { rightX, rightY, mode: this.mode, enabled: this.isEnabled });
+            }
+          }
+          
           this.handleButtons(gamepad);
           
           if (this.mode === 'orbit') {
@@ -309,5 +297,16 @@ export class GamepadController {
 
   public isGamepadConnected(): boolean {
     return this.isConnected;
+  }
+
+  public getGamepadInfo(): { connected: boolean; enabled: boolean; mode: string; name?: string } {
+    const gamepads = navigator.getGamepads();
+    const gamepad = this.gamepadIndex !== null ? gamepads[this.gamepadIndex] : null;
+    return {
+      connected: this.isConnected,
+      enabled: this.isEnabled,
+      mode: this.mode,
+      name: gamepad?.id
+    };
   }
 } 
