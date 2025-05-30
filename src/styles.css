@@ -17,6 +17,10 @@ input, select {
   @apply px-3 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-sm;
 }
 
+.btn-sm{
+  @apply px-2 py-1 bg-neutral-800 hover:bg-neutral-700 rounded text-xs;
+}
+
 .bar { @apply h-1 bg-neutral-700; }
 
 .sidebar {

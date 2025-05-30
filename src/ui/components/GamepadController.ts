@@ -28,6 +28,7 @@ export class GamepadController {
 
   private isSuitableGamepad(gamepad: Gamepad): boolean {
     // Ignore devices with 16 axes (likely not actual game controllers)
+    console.log(gamepad);
     return gamepad.axes.length !== 16;
   }
 

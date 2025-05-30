@@ -4,6 +4,7 @@ console.log('Eidon Sim loaded..');
 import { HidManager }   from '../core/HidManager';
 import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
+import { RecordingManager } from '../core/RecordingManager';
 import { mountAnglePanel } from './components/AnglePanel';
 import { mountDeviceList } from './components/DeviceList';
 import { mountPrefs } from './components/PreferencesModal';
@@ -13,6 +14,7 @@ import { mountStereoCam } from './components/StereoCam';
 import { RoArmController } from '../core/RoArmController';
 import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
+import { RecordingControls } from './components/RecordingControls';
 
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
@@ -71,6 +73,7 @@ export function mount(root: HTMLElement) {
   const store = new DeviceStore();
   const solver= new ArmSolver(store);
   const roCtrl = new RoArmController(store);
+  const recordingManager = new RecordingManager(store, solver);
   storeRef = store;
 
   /* ---------- HID → store pipeline ---------- */
@@ -133,6 +136,10 @@ export function mount(root: HTMLElement) {
 
   /* ------------ Three.js scene ------------ */
   const gamepadController = initScene(canvas, store, solver);
+
+  /* ------------ Recording Controls ------------ */
+  const recordingControls = new RecordingControls(recordingManager);
+  recordingControls.mount(root);
 
   /* ------------ Gamepad button in sidebar ------------ */
   const btnGamepad = document.createElement('button');

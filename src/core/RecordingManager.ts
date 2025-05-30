@@ -1,0 +1,471 @@
+import { DeviceStore } from './DeviceStore';
+import { ArmSolver } from './ArmSolver';
+import { DeviceState } from '../types/types';
+import { vec3, quat } from 'gl-matrix';
+
+export interface RecordingDevice {
+  id: string;
+  kind: 'glove' | 'tracker';
+  color: string;
+  arm: { side: 'left' | 'right'; level: 'upper' | 'lower' | 'hand' };
+}
+
+export interface RecordingSnapshot {
+  time: number; // relative ms from start
+  deviceData: Record<string, {
+    quat: [number, number, number, number];
+    finger?: number[]; // only for gloves
+  }>;
+  angles: {
+    left?: { shYaw: number; shPitch: number; shRoll: number; elFlex: number; faRoll: number; wrPitch: number; wrYaw: number };
+    right?: { shYaw: number; shPitch: number; shRoll: number; elFlex: number; faRoll: number; wrPitch: number; wrYaw: number };
+  };
+}
+
+export interface Recording {
+  id: string;
+  name: string;
+  startTime: number;
+  endTime: number;
+  sampleRate: number;
+  devices: RecordingDevice[];
+  snapshots: RecordingSnapshot[];
+}
+
+export class RecordingManager extends EventTarget {
+  private isRecording = false;
+  private isPlayingBack = false;
+  private isPaused = false;
+  private currentRecording: Recording | null = null;
+  private playbackRecording: Recording | null = null;
+  private playbackPosition = 0; // current time in ms
+  private playbackStartTime = 0;
+  private sampleRate = 30; // Hz
+  private recordingStartTime = 0;
+  private recordingInterval: number | null = null;
+  private playbackInterval: number | null = null;
+  private audioContext: AudioContext | null = null;
+
+  constructor(
+    private store: DeviceStore,
+    private solver: ArmSolver
+  ) {
+    super();
+    this.initAudio();
+  }
+
+  private initAudio() {
+    try {
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    } catch (e) {
+      console.warn('Audio context not available:', e);
+    }
+  }
+
+  private playBeep(frequency: number, duration: number, isLong = false) {
+    if (!this.audioContext) return;
+
+    const oscillator = this.audioContext.createOscillator();
+    const gainNode = this.audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(this.audioContext.destination);
+
+    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+    oscillator.type = 'sine';
+
+    gainNode.gain.setValueAtTime(0.1, this.audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration);
+
+    oscillator.start(this.audioContext.currentTime);
+    oscillator.stop(this.audioContext.currentTime + duration);
+  }
+
+  private async countdown(): Promise<void> {
+    return new Promise((resolve) => {
+      let count = 3;
+      
+      const countdownStep = () => {
+        if (count > 0) {
+          this.playBeep(800, 0.2);
+          this.dispatchEvent(new CustomEvent('countdown', { detail: { count } }));
+          count--;
+          setTimeout(countdownStep, 1000);
+        } else {
+          // Final long beep
+          this.playBeep(1000, 0.5, true);
+          this.dispatchEvent(new CustomEvent('countdown', { detail: { count: 0 } }));
+          setTimeout(resolve, 500);
+        }
+      };
+
+      countdownStep();
+    });
+  }
+
+  private captureSnapshot(): RecordingSnapshot {
+    const devices = Array.from(this.store['map'].values());
+    const currentTime = performance.now() - this.recordingStartTime;
+
+    const deviceData: Record<string, any> = {};
+    
+    devices.forEach(device => {
+      const data: any = {
+        quat: [...device.quat] as [number, number, number, number]
+      };
+      
+      if (device.kind === 'glove' && device.finger) {
+        data.finger = [...device.finger];
+      }
+      
+      deviceData[device.id] = data;
+    });
+
+    const angles: any = {};
+    const leftAngles = this.solver.getAngles('left');
+    const rightAngles = this.solver.getAngles('right');
+    
+    if (leftAngles) angles.left = { ...leftAngles };
+    if (rightAngles) angles.right = { ...rightAngles };
+
+    return {
+      time: currentTime,
+      deviceData,
+      angles
+    };
+  }
+
+  private captureDevices(): RecordingDevice[] {
+    const devices = Array.from(this.store['map'].values());
+    return devices.map(device => ({
+      id: device.id,
+      kind: device.kind,
+      color: device.color,
+      arm: device.arm || { side: 'left', level: 'upper' }
+    }));
+  }
+
+  public async startRecording(): Promise<void> {
+    if (this.isRecording) return;
+
+    this.dispatchEvent(new CustomEvent('recordingStateChanged', { detail: { state: 'countdown' } }));
+    
+    await this.countdown();
+
+    const now = Date.now();
+    this.recordingStartTime = performance.now();
+    
+    this.currentRecording = {
+      id: `rec_${now}`,
+      name: `Recording_${new Date(now).toISOString().replace(/[:.]/g, '_').slice(0, -5)}`,
+      startTime: now,
+      endTime: 0,
+      sampleRate: this.sampleRate,
+      devices: this.captureDevices(),
+      snapshots: []
+    };
+
+    this.isRecording = true;
+    
+    this.recordingInterval = window.setInterval(() => {
+      if (this.currentRecording) {
+        this.currentRecording.snapshots.push(this.captureSnapshot());
+      }
+    }, 1000 / this.sampleRate);
+
+    this.dispatchEvent(new CustomEvent('recordingStateChanged', { detail: { state: 'recording' } }));
+  }
+
+  public stopRecording(): void {
+    if (!this.isRecording || !this.currentRecording) return;
+
+    this.isRecording = false;
+    
+    if (this.recordingInterval) {
+      clearInterval(this.recordingInterval);
+      this.recordingInterval = null;
+    }
+
+    this.currentRecording.endTime = Date.now();
+    
+    // Save to localStorage
+    this.saveToLocalStorage(this.currentRecording);
+
+    this.dispatchEvent(new CustomEvent('recordingStateChanged', { 
+      detail: { state: 'stopped', recording: this.currentRecording } 
+    }));
+  }
+
+  public startPlayback(recording: Recording): void {
+    if (this.isPlayingBack || this.isRecording) return;
+
+    this.playbackRecording = recording;
+    this.playbackPosition = 0;
+    this.playbackStartTime = performance.now();
+    this.isPlayingBack = true;
+    this.isPaused = false;
+
+    this.playbackInterval = window.setInterval(() => {
+      this.updatePlayback();
+    }, 16); // ~60fps for smooth playback
+
+    this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
+      detail: { state: 'playing', position: 0, duration: this.getRecordingDuration(recording) } 
+    }));
+  }
+
+  public pausePlayback(): void {
+    if (!this.isPlayingBack || this.isPaused) return;
+
+    this.isPaused = true;
+    if (this.playbackInterval) {
+      clearInterval(this.playbackInterval);
+      this.playbackInterval = null;
+    }
+
+    this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
+      detail: { state: 'paused', position: this.playbackPosition } 
+    }));
+  }
+
+  public resumePlayback(): void {
+    if (!this.isPlayingBack || !this.isPaused) return;
+
+    this.isPaused = false;
+    this.playbackStartTime = performance.now() - this.playbackPosition;
+
+    this.playbackInterval = window.setInterval(() => {
+      this.updatePlayback();
+    }, 16);
+
+    this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
+      detail: { state: 'playing', position: this.playbackPosition } 
+    }));
+  }
+
+  public stopPlayback(): void {
+    if (!this.isPlayingBack) return;
+
+    this.isPlayingBack = false;
+    this.isPaused = false;
+    
+    if (this.playbackInterval) {
+      clearInterval(this.playbackInterval);
+      this.playbackInterval = null;
+    }
+
+    this.playbackPosition = 0;
+    this.playbackRecording = null;
+
+    // Return to live input
+    this.dispatchEvent(new CustomEvent('playbackStateChanged', { detail: { state: 'stopped' } }));
+  }
+
+  public seekTo(position: number): void {
+    if (!this.playbackRecording) return;
+
+    this.playbackPosition = Math.max(0, Math.min(position, this.getRecordingDuration(this.playbackRecording)));
+    
+    if (this.isPlayingBack && !this.isPaused) {
+      this.playbackStartTime = performance.now() - this.playbackPosition;
+    }
+
+    this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
+      detail: { state: this.isPaused ? 'paused' : 'playing', position: this.playbackPosition } 
+    }));
+  }
+
+  private updatePlayback(): void {
+    if (!this.playbackRecording || this.isPaused) return;
+
+    this.playbackPosition = performance.now() - this.playbackStartTime;
+    const duration = this.getRecordingDuration(this.playbackRecording);
+
+    if (this.playbackPosition >= duration) {
+      this.stopPlayback();
+      return;
+    }
+
+    // Find the snapshot to display
+    const snapshot = this.findSnapshotAtTime(this.playbackRecording, this.playbackPosition);
+    if (snapshot) {
+      this.applySnapshot(snapshot);
+    }
+
+    this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
+      detail: { state: 'playing', position: this.playbackPosition, duration } 
+    }));
+  }
+
+  private findSnapshotAtTime(recording: Recording, time: number): RecordingSnapshot | null {
+    const snapshots = recording.snapshots;
+    if (snapshots.length === 0) return null;
+
+    // Find the closest snapshot at or before the requested time
+    let bestSnapshot = snapshots[0];
+    for (const snapshot of snapshots) {
+      if (snapshot.time <= time) {
+        bestSnapshot = snapshot;
+      } else {
+        break;
+      }
+    }
+
+    return bestSnapshot;
+  }
+
+  private applySnapshot(snapshot: RecordingSnapshot): void {
+    // Apply device data to store (this will trigger 3D scene updates)
+    for (const [deviceId, data] of Object.entries(snapshot.deviceData)) {
+      const deviceState = this.store['map'].get(deviceId);
+      if (deviceState) {
+        // Update quaternion
+        deviceState.quat = [...data.quat];
+        
+        // Update finger data for gloves
+        if (data.finger && deviceState.kind === 'glove') {
+          deviceState.finger = [...data.finger];
+          deviceState.fingerNorm = data.finger.map(f => f / 255);
+          deviceState.fingerDeg = data.finger.map(f => (f / 255) * 90);
+        }
+
+        // Recalculate derived vectors from quaternion (same as in parsers)
+        this.updateDerivedVectors(deviceState);
+
+        // Trigger update event
+        this.store.dispatchEvent(new CustomEvent('update', { detail: deviceState }));
+      }
+    }
+  }
+
+  private updateDerivedVectors(state: DeviceState): void {
+    // Recreate the logic from reportParsers.ts
+    const q = state.quat;
+    
+    if (state.kind === 'tracker') {
+      // From parseTracker
+      const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
+      const up = [upZ[0], upZ[2], -upZ[1]] as vec3;
+      const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y-fwd
+      const fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;            // swap Y/Z
+
+      state.up = up;
+      state.fwd = fwd;
+    } else if (state.kind === 'glove') {
+      // From parseGlove  
+      const upZ = vec3.transformQuat(vec3.create(), [1, 0, 1], q);
+      const up = [upZ[0], upZ[2], -upZ[1]] as vec3;
+      const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
+      const fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;   // swap Y/Z and invert vertical component
+
+      state.up = up;
+      state.fwd = fwd;
+    }
+  }
+
+  private getRecordingDuration(recording: Recording): number {
+    if (recording.snapshots.length === 0) return 0;
+    return recording.snapshots[recording.snapshots.length - 1].time;
+  }
+
+  private saveToLocalStorage(recording: Recording): void {
+    try {
+      const recordings = this.getLocalStorageRecordings();
+      recordings[recording.id] = recording;
+      localStorage.setItem('eidon_recordings', JSON.stringify(recordings));
+    } catch (e) {
+      console.error('Failed to save recording to localStorage:', e);
+    }
+  }
+
+  private getLocalStorageRecordings(): Record<string, Recording> {
+    try {
+      const stored = localStorage.getItem('eidon_recordings');
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      console.error('Failed to load recordings from localStorage:', e);
+      return {};
+    }
+  }
+
+  public getRecordings(): Recording[] {
+    return Object.values(this.getLocalStorageRecordings());
+  }
+
+  public loadRecording(id: string): Recording | null {
+    const recordings = this.getLocalStorageRecordings();
+    return recordings[id] || null;
+  }
+
+  public deleteRecording(id: string): void {
+    const recordings = this.getLocalStorageRecordings();
+    delete recordings[id];
+    localStorage.setItem('eidon_recordings', JSON.stringify(recordings));
+  }
+
+  public exportRecording(recording: Recording): void {
+    const dataStr = JSON.stringify(recording, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `${recording.name}.json`;
+    link.click();
+    
+    URL.revokeObjectURL(link.href);
+  }
+
+  public async importRecording(file: File): Promise<Recording> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const recording = JSON.parse(e.target?.result as string) as Recording;
+          this.saveToLocalStorage(recording);
+          resolve(recording);
+        } catch (error) {
+          reject(new Error('Invalid recording file format'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
+  public async uploadRecording(recording: Recording): Promise<void> {
+    // TODO: Replace with actual API call to api.eidon.ai/upload
+    console.log('Upload recording to api.eidon.ai/upload:', {
+      id: recording.id,
+      name: recording.name,
+      deviceCount: recording.devices.length,
+      snapshotCount: recording.snapshots.length,
+      duration: this.getRecordingDuration(recording),
+      data: recording
+    });
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('Upload completed (simulated)');
+  }
+
+  // Getters for UI
+  public get recordingState() {
+    if (this.isRecording) return 'recording';
+    return 'idle';
+  }
+
+  public get playbackState() {
+    if (this.isPlayingBack) {
+      return this.isPaused ? 'paused' : 'playing';
+    }
+    return 'stopped';
+  }
+
+  public get currentPlaybackPosition(): number {
+    return this.playbackPosition;
+  }
+
+  public get currentPlaybackDuration(): number {
+    return this.playbackRecording ? this.getRecordingDuration(this.playbackRecording) : 0;
+  }
+} 
