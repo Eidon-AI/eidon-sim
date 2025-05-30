@@ -103,7 +103,7 @@ export class RoArmController {
       t: side === 'right' ? this.rightIndexAngle : 3.14 // Use right index angle for right arm, default for left
     };
 
-    console.log(payload);
+    // console.log(payload);
   
     const url = (side==='left'?prefs.roLeftURL:prefs.roRightURL) +
                 `?json=${encodeURIComponent(JSON.stringify(payload))}`;

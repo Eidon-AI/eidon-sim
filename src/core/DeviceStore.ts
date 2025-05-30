@@ -3,6 +3,8 @@ import { parseTracker, parseGlove } from './reportParsers';
 import { DeviceState } from '../types/types';
 
 export class DeviceStore extends EventTarget {
+  private playbackMode = false;
+
   constructor(){
     super();
 
@@ -20,9 +22,30 @@ export class DeviceStore extends EventTarget {
 
   /** Subscribe to HidManager.report */
   handleRaw(id: string, view: DataView) {
+    // Ignore live input during playback
+    if (this.playbackMode) return;
+    
     const state = this.map.get(id) ?? this.newState(id, view);
     this.parseInto(state, view);
     this.map.set(id, state);
+    this.dispatchEvent(new CustomEvent('update', { detail: state }));
+  }
+
+  /** Enable/disable playback mode */
+  setPlaybackMode(enabled: boolean) {
+    this.playbackMode = enabled;
+    console.log('DeviceStore playback mode:', enabled ? 'ON' : 'OFF');
+  }
+
+  /** Update device state during playback (bypasses live input blocking) */
+  updateDeviceForPlayback(id: string, updates: Partial<DeviceState>) {
+    const state = this.map.get(id);
+    if (!state) return;
+
+    // Apply updates
+    Object.assign(state, updates);
+    
+    // Trigger update event
     this.dispatchEvent(new CustomEvent('update', { detail: state }));
   }
 

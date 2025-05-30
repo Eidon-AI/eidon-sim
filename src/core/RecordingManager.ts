@@ -45,6 +45,7 @@ export class RecordingManager extends EventTarget {
   private recordingInterval: number | null = null;
   private playbackInterval: number | null = null;
   private audioContext: AudioContext | null = null;
+  private temporaryDeviceIds: Set<string> = new Set(); // Track devices created for playback
 
   constructor(
     private store: DeviceStore,
@@ -205,6 +206,12 @@ export class RecordingManager extends EventTarget {
     this.isPlayingBack = true;
     this.isPaused = false;
 
+    // Enable playback mode to disable live input
+    this.store.setPlaybackMode(true);
+
+    // Create temporary device states for devices that don't exist
+    this.createTemporaryDevices(recording);
+
     this.playbackInterval = window.setInterval(() => {
       this.updatePlayback();
     }, 16); // ~60fps for smooth playback
@@ -257,6 +264,12 @@ export class RecordingManager extends EventTarget {
     this.playbackPosition = 0;
     this.playbackRecording = null;
 
+    // Clean up temporary devices
+    this.cleanupTemporaryDevices();
+
+    // Disable playback mode to re-enable live input
+    this.store.setPlaybackMode(false);
+
     // Return to live input
     this.dispatchEvent(new CustomEvent('playbackStateChanged', { detail: { state: 'stopped' } }));
   }
@@ -270,6 +283,17 @@ export class RecordingManager extends EventTarget {
       this.playbackStartTime = performance.now() - this.playbackPosition;
     }
 
+    // Apply the snapshot at the new position immediately
+    const snapshot = this.findSnapshotAtTime(this.playbackRecording, this.playbackPosition);
+    if (snapshot) {
+      this.applySnapshot(snapshot);
+    }
+
+    // Send position update to update scrubber
+    this.dispatchEvent(new CustomEvent('playbackPositionUpdate', { 
+      detail: { position: this.playbackPosition, duration: this.getRecordingDuration(this.playbackRecording) } 
+    }));
+
     this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
       detail: { state: this.isPaused ? 'paused' : 'playing', position: this.playbackPosition } 
     }));
@@ -282,8 +306,9 @@ export class RecordingManager extends EventTarget {
     const duration = this.getRecordingDuration(this.playbackRecording);
 
     if (this.playbackPosition >= duration) {
-      this.stopPlayback();
-      return;
+      // Loop back to the beginning instead of stopping
+      this.playbackPosition = 0;
+      this.playbackStartTime = performance.now();
     }
 
     // Find the snapshot to display
@@ -292,8 +317,9 @@ export class RecordingManager extends EventTarget {
       this.applySnapshot(snapshot);
     }
 
-    this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
-      detail: { state: 'playing', position: this.playbackPosition, duration } 
+    // Send position update for scrubber without triggering UI rebuild
+    this.dispatchEvent(new CustomEvent('playbackPositionUpdate', { 
+      detail: { position: this.playbackPosition, duration } 
     }));
   }
 
@@ -315,51 +341,42 @@ export class RecordingManager extends EventTarget {
   }
 
   private applySnapshot(snapshot: RecordingSnapshot): void {
-    // Apply device data to store (this will trigger 3D scene updates)
+    // Apply device data using the new playback method
     for (const [deviceId, data] of Object.entries(snapshot.deviceData)) {
+      // Prepare the updates object
+      const updates: any = {
+        quat: [...data.quat]
+      };
+      
+      // Update finger data for gloves
+      if (data.finger) {
+        updates.finger = [...data.finger];
+        updates.fingerNorm = data.finger.map(f => f / 255);
+        updates.fingerDeg = data.finger.map(f => (f / 255) * 90);
+      }
+
+      // Recalculate derived vectors from quaternion
+      const q = updates.quat;
       const deviceState = this.store['map'].get(deviceId);
+      
       if (deviceState) {
-        // Update quaternion
-        deviceState.quat = [...data.quat];
-        
-        // Update finger data for gloves
-        if (data.finger && deviceState.kind === 'glove') {
-          deviceState.finger = [...data.finger];
-          deviceState.fingerNorm = data.finger.map(f => f / 255);
-          deviceState.fingerDeg = data.finger.map(f => (f / 255) * 90);
+        if (deviceState.kind === 'tracker') {
+          // From parseTracker logic
+          const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
+          updates.up = [upZ[0], upZ[2], -upZ[1]] as vec3;
+          const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
+          updates.fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;
+        } else if (deviceState.kind === 'glove') {
+          // From parseGlove logic
+          const upZ = vec3.transformQuat(vec3.create(), [1, 0, 1], q);
+          updates.up = [upZ[0], upZ[2], -upZ[1]] as vec3;
+          const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
+          updates.fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;
         }
 
-        // Recalculate derived vectors from quaternion (same as in parsers)
-        this.updateDerivedVectors(deviceState);
-
-        // Trigger update event
-        this.store.dispatchEvent(new CustomEvent('update', { detail: deviceState }));
+        // Apply updates using the new playback method
+        this.store.updateDeviceForPlayback(deviceId, updates);
       }
-    }
-  }
-
-  private updateDerivedVectors(state: DeviceState): void {
-    // Recreate the logic from reportParsers.ts
-    const q = state.quat;
-    
-    if (state.kind === 'tracker') {
-      // From parseTracker
-      const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
-      const up = [upZ[0], upZ[2], -upZ[1]] as vec3;
-      const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y-fwd
-      const fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;            // swap Y/Z
-
-      state.up = up;
-      state.fwd = fwd;
-    } else if (state.kind === 'glove') {
-      // From parseGlove  
-      const upZ = vec3.transformQuat(vec3.create(), [1, 0, 1], q);
-      const up = [upZ[0], upZ[2], -upZ[1]] as vec3;
-      const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
-      const fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;   // swap Y/Z and invert vertical component
-
-      state.up = up;
-      state.fwd = fwd;
     }
   }
 
@@ -467,5 +484,58 @@ export class RecordingManager extends EventTarget {
 
   public get currentPlaybackDuration(): number {
     return this.playbackRecording ? this.getRecordingDuration(this.playbackRecording) : 0;
+  }
+
+  private createTemporaryDevices(recording: Recording): void {
+    recording.devices.forEach(deviceInfo => {
+      // Check if device already exists in store
+      const existingDevice = this.store['map'].get(deviceInfo.id);
+      
+      if (!existingDevice) {
+        // Create temporary device state
+        const tempDevice: DeviceState = {
+          id: deviceInfo.id,
+          kind: deviceInfo.kind,
+          color: deviceInfo.color,
+          arm: deviceInfo.arm,
+          quat: quat.create(),
+          up: vec3.create(),
+          fwd: vec3.create(),
+          chainStart: vec3.create(),
+          chainEnd: vec3.create(),
+          lastSeen: performance.now()
+        };
+
+        // Add finger properties for gloves
+        if (deviceInfo.kind === 'glove') {
+          tempDevice.finger = Array(16).fill(0);
+          tempDevice.fingerNorm = Array(16).fill(0);
+          tempDevice.fingerDeg = Array(16).fill(0);
+          tempDevice.fingerSmooth = Array(16).fill(0);
+        }
+
+        // Add to store
+        this.store['map'].set(deviceInfo.id, tempDevice);
+        this.temporaryDeviceIds.add(deviceInfo.id);
+        
+        // Trigger update event so UI and 3D scene know about this device
+        this.store.dispatchEvent(new CustomEvent('update', { detail: tempDevice }));
+        
+        console.log(`Created temporary device for playback: ${deviceInfo.id} (${deviceInfo.kind})`);
+      }
+    });
+  }
+
+  private cleanupTemporaryDevices(): void {
+    this.temporaryDeviceIds.forEach(deviceId => {
+      const device = this.store['map'].get(deviceId);
+      if (device) {
+        // Dispatch removal event before deleting
+        document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id: deviceId } }));
+      }
+      this.store['map'].delete(deviceId);
+      console.log(`Removed temporary device: ${deviceId}`);
+    });
+    this.temporaryDeviceIds.clear();
   }
 } 
