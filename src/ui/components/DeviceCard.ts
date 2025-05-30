@@ -380,8 +380,16 @@ function draw3DPrismIndicator(
         edge1[0] * edge2[1] - edge1[1] * edge2[0]
       ];
       
-      // Only draw "E" if face is facing camera (normal Z > 0)
-      if (normal[2] > 0) {
+      // Normalize the normal vector
+      const normalLength = Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+      if (normalLength > 0) {
+        normal[0] /= normalLength;
+        normal[1] /= normalLength;
+        normal[2] /= normalLength;
+      }
+      
+      // Only draw "E" if face is facing camera (normal Z > 0.1)
+      if (normal[2] > 0.1) {
         // Save the current state
         ctx.save();
         
