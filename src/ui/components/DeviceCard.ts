@@ -24,7 +24,7 @@ function createUpVectorCanvas() {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 40;
   const cap = document.createElement('span');
-  cap.textContent = 'Up';
+  cap.textContent = 'Top';
   cap.className = 'text-[10px] mt-0.5';
   wrap.appendChild(canvas);
   wrap.appendChild(cap);
@@ -302,25 +302,22 @@ function draw3DPrismIndicator(
   ] as vec3[];
 
   /* 1)  quaternion that turns +Y (firmware forward) into –Z (screen) */
-  const qFix = quat.setAxisAngle(quat.create(), [1,0,0],  Math.PI/2);
-
-  /* 2)  multiply device→world quaternion by that fix */
   const qCam = quat.setAxisAngle(quat.create(), [1,0,0],  Math.PI/2);
 
-  /* 3)  multiply device→world quaternion by that fix */
+  /* 2)  flip 180° around Z to orient prism correctly */
   const qFlip = quat.setAxisAngle(quat.create(), [0,0,1],  Math.PI);
 
-  /* 4)  multiply device→world quaternion by that fix */
+  /* 3)  apply transforms: camera then flip */
   const qView = quat.create();
-  quat.mul(qView, qCam, qRaw);   // qCam · qDevice
-  quat.mul(qView, qView, qFlip); // … then flip 180° around Z
+  quat.mul(qView, qCam, qRaw);     // qCam · qDevice
+  quat.mul(qView, qView, qFlip);   // then flip 180° around Z
 
-  /* 5)  rotate every vertex with the view quaternion */
+  /* 4)  rotate every vertex with the view quaternion */
   const R: vec3[] = V.map(v => vec3.transformQuat(vec3.create(), v, qView));
 
-  /* 6)  project: drop Z, scale so the prism fits nicely */
+  /* 5)  project: drop Z, scale so the prism fits nicely */
   const SCALE = 2;               // tweak until it "feels" right
-  const P = R.map(([x,y,z]) => [C + x*SCALE, C - y*SCALE]); // invert Y for canvas
+  const P = R.map(([x,y,z]) => [C - x*SCALE, C - y*SCALE]); // negate X to fix yaw direction, invert Y for canvas
 
   /* faces (indices into P)  – draw back-most first */
   const F = [
@@ -332,7 +329,7 @@ function draw3DPrismIndicator(
   const shade2 = 'rgba(0,0,0,0.10)';
   const faceCol= [shade2, shade1, shade2, shade2, main];
 
-  /* 7)  draw ------------------------------------------------------------ */
+  /* 6)  draw ------------------------------------------------------------ */
   ctx.clearRect(0,0,S,S);
   F.forEach((f,i)=>{
     ctx.beginPath();
