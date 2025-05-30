@@ -9,6 +9,7 @@ export class RecordingControls {
   private currentRecording: Recording | null = null;
   private isDraggingScrubber = false;
   private lastSeekTime = 0;
+  private pausedForDrag = false;
 
   constructor(recordingManager: RecordingManager) {
     this.recordingManager = recordingManager;
@@ -69,7 +70,7 @@ export class RecordingControls {
 
   private createToolbar(): HTMLElement {
     const toolbar = document.createElement('div');
-    toolbar.className = 'bg-neutral-900/90 backdrop-blur-sm border border-neutral-700 rounded-full px-4 py-2 shadow-lg flex items-center gap-3 text-white';
+    toolbar.className = 'bg-neutral-900/50 backdrop-blur-sm border border-neutral-700/60 rounded-full px-4 py-2 shadow-lg flex items-center gap-3 text-white';
     return toolbar;
   }
 
@@ -222,8 +223,8 @@ export class RecordingControls {
       this.toolbar.appendChild(indicator);
     }
 
-    // Recording controls
-    if (recordingState === 'idle') {
+    // Recording controls (only when not playing back)
+    if (recordingState === 'idle' && playbackState === 'stopped') {
       const recordBtn = this.createButton('🔴 Record', 'Record', () => {
         this.recordingManager.startRecording();
       });
@@ -305,12 +306,26 @@ export class RecordingControls {
     const startDrag = () => {
       this.isDraggingScrubber = true;
       console.log('Drag started - disabling automatic slider updates');
+      
+      // Pause playback if it's currently playing
+      if (this.recordingManager.playbackState === 'playing') {
+        this.pausedForDrag = true;
+        this.recordingManager.pausePlayback();
+        console.log('Paused playback for dragging');
+      }
     };
 
     const endDrag = () => {
       if (this.isDraggingScrubber) {
         this.isDraggingScrubber = false;
         console.log('Drag ended - resuming automatic slider updates');
+        
+        // Resume playback if we paused it for dragging
+        if (this.pausedForDrag) {
+          this.pausedForDrag = false;
+          this.recordingManager.resumePlayback();
+          console.log('Resumed playback after dragging');
+        }
       }
     };
 
@@ -389,8 +404,28 @@ export class RecordingControls {
       modal.remove();
     });
 
-    modal.querySelector('#importRecording')?.addEventListener('click', () => {
-      this.importFile();
+    modal.querySelector('#importRecording')?.addEventListener('click', async () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (file) {
+          try {
+            await this.recordingManager.importRecording(file);
+            alert('Recording imported successfully!');
+            
+            // Close current modal and reopen with updated list
+            modal.remove();
+            this.showLoadModal();
+          } catch (e) {
+            alert('Failed to import recording: ' + (e as Error).message);
+          }
+        }
+      };
+      
+      input.click();
     });
 
     modal.querySelectorAll('.loadRecording').forEach(btn => {
@@ -426,24 +461,6 @@ export class RecordingControls {
     });
 
     document.body.appendChild(modal);
-  }
-
-  private importFile(): void {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (file) {
-        try {
-          await this.recordingManager.importRecording(file);
-          alert('Recording imported successfully!');
-        } catch (e) {
-          alert('Failed to import recording: ' + (e as Error).message);
-        }
-      }
-    };
-    input.click();
   }
 
   public mount(parent: HTMLElement): void {

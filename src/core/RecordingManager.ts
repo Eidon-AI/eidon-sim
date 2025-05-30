@@ -406,7 +406,9 @@ export class RecordingManager extends EventTarget {
   }
 
   public getRecordings(): Recording[] {
-    return Object.values(this.getLocalStorageRecordings());
+    const recordings = Object.values(this.getLocalStorageRecordings());
+    // Sort by startTime descending (most recent first)
+    return recordings.sort((a, b) => b.startTime - a.startTime);
   }
 
   public loadRecording(id: string): Recording | null {

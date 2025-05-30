@@ -38,7 +38,7 @@ export function mount(root: HTMLElement) {
    * 1. Inject sidebar + canvas markup
    * ---------------------------------------------------------- */
   root.innerHTML = `
-    <div class="sidebar fixed bottom-0 right-0 w-80 flex flex-col bg-neutral-900/80 backdrop-blur-sm border-neutral-700 p-4 gap-2 overflow-y-auto z-10">
+    <div class="sidebar fixed bottom-0 right-0 w-80 flex flex-col bg-neutral-900/50 backdrop-blur-sm border-neutral-700 p-4 gap-2 overflow-y-auto z-10">
       <div class="flex gap-2 justify-start">
         <button id="btnConnect"    class="btn" style="font-size: 1.2rem;">✛</button>
         <button id="btnCal"        class="btn">♺</button>
