@@ -33,35 +33,34 @@ export class GamepadController {
 
   private findBestGamepad(): Gamepad | null {
     const gamepads = navigator.getGamepads();
-    let suitableGamepad: Gamepad | null = null;
-    let fallbackGamepad: Gamepad | null = null;
 
     for (let i = 0; i < gamepads.length; i++) {
       const gamepad = gamepads[i];
-      if (gamepad) {
-        if (this.isSuitableGamepad(gamepad)) {
-          suitableGamepad = gamepad;
-          break; // Prefer the first suitable gamepad
-        } else if (!fallbackGamepad) {
-          fallbackGamepad = gamepad; // Keep as fallback if no suitable gamepad found
-        }
+      if (gamepad && this.isSuitableGamepad(gamepad)) {
+        return gamepad; // Return the first suitable gamepad found
       }
     }
 
-    return suitableGamepad || fallbackGamepad;
+    // Return null if no suitable gamepad found (no fallback to unsuitable ones)
+    return null;
   }
 
   private selectGamepad(gamepad: Gamepad) {
     this.gamepadIndex = gamepad.index;
     this.isConnected = true;
-    const suitabilityNote = this.isSuitableGamepad(gamepad) ? 'suitable' : 'fallback (16 axes)';
-    this.showGamepadStatus(`Connected: ${gamepad.id} (${suitabilityNote}, enabled)`);
+    this.showGamepadStatus(`Connected: ${gamepad.id} (enabled)`);
   }
 
   private initGamepadSupport() {
     // Listen for gamepad connection/disconnection
     window.addEventListener('gamepadconnected', (e) => {
       console.log('Gamepad connected:', e.gamepad.id, 'Axes:', e.gamepad.axes.length);
+      
+      // Only select if the gamepad is suitable (ignore 16-axis devices completely)
+      if (!this.isSuitableGamepad(e.gamepad)) {
+        console.log('Ignoring unsuitable gamepad:', e.gamepad.id, '(16 axes)');
+        return;
+      }
       
       // If no gamepad is currently selected, or if the new gamepad is more suitable
       if (this.gamepadIndex === null || 
@@ -77,7 +76,7 @@ export class GamepadController {
         this.isConnected = false;
         this.showGamepadStatus('Gamepad disconnected');
         
-        // Try to find another suitable gamepad
+        // Try to find another suitable gamepad (will return null if none found)
         const bestGamepad = this.findBestGamepad();
         if (bestGamepad) {
           this.selectGamepad(bestGamepad);
@@ -85,7 +84,7 @@ export class GamepadController {
       }
     });
 
-    // Check for already connected gamepads
+    // Check for already connected gamepads (only suitable ones)
     const bestGamepad = this.findBestGamepad();
     if (bestGamepad) {
       this.selectGamepad(bestGamepad);
