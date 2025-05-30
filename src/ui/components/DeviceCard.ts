@@ -315,8 +315,30 @@ function draw3DPrismIndicator(
   /* 4)  rotate every vertex with the view quaternion */
   const R: vec3[] = V.map(v => vec3.transformQuat(vec3.create(), v, qView));
 
-  /* 5)  project: drop Z, scale so the prism fits nicely */
+  /* 4.5) create and transform "E" vertices in 3D space on front face */
   const SCALE = 2;               // tweak until it "feels" right
+  const eSize = 4; // size of the "E"
+  const eZ = -d2; // same Z as front face
+  
+  // Define "E" as line segments in 3D space (front face)
+  const eVertices3D: vec3[] = [
+    // Vertical line (left side)
+    [-eSize/2, -eSize/2 + 2, eZ], [-eSize/2, eSize/2 + 2, eZ],
+    // Top horizontal line
+    [-eSize/2, -eSize/2 + 2, eZ], [eSize/2, -eSize/2 + 2, eZ],
+    // Middle horizontal line
+    [-eSize/2, 0 + 2, eZ], [eSize/4, 0 + 2, eZ],
+    // Bottom horizontal line
+    [-eSize/2, eSize/2 + 2, eZ], [eSize/2, eSize/2 + 2, eZ],
+  ];
+  
+  // Transform "E" vertices with same quaternion
+  const eVertices2D = eVertices3D.map(v => {
+    const transformed = vec3.transformQuat(vec3.create(), v, qView);
+    return [C - transformed[0]*SCALE, C - transformed[1]*SCALE];
+  });
+
+  /* 5)  project: drop Z, scale so the prism fits nicely */
   const P = R.map(([x,y,z]) => [C - x*SCALE, C - y*SCALE]); // negate X to fix yaw direction, invert Y for canvas
 
   /* faces (indices into P)  – draw back-most first */
@@ -341,6 +363,48 @@ function draw3DPrismIndicator(
     ctx.lineWidth   = 1.2;
     ctx.fill();
     ctx.stroke();
+    
+    // Add letter "E" cutout to the front face (last face, index 4)
+    if (i === 4) {
+      // Calculate if the front face is facing the camera
+      const v0 = R[f[0]]; // transformed 3D vertices
+      const v1 = R[f[1]];
+      const v2 = R[f[2]];
+      
+      // Calculate face normal using cross product
+      const edge1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+      const edge2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
+      const normal = [
+        edge1[1] * edge2[2] - edge1[2] * edge2[1],
+        edge1[2] * edge2[0] - edge1[0] * edge2[2],
+        edge1[0] * edge2[1] - edge1[1] * edge2[0]
+      ];
+      
+      // Only draw "E" if face is facing camera (normal Z > 0)
+      if (normal[2] > 0) {
+        // Save the current state
+        ctx.save();
+        
+        // Set composite operation to cut out
+        ctx.globalCompositeOperation = 'destination-out';
+        
+        // Draw "E" using transformed 3D vertices as line segments
+        ctx.strokeStyle = 'black'; // Color doesn't matter for cutout
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        
+        // Draw each line segment of the "E"
+        for (let j = 0; j < eVertices2D.length; j += 2) {
+          ctx.beginPath();
+          ctx.moveTo(eVertices2D[j][0], eVertices2D[j][1]);
+          ctx.lineTo(eVertices2D[j + 1][0], eVertices2D[j + 1][1]);
+          ctx.stroke();
+        }
+        
+        // Restore the previous state
+        ctx.restore();
+      }
+    }
   });
 }
 
