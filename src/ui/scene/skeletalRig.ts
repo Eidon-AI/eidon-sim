@@ -172,7 +172,7 @@ export class SkeletalRig {
             const bYaw  = bones[4 + f*3 + 1];    // MCP yaw
             const bPIP  = bones[4 + f*3 + 2];    // PIP
 
-            if (idx === base)        bFlex.rotation.z = bend;
+            if (idx === base)        bFlex.rotation.z = bend - 25*d2r;
             else if (idx === base+1) bYaw.rotation.x  =  sgnYaw * -bend;
             else if (idx === base+2) {
               bPIP.rotation.x = bend;           // PIP
