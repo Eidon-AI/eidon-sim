@@ -208,7 +208,7 @@ export class SkeletalRig {
       // arm.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -(a.shYaw - 180)*d2r);
       const correctedRoll = -euler.x;   // X = roll
       const correctedPitch = euler.y; // Y = pitch (negated)
-      const correctedYaw = -(euler.z * 180/Math.PI) * Math.PI/180; // Z = yaw (offset and negated)
+      const correctedYaw = -euler.z; // Z = yaw (offset and negated)
       
       // Convert back to quaternion with corrected Euler angles
       const correctedEuler = new THREE.Euler(correctedRoll, correctedPitch, correctedYaw, 'XYZ');
@@ -249,9 +249,34 @@ export class SkeletalRig {
       arm.elbow.rotation.set(0, 0, (side === 'left' ? 1 : -1) * a.elFlex * d2r);
     }
 
-    /* Wrist: Use quaternion if hand device available, otherwise Euler */
+    /* Wrist: Use relative quaternion between hand and forearm if both devices available */
     const handDevice = this.store.getBy(side, 'hand');
-    if (handDevice) {
+    if (handDevice && lowerDevice) {
+      // Calculate relative rotation between forearm and hand
+      const lowerQuat = lowerDevice.quat;
+      const handQuat = handDevice.quat;
+      
+      // Calculate relative quaternion: hand relative to forearm
+      const lowerInverse = quat.invert(quat.create(), lowerQuat);
+      const relativeQuat = quat.multiply(quat.create(), lowerInverse, handQuat);
+      
+      // Convert to THREE.js quaternion and then to Euler
+      const threeRelQuat = new THREE.Quaternion(relativeQuat[0], relativeQuat[1], relativeQuat[2], relativeQuat[3]);
+      const relativeEuler = new THREE.Euler().setFromQuaternion(threeRelQuat, 'XYZ');
+      
+      // Apply coordinate corrections for wrist relative motion
+      const correctedPitch = -relativeEuler.x; // X = pitch (negated)
+      const correctedYaw = -relativeEuler.z;   // Z = yaw (negated) 
+      
+      // Convert back to quaternion with corrected Euler angles
+      const correctedEuler = new THREE.Euler(correctedPitch, 0, correctedYaw, 'XYZ');
+      const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
+      
+      // Reset Euler rotation and use quaternion
+      arm.wrist.rotation.set(0, 0, 0);
+      arm.wrist.quaternion.copy(correctedQuat);
+    } else if (handDevice) {
+      // Fallback to absolute hand orientation if forearm device not available
       const deviceQuat = handDevice.quat;
       
       // Convert gl-matrix quat to THREE.js quaternion
@@ -262,11 +287,11 @@ export class SkeletalRig {
       
       // Apply same coordinate corrections as actuator mode for wrist:
       // arm.wrist.rotation.set(-a.wrPitch*d2r, 0, -a.wrYaw*d2r);
-      const correctedPitch = -euler.y; // Y = pitch (negated)
-      const correctedYaw = -euler.z + 90*d2r;   // Z = yaw (negated)
+      const correctedPitch = -euler.x; // Y = pitch (negated)
+      const correctedYaw = -euler.z + 120*d2r;   // Z = yaw (negated)
       
       // Convert back to quaternion with corrected Euler angles
-      const correctedEuler = new THREE.Euler(0, correctedPitch, correctedYaw, 'XYZ');
+      const correctedEuler = new THREE.Euler(correctedPitch, 0, correctedYaw, 'XYZ');
       const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
       
       // Reset Euler rotation and use quaternion
@@ -297,7 +322,18 @@ export class SkeletalRig {
 
     /* Elbow: Use calculated actuator angle */
     arm.elbow.quaternion.set(0, 0, 0, 1); // Reset quaternion
-    arm.elbow.rotation.set(0, 0, sgn * a.elFlex * d2r);
+    
+    // Apply both elbow flex (Z rotation) and forearm roll (Y rotation) 
+    // The elbow bone is actually the forearm, so it needs both rotations
+    const elbowFlex = sgn * a.elFlex * d2r;    // flex around Z (hinge)
+    const forearmRoll = (-1) * a.faRoll * d2r;       // roll around Y (length of forearm)
+    
+    // Create separate rotations and combine them
+    const flexQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), elbowFlex);
+    const rollQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), forearmRoll);
+    
+    // Combine: apply roll first, then flex (so flex has priority)
+    arm.elbow.quaternion.multiplyQuaternions(flexQuat, rollQuat);
 
     /* Wrist: Use calculated actuator angles */
     arm.wrist.quaternion.set(0, 0, 0, 1); // Reset quaternion
