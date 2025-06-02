@@ -145,7 +145,7 @@ export class RecordingControls {
         </div>
 
         <div class="flex gap-2">
-          <button id="playRecording" class="btn flex-1">▶️ Play</button>
+          <button id="playRecording" class="btn flex-1">▶ Play</button>
           <button id="exportRecording" class="btn">💾 Export</button>
           <button id="uploadRecording" class="btn">☁️ Upload</button>
           <button id="closeModal" class="btn">✕</button>
@@ -230,37 +230,29 @@ export class RecordingControls {
       });
       this.toolbar.appendChild(recordBtn);
     } else if (recordingState === 'recording') {
-      const stopBtn = this.createButton('⏹️', 'Stop Recording', () => {
-        this.recordingManager.stopRecording();
-      });
-      stopBtn.className += ' bg-red-900/80 border-red-600 text-red-200';
-      this.toolbar.appendChild(stopBtn);
+      // Stop button will be added at the end
     }
 
     // Playback controls
     if (playbackState === 'playing') {
-      const pauseBtn = this.createButton('⏸️', 'Pause', () => {
+      const pauseBtn = this.createButton('||', 'Pause', () => {
         this.recordingManager.pausePlayback();
+      }, {
+        width: 38,
+        fontWeight: 900,
+        letterSpacing: 1.5,
       });
       this.toolbar.appendChild(pauseBtn);
-
-      const stopBtn = this.createButton('⏹️', 'Stop', () => {
-        this.recordingManager.stopPlayback();
-      });
-      this.toolbar.appendChild(stopBtn);
 
       // Progress scrubber
       this.toolbar.appendChild(this.createScrubber());
     } else if (playbackState === 'paused') {
-      const playBtn = this.createButton('▶️', 'Resume', () => {
+      const playBtn = this.createButton('▶', 'Resume', () => {
         this.recordingManager.resumePlayback();
+      }, {
+        width: 38
       });
       this.toolbar.appendChild(playBtn);
-
-      const stopBtn = this.createButton('⏹️', 'Stop', () => {
-        this.recordingManager.stopPlayback();
-      });
-      this.toolbar.appendChild(stopBtn);
 
       // Progress scrubber
       this.toolbar.appendChild(this.createScrubber());
@@ -273,14 +265,35 @@ export class RecordingControls {
       });
       this.toolbar.appendChild(loadBtn);
     }
+
+    // Add stop buttons at the end
+    if (recordingState === 'recording') {
+      const stopBtn = this.createButton('✕', 'Stop Recording', () => {
+        this.recordingManager.stopRecording();
+      });
+      stopBtn.className += ' bg-red-900/80 border-red-600 text-red-200';
+      this.toolbar.appendChild(stopBtn);
+    }
+
+    if (playbackState === 'playing' || playbackState === 'paused') {
+      const stopBtn = this.createButton('✕', 'Stop', () => {
+        this.recordingManager.stopPlayback();
+      });
+      this.toolbar.appendChild(stopBtn);
+    }
   }
 
-  private createButton(icon: string, tooltip: string, onClick: () => void): HTMLElement {
+  private createButton(icon: string, tooltip: string, onClick: () => void, styles?: { width?: number, fontWeight?: number, letterSpacing?: number }): HTMLElement {
     const btn = document.createElement('button');
-    btn.className = 'px-3 py-2 rounded-full hover:bg-neutral-700 border border-neutral-600 transition-colors flex items-center gap-1 text-sm text-white';
+    btn.className = 'px-3 py-2 rounded-full hover:bg-neutral-700 border border-transparent hover:border-neutral-600 transition-colors flex items-center gap-1 text-sm text-white';
     btn.innerHTML = `<span>${icon}</span>`;
     btn.title = tooltip;
     btn.addEventListener('click', onClick);
+    if (styles) {
+      btn.style.width = `${styles.width?.toString()}px` || 'auto';
+      btn.style.fontWeight = styles.fontWeight?.toString() || 'normal';
+      btn.style.letterSpacing = `${styles.letterSpacing?.toString()}px` || 'normal';
+    }
     return btn;
   }
 
@@ -368,13 +381,13 @@ export class RecordingControls {
       return `
         <div class="flex items-center justify-between p-3 hover:bg-neutral-800">
           <div>
-            <div class="font-medium text-white">${recording.name}</div>
+            <div class="font-medium text-white cursor-pointer hover:text-blue-400 transition-colors playRecordingTitle" data-id="${recording.id}">${recording.name}</div>
             <div class="text-sm text-neutral-400">
               ${(duration / 1000).toFixed(1)}s • ${recording.devices.length} devices • ${recording.snapshots.length} frames
             </div>
           </div>
           <div class="flex gap-2">
-            <button class="loadRecording btn-sm" data-id="${recording.id}">▶️ Play</button>
+            <button class="loadRecording btn-sm" data-id="${recording.id}">▶ Play</button>
             <button class="exportRecording btn-sm" data-id="${recording.id}">💾</button>
             <button class="deleteRecording btn-sm text-red-400" data-id="${recording.id}">🗑️</button>
           </div>
@@ -431,6 +444,17 @@ export class RecordingControls {
     modal.querySelectorAll('.loadRecording').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = (btn as HTMLElement).dataset.id!;
+        const recording = this.recordingManager.loadRecording(id);
+        if (recording) {
+          this.recordingManager.startPlayback(recording);
+          modal.remove();
+        }
+      });
+    });
+
+    modal.querySelectorAll('.playRecordingTitle').forEach(title => {
+      title.addEventListener('click', () => {
+        const id = (title as HTMLElement).dataset.id!;
         const recording = this.recordingManager.loadRecording(id);
         if (recording) {
           this.recordingManager.startPlayback(recording);
