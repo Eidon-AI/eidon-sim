@@ -144,7 +144,7 @@ export function mount(root: HTMLElement) {
 
   document.addEventListener('prefsChanged', ()=>{
     // simple reload approach
-    location.reload();
+    // location.reload();
   });
 
   /* ------------ prefs ------------ */

@@ -42,7 +42,7 @@ const KEYBOARD_VIEWS: Record<string, CameraPosition> = {
   },
   '9': { // Default perspective (reset)
     position: [1.5, 1.5, -3],
-    target: [-0.3, 0.15, 0]
+    target: [-0.1, 0.15, 0]
   }
 };
 
@@ -167,7 +167,7 @@ export class KeyboardController {
   }
 
   private showConsoleHelp(): void {
-    console.log('🎹 Keyboard Camera Controls:');
+    console.log('⌨ Keyboard Camera Controls:');
     console.log('1️⃣ Front View    2️⃣ Back View     3️⃣ Right View');
     console.log('4️⃣ Left View     5️⃣ Top View      6️⃣ Bottom View');
     console.log('7️⃣ Isometric     8️⃣ Isometric 2   9️⃣ Default View');
@@ -198,7 +198,7 @@ export class KeyboardController {
     overlay.innerHTML = `
       <div class="bg-neutral-800 p-6 rounded-lg shadow-2xl max-w-md">
         <div class="flex justify-between items-center mb-4">
-          <h3 class="text-xl font-bold text-white">🎹 Keyboard Camera Controls</h3>
+          <h3 class="text-xl font-bold text-white">⌨ Keyboard Camera Controls</h3>
           <button id="close-help" class="text-neutral-400 hover:text-white text-xl">✕</button>
         </div>
         <div class="grid grid-cols-3 gap-3 text-sm text-white">

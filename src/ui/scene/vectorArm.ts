@@ -305,4 +305,8 @@ export class VectorArm {
     
     console.log('VectorArm destroyed');
   }
+
+  public setVisible(visible: boolean): void {
+    this.group.visible = visible;
+  }
 }

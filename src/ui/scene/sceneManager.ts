@@ -8,6 +8,8 @@ import { SkeletalRig } from './skeletalRig';
 import { CameraControl } from '../components/CameraControl';
 import { KeyboardController } from '../components/KeyboardController';
 import { GamepadController } from '../components/GamepadController';
+import { ViewControls } from '../components/ViewControls';
+import { prefs, savePrefs } from '../../core/preferences';
 
 export function initScene(
   canvas: HTMLCanvasElement,
@@ -37,12 +39,82 @@ export function initScene(
     25,
     (window.innerWidth - 0) / window.innerHeight,
     0.1,
-    10
+    1000
   );
   cam.position.set(1.5, 1.5, -3);
   const controls = new OrbitControls(cam, renderer.domElement);
-  controls.target.set(-0.3, 0.15, 0);
+  controls.target.set(-0.1, 0.15, 0);
   controls.update();
+
+  /* ------------ infinite grid plane ------------ */
+  const createInfiniteGrid = () => {
+    // Create a large plane geometry
+    const size = 50;
+    const divisions = 100;
+    const geometry = new THREE.PlaneGeometry(size, size, divisions, divisions);
+    
+    // Create shader material that fades with distance
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uCameraPosition: { value: cam.position }
+      },
+      vertexShader: `
+        uniform vec3 uCameraPosition;
+        varying vec3 vWorldPosition;
+        varying float vDistanceToCamera;
+        
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          vDistanceToCamera = distance(worldPosition.xyz, uCameraPosition);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vWorldPosition;
+        varying float vDistanceToCamera;
+        
+        void main() {
+          // Create grid lines
+          vec2 grid = abs(fract(vWorldPosition.xz * 4.0) - 0.5) / fwidth(vWorldPosition.xz * 4.0);
+          float line = min(grid.x, grid.y);
+          
+          // Major grid lines every 4 units
+          vec2 majorGrid = abs(fract(vWorldPosition.xz) - 0.5) / fwidth(vWorldPosition.xz);
+          float majorLine = min(majorGrid.x, majorGrid.y);
+          
+          // Combine grid lines
+          float gridStrength = 1.0 - min(line, 1.0);
+          float majorGridStrength = 1.0 - min(majorLine, 1.0);
+          
+          // Mix major and minor grid lines
+          float finalGrid = max(gridStrength * 0.3, majorGridStrength * 0.6);
+          
+          // Fade with distance
+          float fadeStart = 5.0;
+          float fadeEnd = 25.0;
+          float fadeFactor = 1.0 - smoothstep(fadeStart, fadeEnd, vDistanceToCamera);
+          
+          // Grid color
+          vec3 gridColor = vec3(0.4, 0.4, 0.4);
+          
+          gl_FragColor = vec4(gridColor, finalGrid * fadeFactor);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    
+    const gridMesh = new THREE.Mesh(geometry, material);
+    gridMesh.rotation.x = -Math.PI / 2; // Rotate to lie flat on XZ plane
+    gridMesh.position.y = -1.0; // Position slightly below the character
+    
+    return { mesh: gridMesh, material };
+  };
+  
+  const { mesh: gridMesh, material: gridMaterial } = createInfiniteGrid();
+  scene.add(gridMesh);
 
   /* ------------ gamepad controller ----------------- */
   const gamepadController = new GamepadController(cam, controls);
@@ -64,9 +136,49 @@ export function initScene(
   cameraControl.mount();
   const keyboardController = new KeyboardController(cameraChangeHandler, cam, controls);
 
+  /* ------------ view controls -------------------- */
+  const viewControls = new ViewControls();
+  viewControls.mount();
+  
+  // Handle view toggle events
+  viewControls.addEventListener('viewToggle', (e) => {
+    const { type, enabled } = (e as CustomEvent).detail;
+    
+    switch (type) {
+      case 'grid':
+        gridMesh.visible = enabled;
+        break;
+      case 'riggedModel':
+        rig.setVisible(enabled);
+        break;
+      case 'vectorArms':
+        leftArm.setVisible(enabled);
+        rightArm.setVisible(enabled);
+        break;
+    }
+  });
+
+  // Handle color change events
+  viewControls.addEventListener('colorChange', (e) => {
+    const { color, save } = (e as CustomEvent).detail;
+    
+    // Always update the material directly for instant visual feedback
+    rig.updateSurfaceColor(color);
+    
+    // Only save preferences when the picker closes (save: true)
+    if (save) {
+      prefs.meshSurface = color;
+      savePrefs(); // This will also update the logo
+    }
+  });
+
   /* ------------ render loop ---------------------- */
   function animate() {
     requestAnimationFrame(animate);
+    
+    // Update grid shader uniform with camera position for proper distance fading
+    gridMaterial.uniforms.uCameraPosition.value.copy(cam.position);
+    
     controls.update();
     renderer.render(scene, cam);
   }
@@ -98,6 +210,11 @@ export function initScene(
       cameraControl.unmount();
       cameraControl.destroy();
       keyboardController.destroy();
+      viewControls.destroy();
+      
+      // Clean up grid
+      gridMesh.geometry.dispose();
+      gridMaterial.dispose();
       
       // Clean up Three.js resources
       renderer.dispose();

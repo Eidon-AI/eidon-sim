@@ -343,4 +343,38 @@ export class SkeletalRig {
       -a.wrYaw*d2r
     );
   }
+
+  public setVisible(visible: boolean): void {
+    if (this.root) {
+      this.root.visible = visible;
+    }
+  }
+
+  public updateSurfaceColor(color: string): void {
+    if (this.extraMeshes && this.extraMeshes.surface && this.extraMeshes.surface.material) {
+      // Update surface material color instantly
+      (this.extraMeshes.surface.material as THREE.MeshStandardMaterial).color.set(color);
+      
+      // Force material to update
+      this.extraMeshes.surface.material.needsUpdate = true;
+    }
+  }
+
+  public destroy(): void {
+    // Clean up event listeners
+    const recolorHandler = () => {
+      if (this.extraMeshes) {
+        this.extraMeshes.surface?.material?.color?.set?.(prefs.meshSurface);
+        this.extraMeshes.joints?.material?.color?.set?.(prefs.meshJoints);
+      }
+    };
+    document.removeEventListener('prefsChanged', recolorHandler);
+    
+    // Remove from scene
+    if (this.root) {
+      this.scene.remove(this.root);
+    }
+    
+    console.log('SkeletalRig destroyed');
+  }
 }
