@@ -18,21 +18,34 @@ export class SkeletalRig {
   private extraMeshes!: { surface: THREE.Mesh; joints: THREE.Mesh };
   private root: THREE.Group | null = null;
   private useActuatorAngles: boolean = false;
+  private pendingVisible: boolean = true; // Store visibility state until model loads
+  private pendingPosition: { x: number; z: number } = { x: 0, z: 0 };
+  private pendingScale: number = 1.0;
+  private rigId: string;
+  private isDestroyed: boolean = false; // Flag to prevent updates after destruction
+  
+  // Store event handler references for proper cleanup
+  private deviceColorHandler: (e: Event) => void;
+  private angleModeHandler: (e: Event) => void;
+  private recolorHandler: () => void;
+  private anglesHandler: () => void;
 
   constructor(
     private scene : THREE.Scene,
     private store : DeviceStore,
     private solver: ArmSolver,
-    gltfPath = '/assets/YBot.gltf'
+    gltfPath = '/assets/YBot.gltf',
+    initialVisible: boolean = true,
+    position: { x: number; z: number } = { x: 0, z: 0 },
+    scale: number = 1.0
   ) {
-    loader.load(
-      gltfPath,
-      (g: GLTF) => this.init(g.scene),
-      undefined,
-      err => console.error('GLTF load error', err)
-    );
-
-    document.addEventListener('deviceColor', e=>{
+    this.rigId = `rig_${Math.random().toString(36).substr(2, 9)}`;
+    this.pendingVisible = initialVisible;
+    this.pendingPosition = position;
+    this.pendingScale = scale;
+    
+    // Create bound event handlers for proper cleanup
+    this.deviceColorHandler = (e: Event) => {
       const { id, hex } = (e as CustomEvent<any>).detail;
       const dev = this.store.getBy('right','hand');
       if (dev && dev.id===id) {
@@ -45,14 +58,42 @@ export class SkeletalRig {
           if (mesh.material) (mesh.material as THREE.MeshStandardMaterial).color.set(hex);
         });
       }
-    });
-
-    // Listen for angle mode changes
-    document.addEventListener('angleModeChanged', (e) => {
+    };
+    
+    this.angleModeHandler = (e: Event) => {
       const { useActuatorAngles } = (e as CustomEvent<any>).detail;
-      console.log('SkeletalRig: Mode changed to', useActuatorAngles ? 'Actuator Angles' : 'Quaternions');
       this.useActuatorAngles = useActuatorAngles;
-    });
+    };
+    
+    this.recolorHandler = () => {
+      if (this.extraMeshes) {
+        this.extraMeshes.surface?.material?.color?.set?.(prefs.meshSurface);
+        this.extraMeshes.joints?.material?.color?.set?.(prefs.meshJoints);
+      }
+    };
+    
+    this.anglesHandler = () => {
+      // Prevent updates after destruction to avoid race conditions during model switching
+      if (this.isDestroyed) return;
+      
+      this.applySide('left');  
+      this.applySide('right');
+    };
+    
+    // Add event listeners
+    document.addEventListener('deviceColor', this.deviceColorHandler);
+    document.addEventListener('angleModeChanged', this.angleModeHandler);
+    
+    loader.load(
+      gltfPath,
+      (g: GLTF) => {
+        this.init(g.scene);
+      },
+      undefined, // Remove progress logging
+      (err) => {
+        console.error('SkeletalRig: GLTF load error:', err);
+      }
+    );
   }
 
   private mapFinger(side: Side, digit: string, idx: number): THREE.Bone {
@@ -62,8 +103,13 @@ export class SkeletalRig {
 
   /* ------------ once, both arms in one mesh ------------- */
   private init(root: THREE.Group) {
-    root.position.set(0, -1, 0);
+    root.position.set(this.pendingPosition.x, -1, this.pendingPosition.z);
     root.rotation.set(0, 180 * d2r, 0);
+    root.scale.setScalar(this.pendingScale);
+    
+    // Apply any pending visibility state BEFORE adding to scene
+    root.visible = this.pendingVisible;
+    
     this.scene.add(root);
     this.root = root;
 
@@ -103,9 +149,7 @@ export class SkeletalRig {
       });
     }
 
-    this.solver.addEventListener('angles', () => {
-      this.applySide('left');  this.applySide('right');
-    });
+    this.solver.addEventListener('angles', this.anglesHandler);
 
     ['left','right'].forEach(s=>{
       const side = s as Side;
@@ -124,16 +168,16 @@ export class SkeletalRig {
       ];
     });
 
-    const recolor = ()=>{
-      this.extraMeshes.surface.material.color.set(prefs.meshSurface);
-      this.extraMeshes.joints .material.color.set(prefs.meshJoints );
-    };
+    const recolor = this.recolorHandler;
     recolor();
     document.addEventListener('prefsChanged', recolor);
   }
 
   /* ------------ per-frame mapping ----------------------- */
   private applySide(side: Side) {
+    // Prevent updates after destruction
+    if (this.isDestroyed) return;
+    
     if (this.useActuatorAngles) {
       this.applySideActuatorAngles(side);
     } else {
@@ -344,13 +388,42 @@ export class SkeletalRig {
     );
   }
 
+  public setPosition(x: number, z: number): void {
+    this.pendingPosition = { x, z };
+    if (this.root) {
+      this.root.position.x = x;
+      this.root.position.z = z;
+    }
+  }
+
+  public setScale(scale: number): void {
+    this.pendingScale = scale;
+    if (this.root) {
+      this.root.scale.setScalar(scale);
+    }
+  }
+
+  public isLoaded(): boolean {
+    return this.root !== null;
+  }
+
   public setVisible(visible: boolean): void {
+    // Prevent operations after destruction
+    if (this.isDestroyed) return;
+    
+    // Always store the desired visibility state
+    this.pendingVisible = visible;
+    
+    // Apply immediately if the model is loaded
     if (this.root) {
       this.root.visible = visible;
     }
   }
 
   public updateSurfaceColor(color: string): void {
+    // Prevent operations after destruction
+    if (this.isDestroyed) return;
+    
     if (this.extraMeshes && this.extraMeshes.surface && this.extraMeshes.surface.material) {
       // Update surface material color instantly
       (this.extraMeshes.surface.material as THREE.MeshStandardMaterial).color.set(color);
@@ -361,20 +434,21 @@ export class SkeletalRig {
   }
 
   public destroy(): void {
+    // Mark as destroyed first to prevent any further updates during cleanup
+    this.isDestroyed = true;
+    
     // Clean up event listeners
-    const recolorHandler = () => {
-      if (this.extraMeshes) {
-        this.extraMeshes.surface?.material?.color?.set?.(prefs.meshSurface);
-        this.extraMeshes.joints?.material?.color?.set?.(prefs.meshJoints);
-      }
-    };
-    document.removeEventListener('prefsChanged', recolorHandler);
+    document.removeEventListener('deviceColor', this.deviceColorHandler);
+    document.removeEventListener('angleModeChanged', this.angleModeHandler);
+    document.removeEventListener('prefsChanged', this.recolorHandler);
+    
+    // Remove solver event listener
+    this.solver.removeEventListener('angles', this.anglesHandler);
     
     // Remove from scene
     if (this.root) {
       this.scene.remove(this.root);
+      this.root = null;
     }
-    
-    console.log('SkeletalRig destroyed');
   }
 }

@@ -126,10 +126,86 @@ export function initScene(
   /* ------------ scene objects ------------------- */
   const leftArm = new VectorArm(scene, store, 'left');
   const rightArm = new VectorArm(scene, store, 'right');
-  
+
+  // Model arrays - we'll populate these based on toggle state
+  let rigs: SkeletalRig[] = [];
+  let currentMultipleModelsState: boolean | null;
+
+  // Function to create single model
+  const createSingleModel = (visible: boolean) => {
+    const rig = new SkeletalRig(scene, store, solver, '/assets/YBot.gltf', visible);
+    return [rig];
+  };
+
+  // Function to create multiple models  
+  const createMultipleModels = (visible: boolean) => {
+    // Define model configurations: position, scale, description
+    const modelConfigs = [
+      // Front row - main models
+      { pos: { x: 0, z: 0 }, scale: 1.0, desc: 'Main center model' },
+      { pos: { x: +1.5, z: 0 }, scale: 0.8, desc: 'Left side model' },
+      { pos: { x: -1.5, z: 0 }, scale: 0.8, desc: 'Right side model' },
+
+      // Back row - smaller models
+      { pos: { x: +0.75, z: +1.5 }, scale: 0.6, desc: 'Back left model' },
+      { pos: { x: -0.75, z: +1.5 }, scale: 0.6, desc: 'Back right model' },
+
+      // Side models - different scales
+      { pos: { x: +2.5, z: -0.5 }, scale: 0.5, desc: 'Far left mini model' },
+      { pos: { x: -2.5, z: -0.5 }, scale: 0.5, desc: 'Far right mini model' },
+
+      // Center back - large model
+      { pos: { x: 0, z: +2.5 }, scale: 1.2, desc: 'Large back model' }
+    ];
+
+    // Create all models
+    const newRigs: SkeletalRig[] = [];
+    modelConfigs.forEach((config) => {
+      const rig = new SkeletalRig(
+        scene, 
+        store, 
+        solver, 
+        '/assets/YBot.gltf', 
+        visible,
+        config.pos,  // Position (accounting for 180° model rotation)
+        config.scale // Scale
+      );
+      newRigs.push(rig);
+    });
+
+    return newRigs;
+  };
+
+  // Function to clean up existing models
+  const cleanupModels = () => {
+    rigs.forEach(rig => rig.destroy());
+    rigs = [];
+  };
+
+  // Function to switch model mode
+  const switchModelMode = (useMultiple: boolean, visible: boolean) => {
+    console.log('🔧 switchModelMode called - useMultiple:', useMultiple, 'visible:', visible, 'current rigs:', rigs.length);
+
+    // Clean up existing models
+    cleanupModels();
+
+    // Create new models based on mode
+    if (useMultiple) {
+      rigs = createMultipleModels(visible);
+    } else {
+      rigs = createSingleModel(visible);
+    }
+    
+    currentMultipleModelsState = useMultiple;
+    console.log('🔧 switchModelMode completed - new rigs count:', rigs.length, 'state:', currentMultipleModelsState);
+  };
+
+  // Initialize with default state - let applyInitialState() handle model creation
   const initialRiggedModelState = viewControls.getInitialRiggedModelState();
-  console.log('SceneManager: Creating SkeletalRig with saved riggedModel =', initialRiggedModelState);
-  const rig = new SkeletalRig(scene, store, solver, '/assets/YBot.gltf', initialRiggedModelState);
+  const initialMultipleModelsState = viewControls.getState().multipleModels;
+  currentMultipleModelsState = null; // Will be set by first event
+
+  console.log('🔧 Initial states - riggedModel:', initialRiggedModelState, 'multipleModels:', initialMultipleModelsState);
 
   /* ------------ camera control ------------------- */
   const cameraChangeHandler = (pos: any) => {
@@ -152,12 +228,24 @@ export function initScene(
         gridMesh.visible = enabled;
         break;
       case 'riggedModel':
-        console.log('SceneManager: Setting skeleton visible =', enabled);
-        rig.setVisible(enabled);
+        rigs.forEach(rig => rig.setVisible(enabled));
         break;
       case 'vectorArms':
         leftArm.setVisible(enabled);
         rightArm.setVisible(enabled);
+        break;
+      case 'multipleModels':
+        console.log('🔧 multipleModels toggle - enabled:', enabled, 'current:', currentMultipleModelsState);
+        // Only switch if the state is actually changing (or if this is the first time)
+        if (currentMultipleModelsState === null || enabled !== currentMultipleModelsState) {
+          // Get current visibility state of rigged models
+          const currentRiggedModelState = viewControls.getState().riggedModel;
+          // Switch model mode while preserving visibility state
+          switchModelMode(enabled, currentRiggedModelState);
+          console.log('🔧 Model switch completed - new state:', currentMultipleModelsState);
+        } else {
+          console.log('🔧 Skipping model switch - state unchanged');
+        }
         break;
     }
   });
@@ -167,7 +255,7 @@ export function initScene(
     const { color, save } = (e as CustomEvent).detail;
     
     // Always update the material directly for instant visual feedback
-    rig.updateSurfaceColor(color);
+    rigs.forEach(rig => rig.updateSurfaceColor(color));
     
     // Only save preferences when the picker closes (save: true)
     if (save) {
@@ -177,7 +265,6 @@ export function initScene(
   });
 
   // Apply initial view state after event listeners are set up
-  console.log('SceneManager: Applying initial view state...');
   viewControls.applyInitialState();
 
   /* ------------ render loop ---------------------- */
@@ -206,14 +293,13 @@ export function initScene(
   return {
     gamepadController,
     destroy() {
-      console.log('Destroying scene...');
-      
       // Clean up window event listeners
       window.removeEventListener('resize', handleResize);
       
       // Clean up components
       leftArm.destroy();
       rightArm.destroy();
+      cleanupModels(); // Use our new cleanup function
       gamepadController.destroy();
       cameraControl.unmount();
       cameraControl.destroy();
@@ -230,8 +316,6 @@ export function initScene(
       
       // Clean up controls
       controls.dispose();
-      
-      console.log('Scene destroyed');
     }
   };
 }

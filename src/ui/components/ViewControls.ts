@@ -4,10 +4,26 @@ export interface ViewToggleState {
   grid: boolean;
   riggedModel: boolean;
   vectorArms: boolean;
+  multipleModels: boolean;
 }
 
 export interface ViewControlsState extends ViewToggleState {
   surfaceColor: string;
+}
+
+// Helper function to ensure hex color is in full 6-digit format
+function normalizeHexColor(color: string): string {
+  if (!color || !color.startsWith('#')) {
+    return '#ffff00'; // Default yellow
+  }
+
+  // Convert 3-digit hex to 6-digit hex
+  if (color.length === 4) {
+    return '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+  }
+
+  // Return as-is if already 6-digit or invalid
+  return color.length === 7 ? color : '#ffff00';
 }
 
 // Load saved view state from localStorage, with defaults
@@ -20,9 +36,9 @@ function loadViewState(): ViewToggleState {
       const result = {
         grid: parsed.grid !== undefined ? parsed.grid : true,
         riggedModel: parsed.riggedModel !== undefined ? parsed.riggedModel : true,
-        vectorArms: parsed.vectorArms !== undefined ? parsed.vectorArms : true
+        vectorArms: parsed.vectorArms !== undefined ? parsed.vectorArms : true,
+        multipleModels: parsed.multipleModels !== undefined ? parsed.multipleModels : false
       };
-      console.log('ViewControls: Loaded saved state =', result);
       return result;
     } catch (e) {
       console.warn('Failed to parse saved view state, using defaults');
@@ -33,9 +49,9 @@ function loadViewState(): ViewToggleState {
   const defaults = {
     grid: true,
     riggedModel: true,
-    vectorArms: true
+    vectorArms: true,
+    multipleModels: false
   };
-  console.log('ViewControls: Using default state =', defaults);
   return defaults;
 }
 
@@ -50,14 +66,18 @@ export class ViewControls extends EventTarget {
 
   constructor() {
     super();
-    
+
     // Load saved state or use defaults
     const savedToggleState = loadViewState();
+
+    // Ensure we have a valid hex color for the surface
+    const surfaceColor = normalizeHexColor(prefs.meshSurface);
+
     this.state = {
       ...savedToggleState,
-      surfaceColor: prefs.meshSurface
+      surfaceColor: surfaceColor
     };
-    
+
     this.container = this.createContainer();
     this.render();
   }
@@ -105,7 +125,8 @@ export class ViewControls extends EventTarget {
     saveViewState({
       grid: this.state.grid,
       riggedModel: this.state.riggedModel,
-      vectorArms: this.state.vectorArms
+      vectorArms: this.state.vectorArms,
+      multipleModels: this.state.multipleModels
     });
     
     // Dispatch event for scene manager to handle
@@ -125,7 +146,8 @@ export class ViewControls extends EventTarget {
 
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
-    colorInput.value = this.state.surfaceColor;
+    // Ensure the color value is properly normalized
+    colorInput.value = normalizeHexColor(this.state.surfaceColor);
     colorInput.className = `
       w-6 h-6 rounded border-0 cursor-pointer
       appearance-none bg-transparent
@@ -144,31 +166,33 @@ export class ViewControls extends EventTarget {
 
     colorInput.addEventListener('input', (e) => {
       const target = e.target as HTMLInputElement;
-      this.state.surfaceColor = target.value;
+      const normalizedColor = normalizeHexColor(target.value);
+      this.state.surfaceColor = normalizedColor;
       
       // Dispatch event for instant visual update (no save)
       this.dispatchEvent(new CustomEvent('colorChange', {
-        detail: { color: target.value, save: false }
+        detail: { color: normalizedColor, save: false }
       }));
       
       // Also dispatch globally for other components
       document.dispatchEvent(new CustomEvent('colorChange', {
-        detail: { color: target.value, save: false }
+        detail: { color: normalizedColor, save: false }
       }));
     });
 
     colorInput.addEventListener('change', (e) => {
       const target = e.target as HTMLInputElement;
-      this.state.surfaceColor = target.value;
+      const normalizedColor = normalizeHexColor(target.value);
+      this.state.surfaceColor = normalizedColor;
       
       // Dispatch event for final save when picker closes
       this.dispatchEvent(new CustomEvent('colorChange', {
-        detail: { color: target.value, save: true }
+        detail: { color: normalizedColor, save: true }
       }));
       
       // Also dispatch globally for other components
       document.dispatchEvent(new CustomEvent('colorChange', {
-        detail: { color: target.value, save: true }
+        detail: { color: normalizedColor, save: true }
       }));
     });
 
@@ -183,7 +207,8 @@ export class ViewControls extends EventTarget {
     const buttons = [
       this.createToggleButton('Toggle Grid', 'grid', '⊞'),
       this.createToggleButton('Toggle Skeleton', 'riggedModel', '🦴'),
-      this.createToggleButton('Toggle Vectors', 'vectorArms', '↑')
+      this.createToggleButton('Toggle Vectors', 'vectorArms', '↑'),
+      this.createToggleButton('Toggle Multiple Models', 'multipleModels', '👥')
     ];
 
     buttons.forEach(button => {
@@ -200,7 +225,7 @@ export class ViewControls extends EventTarget {
 
   public applyInitialState(): void {
     // Dispatch events for each toggle state so scene manager applies them
-    (['grid', 'riggedModel', 'vectorArms'] as const).forEach(key => {
+    (['grid', 'riggedModel', 'vectorArms', 'multipleModels'] as const).forEach(key => {
       this.dispatchEvent(new CustomEvent('viewToggle', {
         detail: { type: key, enabled: this.state[key] }
       }));
@@ -228,6 +253,5 @@ export class ViewControls extends EventTarget {
 
   public destroy(): void {
     this.unmount();
-    console.log('ViewControls destroyed');
   }
 } 
