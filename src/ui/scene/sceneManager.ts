@@ -119,10 +119,17 @@ export function initScene(
   /* ------------ gamepad controller ----------------- */
   const gamepadController = new GamepadController(cam, controls);
 
+  /* ------------ view controls -------------------- */
+  const viewControls = new ViewControls();
+  viewControls.mount();
+  
   /* ------------ scene objects ------------------- */
   const leftArm = new VectorArm(scene, store, 'left');
   const rightArm = new VectorArm(scene, store, 'right');
-  const rig = new SkeletalRig(scene, store, solver);
+  
+  const initialRiggedModelState = viewControls.getInitialRiggedModelState();
+  console.log('SceneManager: Creating SkeletalRig with saved riggedModel =', initialRiggedModelState);
+  const rig = new SkeletalRig(scene, store, solver, '/assets/YBot.gltf', initialRiggedModelState);
 
   /* ------------ camera control ------------------- */
   const cameraChangeHandler = (pos: any) => {
@@ -136,10 +143,6 @@ export function initScene(
   cameraControl.mount();
   const keyboardController = new KeyboardController(cameraChangeHandler, cam, controls);
 
-  /* ------------ view controls -------------------- */
-  const viewControls = new ViewControls();
-  viewControls.mount();
-  
   // Handle view toggle events
   viewControls.addEventListener('viewToggle', (e) => {
     const { type, enabled } = (e as CustomEvent).detail;
@@ -149,6 +152,7 @@ export function initScene(
         gridMesh.visible = enabled;
         break;
       case 'riggedModel':
+        console.log('SceneManager: Setting skeleton visible =', enabled);
         rig.setVisible(enabled);
         break;
       case 'vectorArms':
@@ -171,6 +175,10 @@ export function initScene(
       savePrefs(); // This will also update the logo
     }
   });
+
+  // Apply initial view state after event listeners are set up
+  console.log('SceneManager: Applying initial view state...');
+  viewControls.applyInitialState();
 
   /* ------------ render loop ---------------------- */
   function animate() {

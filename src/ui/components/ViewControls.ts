@@ -13,25 +13,30 @@ export interface ViewControlsState extends ViewToggleState {
 // Load saved view state from localStorage, with defaults
 function loadViewState(): ViewToggleState {
   const saved = localStorage.getItem('viewControlsState');
+  
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      return {
+      const result = {
         grid: parsed.grid !== undefined ? parsed.grid : true,
         riggedModel: parsed.riggedModel !== undefined ? parsed.riggedModel : true,
         vectorArms: parsed.vectorArms !== undefined ? parsed.vectorArms : true
       };
+      console.log('ViewControls: Loaded saved state =', result);
+      return result;
     } catch (e) {
       console.warn('Failed to parse saved view state, using defaults');
     }
   }
   
   // Default values
-  return {
+  const defaults = {
     grid: true,
     riggedModel: true,
     vectorArms: true
   };
+  console.log('ViewControls: Using default state =', defaults);
+  return defaults;
 }
 
 // Save view state to localStorage
@@ -191,12 +196,9 @@ export class ViewControls extends EventTarget {
 
   public mount(parent: HTMLElement = document.body): void {
     parent.appendChild(this.container);
-    
-    // Dispatch initial state events so scene manager applies saved settings
-    this.dispatchInitialState();
   }
 
-  private dispatchInitialState(): void {
+  public applyInitialState(): void {
     // Dispatch events for each toggle state so scene manager applies them
     (['grid', 'riggedModel', 'vectorArms'] as const).forEach(key => {
       this.dispatchEvent(new CustomEvent('viewToggle', {
@@ -213,6 +215,10 @@ export class ViewControls extends EventTarget {
 
   public getState(): ViewControlsState {
     return { ...this.state };
+  }
+
+  public getInitialRiggedModelState(): boolean {
+    return this.state.riggedModel;
   }
 
   public setState(newState: Partial<ViewControlsState>): void {

@@ -62,6 +62,7 @@ export class KeyboardController {
   private onViewChange: (view: CameraPosition) => void;
   private boundKeyHandler: (e: KeyboardEvent) => void;
   private boundKeyUpHandler: (e: KeyboardEvent) => void;
+  private boundBlurHandler: () => void;
   private isEnabled: boolean = true;
   
   // FPS-style movement
@@ -82,10 +83,17 @@ export class KeyboardController {
     
     this.boundKeyHandler = this.handleKeyPress.bind(this);
     this.boundKeyUpHandler = this.handleKeyUp.bind(this);
+    this.boundBlurHandler = () => {
+      this.keys.clear();
+      this.isMoving = false;
+    };
     
     // Listen for keydown and keyup events
     document.addEventListener('keydown', this.boundKeyHandler);
     document.addEventListener('keyup', this.boundKeyUpHandler);
+    
+    // Clear stuck keys when window loses focus (prevents Command+W and similar issues)
+    window.addEventListener('blur', this.boundBlurHandler);
     
     console.log('KeyboardController: Number keys 1-9 mapped to camera views');
     console.log('KeyboardController: WASD for movement, +/- for zoom');
@@ -98,6 +106,11 @@ export class KeyboardController {
   private handleKeyPress(event: KeyboardEvent): void {
     // Only handle number keys and only when no input elements are focused
     if (!this.isEnabled) return;
+    
+    // Ignore all keyboard controls when modifier keys are held (for browser shortcuts)
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
     
     // Don't trigger if user is typing in an input field
     const activeElement = document.activeElement;
@@ -140,10 +153,22 @@ export class KeyboardController {
   }
 
   private handleKeyUp(event: KeyboardEvent): void {
-    // Handle keyup events
+    if (!this.isEnabled) return;
+    
+    // Ignore all keyboard controls when modifier keys are held (for browser shortcuts)
+    if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+
     const key = event.key.toLowerCase();
-    this.keys.delete(key);
-    this.isMoving = this.keys.size > 0;
+    if (this.keys.has(key)) {
+      this.keys.delete(key);
+      
+      // Stop movement if no more movement keys are pressed
+      if (!['w', 'a', 's', 'd', 'q', 'e', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].some(k => this.keys.has(k))) {
+        this.isMoving = false;
+      }
+    }
   }
 
   private showViewFeedback(viewName: string): void {
@@ -306,6 +331,8 @@ export class KeyboardController {
     // Clean up event listeners
     document.removeEventListener('keydown', this.boundKeyHandler);
     document.removeEventListener('keyup', this.boundKeyUpHandler);
+    window.removeEventListener('blur', this.boundBlurHandler);
+    
     console.log('KeyboardController destroyed');
   }
 
@@ -396,18 +423,18 @@ export class KeyboardController {
       moved = true;
     }
     if (this.keys.has('arrowleft')) {
-      // Look left
-      const spherical = new THREE.Spherical();
-      spherical.setFromVector3(this.camera.position.clone().sub(this.controls.target));
-      spherical.theta -= currentRotationSpeed;
-      this.camera.position.setFromSpherical(spherical).add(this.controls.target);
-      moved = true;
-    }
-    if (this.keys.has('arrowright')) {
       // Look right
       const spherical = new THREE.Spherical();
       spherical.setFromVector3(this.camera.position.clone().sub(this.controls.target));
       spherical.theta += currentRotationSpeed;
+      this.camera.position.setFromSpherical(spherical).add(this.controls.target);
+      moved = true;
+    }
+    if (this.keys.has('arrowright')) {
+      // Look left
+      const spherical = new THREE.Spherical();
+      spherical.setFromVector3(this.camera.position.clone().sub(this.controls.target));
+      spherical.theta -= currentRotationSpeed;
       this.camera.position.setFromSpherical(spherical).add(this.controls.target);
       moved = true;
     }
