@@ -230,6 +230,10 @@ export function mount(root: HTMLElement) {
           <div>4️⃣ Left View</div><div>5️⃣ Top View</div><div>6️⃣ Bottom View</div>
           <div>7️⃣ Isometric</div><div>8️⃣ Isometric 2</div><div>9️⃣ Default View</div>
         </div>
+        <div style="margin-top: 12px; font-size: 0.85em;">
+          <strong style="color: #4ade80;">🎮 FPS Movement:</strong> 
+          <span style="color: #e5e7eb;">WASD = Move • Q/E = Forward/Back • +/- = Zoom • ↑↓←→ = Look • Shift = Speed Boost</span>
+        </div>
         <div style="margin-top: 8px; font-size: 0.85em; color: #999;">Press H for keyboard help</div>
       </div>
     </div>

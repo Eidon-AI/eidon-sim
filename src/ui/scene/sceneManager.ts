@@ -62,7 +62,7 @@ export function initScene(
 
   const cameraControl = new CameraControl(cameraChangeHandler, cam);
   cameraControl.mount();
-  const keyboardController = new KeyboardController(cameraChangeHandler);
+  const keyboardController = new KeyboardController(cameraChangeHandler, cam, controls);
 
   /* ------------ render loop ---------------------- */
   function animate() {

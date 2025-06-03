@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 interface CameraPosition {
   position: [number, number, number];
@@ -8,28 +9,28 @@ interface CameraPosition {
 // CAD-style camera views mapped to number keys
 const KEYBOARD_VIEWS: Record<string, CameraPosition> = {
   '1': { // Front view
-    position: [0, 0, -5],
+    position: [0, 0, -5.5],
     target: [0, 0, 0]
   },
   '2': { // Back view
-    position: [0, 0, 5],
+    position: [0, 0, 5.5],
     target: [0, 0, 0]
   },
   '3': { // Right view
-    position: [5, 0, 0],
+    position: [5.5, 0, 0],
     target: [0, 0, 0]
   },
   '4': { // Left view
-    position: [-5, 0, 0],
+    position: [-5.5, 0, 0],
     target: [0, 0, 0]
   },
   '5': { // Top view
-    position: [0, 5, 0],
-    target: [0, 0, 0]
+    position: [0, 5.5, 0],
+    target: [0, 0, -0.2]
   },
   '6': { // Bottom view
-    position: [0, -5, 0],
-    target: [0, 0, 0]
+    position: [0, -5.5, 0],
+    target: [0, 0, -0.2]
   },
   '7': { // Isometric view 1
     position: [3, 3, 3],
@@ -60,17 +61,38 @@ const VIEW_NAMES: Record<string, string> = {
 export class KeyboardController {
   private onViewChange: (view: CameraPosition) => void;
   private boundKeyHandler: (e: KeyboardEvent) => void;
+  private boundKeyUpHandler: (e: KeyboardEvent) => void;
   private isEnabled: boolean = true;
+  
+  // FPS-style movement
+  private camera: THREE.PerspectiveCamera | null = null;
+  private controls: OrbitControls | null = null;
+  private keys: Set<string> = new Set();
+  private moveSpeed: number = 0.02;
+  private zoomSpeed: number = 0.1;
+  private rotationSpeed: number = 0.02;
+  private speedBoostMultiplier: number = 3.0; // 3x speed when holding shift
+  private animationId: number | null = null;
+  private isMoving: boolean = false;
 
-  constructor(onViewChange: (view: CameraPosition) => void) {
+  constructor(onViewChange: (view: CameraPosition) => void, camera?: THREE.PerspectiveCamera, controls?: OrbitControls) {
     this.onViewChange = onViewChange;
-    this.boundKeyHandler = this.handleKeyPress.bind(this);
+    this.camera = camera || null;
+    this.controls = controls || null;
     
-    // Listen for keydown events
+    this.boundKeyHandler = this.handleKeyPress.bind(this);
+    this.boundKeyUpHandler = this.handleKeyUp.bind(this);
+    
+    // Listen for keydown and keyup events
     document.addEventListener('keydown', this.boundKeyHandler);
+    document.addEventListener('keyup', this.boundKeyUpHandler);
     
     console.log('KeyboardController: Number keys 1-9 mapped to camera views');
+    console.log('KeyboardController: WASD for movement, +/- for zoom');
     this.showConsoleHelp();
+    
+    // Start movement loop
+    this.startMovementLoop();
   }
 
   private handleKeyPress(event: KeyboardEvent): void {
@@ -108,12 +130,26 @@ export class KeyboardController {
       event.preventDefault();
       this.showHelp();
     }
+    
+    // Handle FPS-style movement keys
+    else if (['w', 'a', 's', 'd', 'q', 'e', '+', '=', '-', '_', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key.toLowerCase())) {
+      event.preventDefault();
+      this.keys.add(key.toLowerCase());
+      this.isMoving = true;
+    }
+  }
+
+  private handleKeyUp(event: KeyboardEvent): void {
+    // Handle keyup events
+    const key = event.key.toLowerCase();
+    this.keys.delete(key);
+    this.isMoving = this.keys.size > 0;
   }
 
   private showViewFeedback(viewName: string): void {
     // Create temporary feedback element
     const feedback = document.createElement('div');
-    feedback.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-lg z-50 pointer-events-none';
+    feedback.className = 'fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-lg z-50 pointer-events-none';
     feedback.textContent = `📹 ${viewName}`;
     
     document.body.appendChild(feedback);
@@ -135,6 +171,9 @@ export class KeyboardController {
     console.log('1️⃣ Front View    2️⃣ Back View     3️⃣ Right View');
     console.log('4️⃣ Left View     5️⃣ Top View      6️⃣ Bottom View');
     console.log('7️⃣ Isometric     8️⃣ Isometric 2   9️⃣ Default View');
+    console.log('🎮 FPS Controls: WASD = Move, Q/E = Forward/Back, +/- = Zoom');
+    console.log('🔄 Rotation: Arrow Keys = Look Around');
+    console.log('⚡ Speed Boost: Hold Shift for 3x speed');
     console.log('H - Show this help');
   }
 
@@ -203,6 +242,19 @@ export class KeyboardController {
         <div class="mt-4 text-center text-sm text-neutral-400">
           Press <span class="font-bold text-white">H</span> again to close • Press <span class="font-bold text-white">ESC</span> to close
         </div>
+        <div class="mt-4 pt-4 border-t border-neutral-600">
+          <div class="text-center text-sm font-bold text-green-400 mb-2">🎮 FPS Controls</div>
+          <div class="grid grid-cols-2 gap-2 text-xs text-neutral-300">
+            <div><span class="font-bold text-white">WASD</span> - Move</div>
+            <div><span class="font-bold text-white">Q/E</span> - Forward/Back</div>
+            <div><span class="font-bold text-white">+/-</span> - Zoom</div>
+            <div><span class="font-bold text-white">↑↓←→</span> - Look Around</div>
+            <div colspan="2"><span class="text-neutral-400">Hold keys for smooth movement</span></div>
+          </div>
+          <div class="mt-2 text-center text-xs">
+            <span class="font-bold text-yellow-400">⚡ Shift</span> - <span class="text-neutral-300">Speed Boost (3x)</span>
+          </div>
+        </div>
       </div>
     `;
 
@@ -241,8 +293,155 @@ export class KeyboardController {
   }
 
   public destroy(): void {
-    // Clean up event listener
+    // Stop movement loop
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+    
+    // Clear any active keys
+    this.keys.clear();
+    this.isMoving = false;
+    
+    // Clean up event listeners
     document.removeEventListener('keydown', this.boundKeyHandler);
+    document.removeEventListener('keyup', this.boundKeyUpHandler);
     console.log('KeyboardController destroyed');
+  }
+
+  private startMovementLoop(): void {
+    const update = () => {
+      if (this.isMoving && this.camera && this.controls) {
+        this.updateMovement();
+      }
+      this.animationId = requestAnimationFrame(update);
+    };
+    update();
+  }
+
+  private updateMovement(): void {
+    if (!this.camera || !this.controls) return;
+    
+    let moved = false;
+    
+    // Calculate speed based on whether shift is held
+    const currentMoveSpeed = this.getCurrentMoveSpeed();
+    const currentRotationSpeed = this.getCurrentRotationSpeed();
+    const currentZoomSpeed = this.getCurrentZoomSpeed();
+    
+    // Get camera direction vectors
+    const direction = new THREE.Vector3();
+    this.camera.getWorldDirection(direction);
+    
+    const right = new THREE.Vector3();
+    right.crossVectors(direction, this.camera.up).normalize();
+    
+    const up = new THREE.Vector3(0, 1, 0);
+    
+    // Handle movement
+    if (this.keys.has('w')) {
+      // Move up
+      this.camera.position.addScaledVector(up, currentMoveSpeed);
+      this.controls.target.addScaledVector(up, currentMoveSpeed);
+      moved = true;
+    }
+    if (this.keys.has('s')) {
+      // Move down
+      this.camera.position.addScaledVector(up, -currentMoveSpeed);
+      this.controls.target.addScaledVector(up, -currentMoveSpeed);
+      moved = true;
+    }
+    if (this.keys.has('a')) {
+      // Strafe left
+      this.camera.position.addScaledVector(right, -currentMoveSpeed);
+      this.controls.target.addScaledVector(right, -currentMoveSpeed);
+      moved = true;
+    }
+    if (this.keys.has('d')) {
+      // Strafe right
+      this.camera.position.addScaledVector(right, currentMoveSpeed);
+      this.controls.target.addScaledVector(right, currentMoveSpeed);
+      moved = true;
+    }
+    if (this.keys.has('q')) {
+      // Move forward
+      this.camera.position.addScaledVector(direction, -currentZoomSpeed);
+      this.controls.target.addScaledVector(direction, -currentZoomSpeed);
+      moved = true;
+    }
+    if (this.keys.has('e')) {
+      // Move backward  
+      this.camera.position.addScaledVector(direction, currentZoomSpeed);
+      this.controls.target.addScaledVector(direction, currentZoomSpeed);
+      moved = true;
+    }
+    
+    // Handle rotation (look around)
+    if (this.keys.has('arrowup')) {
+      // Look up
+      const spherical = new THREE.Spherical();
+      spherical.setFromVector3(this.camera.position.clone().sub(this.controls.target));
+      spherical.phi -= currentRotationSpeed;
+      spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi)); // Constrain vertical rotation
+      this.camera.position.setFromSpherical(spherical).add(this.controls.target);
+      moved = true;
+    }
+    if (this.keys.has('arrowdown')) {
+      // Look down
+      const spherical = new THREE.Spherical();
+      spherical.setFromVector3(this.camera.position.clone().sub(this.controls.target));
+      spherical.phi += currentRotationSpeed;
+      spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi)); // Constrain vertical rotation
+      this.camera.position.setFromSpherical(spherical).add(this.controls.target);
+      moved = true;
+    }
+    if (this.keys.has('arrowleft')) {
+      // Look left
+      const spherical = new THREE.Spherical();
+      spherical.setFromVector3(this.camera.position.clone().sub(this.controls.target));
+      spherical.theta -= currentRotationSpeed;
+      this.camera.position.setFromSpherical(spherical).add(this.controls.target);
+      moved = true;
+    }
+    if (this.keys.has('arrowright')) {
+      // Look right
+      const spherical = new THREE.Spherical();
+      spherical.setFromVector3(this.camera.position.clone().sub(this.controls.target));
+      spherical.theta += currentRotationSpeed;
+      this.camera.position.setFromSpherical(spherical).add(this.controls.target);
+      moved = true;
+    }
+    
+    // Handle zoom
+    if (this.keys.has('+') || this.keys.has('=')) {
+      // Zoom in
+      const zoomDirection = new THREE.Vector3();
+      zoomDirection.subVectors(this.controls.target, this.camera.position).normalize();
+      this.camera.position.addScaledVector(zoomDirection, currentZoomSpeed);
+      moved = true;
+    }
+    if (this.keys.has('-') || this.keys.has('_')) {
+      // Zoom out
+      const zoomDirection = new THREE.Vector3();
+      zoomDirection.subVectors(this.controls.target, this.camera.position).normalize();
+      this.camera.position.addScaledVector(zoomDirection, -currentZoomSpeed);
+      moved = true;
+    }
+    
+    if (moved) {
+      this.controls.update();
+    }
+  }
+
+  private getCurrentMoveSpeed(): number {
+    return this.keys.has('shift') ? this.moveSpeed * this.speedBoostMultiplier : this.moveSpeed;
+  }
+
+  private getCurrentRotationSpeed(): number {
+    return this.keys.has('shift') ? this.rotationSpeed * this.speedBoostMultiplier : this.rotationSpeed;
+  }
+
+  private getCurrentZoomSpeed(): number {
+    return this.keys.has('shift') ? this.zoomSpeed * this.speedBoostMultiplier : this.zoomSpeed;
   }
 } 

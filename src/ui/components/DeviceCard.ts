@@ -549,7 +549,7 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
 
   // Throttle canvas updates to 10fps max to prevent browser freeze
   let lastCanvasUpdate = 0;
-  const CANVAS_UPDATE_INTERVAL = 100; // 10fps max
+  const CANVAS_UPDATE_INTERVAL = 50; // 10fps max
 
   const updateDials = (s: DeviceState) =>{
     const now = performance.now();
