@@ -16,10 +16,6 @@ export interface RecordingSnapshot {
     quat: [number, number, number, number];
     finger?: number[]; // only for gloves
   }>;
-  angles: {
-    left?: { shYaw: number; shPitch: number; shRoll: number; elFlex: number; faRoll: number; wrPitch: number; wrYaw: number };
-    right?: { shYaw: number; shPitch: number; shRoll: number; elFlex: number; faRoll: number; wrPitch: number; wrYaw: number };
-  };
 }
 
 export interface Recording {
@@ -122,17 +118,9 @@ export class RecordingManager extends EventTarget {
       deviceData[device.id] = data;
     });
 
-    const angles: any = {};
-    const leftAngles = this.solver.getAngles('left');
-    const rightAngles = this.solver.getAngles('right');
-    
-    if (leftAngles) angles.left = { ...leftAngles };
-    if (rightAngles) angles.right = { ...rightAngles };
-
     return {
       time: currentTime,
       deviceData,
-      angles
     };
   }
 

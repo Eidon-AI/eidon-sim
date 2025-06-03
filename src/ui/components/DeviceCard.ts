@@ -316,20 +316,20 @@ function draw3DPrismIndicator(
   const R: vec3[] = V.map(v => vec3.transformQuat(vec3.create(), v, qView));
 
   /* 4.5) create and transform "E" vertices in 3D space on front face */
-  const SCALE = 2;               // tweak until it "feels" right
+  const SCALE = 1.9;               // tweak until it "feels" right
   const eSize = 4; // size of the "E"
   const eZ = -d2; // same Z as front face
   
   // Define "E" as line segments in 3D space (front face)
   const eVertices3D: vec3[] = [
-    // Vertical line (left side)
-    [-eSize/2, -eSize/2 + 2, eZ], [-eSize/2, eSize/2 + 2, eZ],
+    // Vertical line (left side) - flipped Y coordinates for canvas
+    [-eSize/2, eSize/2 + 1, eZ], [-eSize/2, -eSize/2 + 1, eZ],
     // Top horizontal line
-    [-eSize/2, -eSize/2 + 2, eZ], [eSize/2, -eSize/2 + 2, eZ],
+    [-eSize/2, eSize/2 + 1, eZ], [eSize/2, eSize/2 + 1, eZ],
     // Middle horizontal line
-    [-eSize/2, 0 + 2, eZ], [eSize/4, 0 + 2, eZ],
+    [-eSize/2, 0 + 1, eZ], [eSize/4, 0 + 1, eZ],
     // Bottom horizontal line
-    [-eSize/2, eSize/2 + 2, eZ], [eSize/2, eSize/2 + 2, eZ],
+    [-eSize/2, -eSize/2 + 1, eZ], [eSize/2, -eSize/2 + 1, eZ],
   ];
   
   // Transform "E" vertices with same quaternion
@@ -366,30 +366,13 @@ function draw3DPrismIndicator(
     
     // Add letter "E" cutout to the front face (last face, index 4)
     if (i === 4) {
-      // Calculate if the front face is facing the camera
-      const v0 = R[f[0]]; // transformed 3D vertices
-      const v1 = R[f[1]];
-      const v2 = R[f[2]];
+      // More robust check: use the average Z-depth of front face vertices
+      // Front face should have the smallest (most negative) Z values when facing camera
+      const frontFaceZ = R.slice(0, 3).reduce((sum, v) => sum + v[2], 0) / 3; // Average Z of front vertices
+      const backFaceZ = R.slice(3, 6).reduce((sum, v) => sum + v[2], 0) / 3;  // Average Z of back vertices
       
-      // Calculate face normal using cross product
-      const edge1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
-      const edge2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
-      const normal = [
-        edge1[1] * edge2[2] - edge1[2] * edge2[1],
-        edge1[2] * edge2[0] - edge1[0] * edge2[2],
-        edge1[0] * edge2[1] - edge1[1] * edge2[0]
-      ];
-      
-      // Normalize the normal vector
-      const normalLength = Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
-      if (normalLength > 0) {
-        normal[0] /= normalLength;
-        normal[1] /= normalLength;
-        normal[2] /= normalLength;
-      }
-      
-      // Only draw "E" if face is facing camera (normal Z > 0.1)
-      if (normal[2] > 0.1) {
+      // Draw "E" if front face is closer to camera (more negative Z) than back face
+      if (frontFaceZ < backFaceZ - 0.5) {  // Small threshold to avoid flickering
         // Save the current state
         ctx.save();
         
