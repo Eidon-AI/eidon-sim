@@ -1,0 +1,244 @@
+import * as THREE from 'three';
+
+interface CameraPosition {
+  position: [number, number, number];
+  target: [number, number, number];
+}
+
+// CAD-style camera views mapped to number keys
+const KEYBOARD_VIEWS: Record<string, CameraPosition> = {
+  '1': { // Front view
+    position: [0.15, 0, 5],
+    target: [0.15, 0, 0]
+  },
+  '2': { // Back view
+    position: [0.15, 0, -5],
+    target: [0.15, 0, 0]
+  },
+  '3': { // Right view
+    position: [5, 0, 0],
+    target: [0.15, 0, 0]
+  },
+  '4': { // Left view
+    position: [-5, 0, 0],
+    target: [0.15, 0, 0]
+  },
+  '5': { // Top view
+    position: [0.15, 5, 0],
+    target: [0.15, 0, 0]
+  },
+  '6': { // Bottom view
+    position: [0.15, -5, 0],
+    target: [0.15, 0, 0]
+  },
+  '7': { // Isometric view 1
+    position: [3, 3, 3],
+    target: [0.15, 0, 0]
+  },
+  '8': { // Isometric view 2
+    position: [-3, 3, -3],
+    target: [0.15, 0, 0]
+  },
+  '9': { // Default perspective (reset)
+    position: [1.5, 1.5, -3],
+    target: [-0.3, 0.15, 0]
+  }
+};
+
+const VIEW_NAMES: Record<string, string> = {
+  '1': 'Front View',
+  '2': 'Back View',
+  '3': 'Right View',
+  '4': 'Left View',
+  '5': 'Top View',
+  '6': 'Bottom View',
+  '7': 'Isometric View',
+  '8': 'Isometric View 2',
+  '9': 'Default View'
+};
+
+export class KeyboardController {
+  private onViewChange: (view: CameraPosition) => void;
+  private boundKeyHandler: (e: KeyboardEvent) => void;
+  private isEnabled: boolean = true;
+
+  constructor(onViewChange: (view: CameraPosition) => void) {
+    this.onViewChange = onViewChange;
+    this.boundKeyHandler = this.handleKeyPress.bind(this);
+    
+    // Listen for keydown events
+    document.addEventListener('keydown', this.boundKeyHandler);
+    
+    console.log('KeyboardController: Number keys 1-9 mapped to camera views');
+    this.showHelp();
+  }
+
+  private handleKeyPress(event: KeyboardEvent): void {
+    // Only handle number keys and only when no input elements are focused
+    if (!this.isEnabled) return;
+    
+    // Don't trigger if user is typing in an input field
+    const activeElement = document.activeElement;
+    if (activeElement && (
+      activeElement.tagName === 'INPUT' || 
+      activeElement.tagName === 'TEXTAREA' ||
+      (activeElement instanceof HTMLElement && activeElement.contentEditable === 'true')
+    )) {
+      return;
+    }
+
+    const key = event.key;
+    
+    // Handle number keys 1-9
+    if (KEYBOARD_VIEWS[key]) {
+      event.preventDefault(); // Prevent any default browser behavior
+      
+      const view = KEYBOARD_VIEWS[key];
+      const viewName = VIEW_NAMES[key];
+      
+      console.log(`KeyboardController: Switching to ${viewName} (${key})`);
+      this.onViewChange(view);
+      
+      // Show brief visual feedback
+      this.showViewFeedback(viewName);
+    }
+    
+    // Handle 'H' key for help
+    else if (key.toLowerCase() === 'h' && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      this.showHelp();
+    }
+  }
+
+  private showViewFeedback(viewName: string): void {
+    // Create temporary feedback element
+    const feedback = document.createElement('div');
+    feedback.className = 'fixed top-16 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-lg z-50 pointer-events-none';
+    feedback.textContent = `📹 ${viewName}`;
+    
+    document.body.appendChild(feedback);
+    
+    // Fade out and remove after 1.5 seconds
+    setTimeout(() => {
+      feedback.style.transition = 'opacity 0.5s ease-out';
+      feedback.style.opacity = '0';
+      setTimeout(() => {
+        if (feedback.parentNode) {
+          feedback.parentNode.removeChild(feedback);
+        }
+      }, 500);
+    }, 1000);
+  }
+
+  private showHelp(): void {
+    console.log('🎹 Keyboard Camera Controls:');
+    console.log('1️⃣ Front View    2️⃣ Back View     3️⃣ Right View');
+    console.log('4️⃣ Left View     5️⃣ Top View      6️⃣ Bottom View');
+    console.log('7️⃣ Isometric     8️⃣ Isometric 2   9️⃣ Default View');
+    console.log('H - Show this help');
+    
+    // Also show visual overlay
+    this.showHelpOverlay();
+  }
+
+  private showHelpOverlay(): void {
+    // Remove existing overlay if present
+    const existingOverlay = document.getElementById('keyboard-help-overlay');
+    if (existingOverlay) {
+      existingOverlay.remove();
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'keyboard-help-overlay';
+    overlay.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
+    overlay.innerHTML = `
+      <div class="bg-neutral-800 p-6 rounded-lg shadow-2xl max-w-md">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-xl font-bold text-white">🎹 Keyboard Camera Controls</h3>
+          <button id="close-help" class="text-neutral-400 hover:text-white text-xl">✕</button>
+        </div>
+        <div class="grid grid-cols-3 gap-3 text-sm text-white">
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">1</div>
+            <div>Front View</div>
+          </div>
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">2</div>
+            <div>Back View</div>
+          </div>
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">3</div>
+            <div>Right View</div>
+          </div>
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">4</div>
+            <div>Left View</div>
+          </div>
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">5</div>
+            <div>Top View</div>
+          </div>
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">6</div>
+            <div>Bottom View</div>
+          </div>
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">7</div>
+            <div>Isometric</div>
+          </div>
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">8</div>
+            <div>Isometric 2</div>
+          </div>
+          <div class="text-center p-2 bg-neutral-700 rounded">
+            <div class="font-bold text-blue-400">9</div>
+            <div>Default View</div>
+          </div>
+        </div>
+        <div class="mt-4 text-center text-sm text-neutral-400">
+          Press <span class="font-bold text-white">H</span> again to close • Press <span class="font-bold text-white">ESC</span> to close
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Close handlers
+    const closeBtn = overlay.querySelector('#close-help') as HTMLButtonElement;
+    const closeHandler = () => overlay.remove();
+    
+    closeBtn.onclick = closeHandler;
+    overlay.onclick = (e) => {
+      if (e.target === overlay) closeHandler();
+    };
+
+    // ESC key handler
+    const escHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeHandler();
+        document.removeEventListener('keydown', escHandler);
+      }
+    };
+    document.addEventListener('keydown', escHandler);
+  }
+
+  public setEnabled(enabled: boolean): void {
+    this.isEnabled = enabled;
+    console.log(`KeyboardController: ${enabled ? 'Enabled' : 'Disabled'}`);
+  }
+
+  public isKeyboardEnabled(): boolean {
+    return this.isEnabled;
+  }
+
+  public getAvailableViews(): Record<string, string> {
+    return { ...VIEW_NAMES };
+  }
+
+  public destroy(): void {
+    // Clean up event listener
+    document.removeEventListener('keydown', this.boundKeyHandler);
+    console.log('KeyboardController destroyed');
+  }
+} 

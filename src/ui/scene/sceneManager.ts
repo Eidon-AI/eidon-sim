@@ -6,6 +6,7 @@ import { ArmSolver } from '../../core/ArmSolver';
 import { VectorArm } from './vectorArm';
 import { SkeletalRig } from './skeletalRig';
 import { CameraControl } from '../components/CameraControl';
+import { KeyboardController } from '../components/KeyboardController';
 import { GamepadController } from '../components/GamepadController';
 
 export function initScene(
@@ -52,12 +53,15 @@ export function initScene(
   const rig = new SkeletalRig(scene, store, solver);
 
   /* ------------ camera control ------------------- */
-  const cameraControl = new CameraControl(pos => {
+  const cameraChangeHandler = (pos: any) => {
     cam.position.set(pos.position[0], pos.position[1], pos.position[2]);
     cam.lookAt(pos.target[0], pos.target[1], pos.target[2]);
     controls.target.set(pos.target[0], pos.target[1], pos.target[2]);
     controls.update();
-  }, cam);
+  };
+
+  const cameraControl = new CameraControl(cameraChangeHandler, cam);
+  const keyboardController = new KeyboardController(cameraChangeHandler);
 
   /* ------------ render loop ---------------------- */
   function animate() {
@@ -91,6 +95,7 @@ export function initScene(
       rightArm.destroy();
       gamepadController.destroy();
       cameraControl.destroy();
+      keyboardController.destroy();
       
       // Clean up Three.js resources
       renderer.dispose();

@@ -222,6 +222,16 @@ export function mount(root: HTMLElement) {
         <strong>Button Controls:</strong><br>
         A: Toggle camera mode • B: Reset camera • Y: Enable/disable gamepad
       </div>
+      
+      <div style="margin-top: 15px; text-align: center; padding-top: 10px; border-top: 1px solid #444;">
+        <strong>⌨️ Keyboard Shortcuts:</strong><br>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; font-size: 0.9em;">
+          <div>1️⃣ Front View</div><div>2️⃣ Back View</div><div>3️⃣ Right View</div>
+          <div>4️⃣ Left View</div><div>5️⃣ Top View</div><div>6️⃣ Bottom View</div>
+          <div>7️⃣ Isometric</div><div>8️⃣ Isometric 2</div><div>9️⃣ Default View</div>
+        </div>
+        <div style="margin-top: 8px; font-size: 0.85em; color: #999;">Press H for keyboard help</div>
+      </div>
     </div>
   `;
   root.appendChild(gamepadModal);
