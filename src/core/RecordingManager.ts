@@ -500,10 +500,11 @@ export class RecordingManager extends EventTarget {
   public async importRecording(file: File): Promise<Recording> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const recording = JSON.parse(e.target?.result as string) as Recording;
-          this.saveToLocalStorage(recording);
+          // Wait for save to complete before resolving
+          await this.saveToLocalStorage(recording);
           resolve(recording);
         } catch (error) {
           reject(new Error('Invalid recording file format'));

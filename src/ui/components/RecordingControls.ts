@@ -6,6 +6,7 @@ export class RecordingControls {
   private recordingManager: RecordingManager;
   private countdownOverlay: HTMLElement | null = null;
   private recordingModal: HTMLElement | null = null;
+  private loadModal: HTMLElement | null = null;
   private currentRecording: Recording | null = null;
   private isDraggingScrubber = false;
   private lastSeekTime = 0;
@@ -382,6 +383,24 @@ export class RecordingControls {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/60 flex items-center justify-center z-50';
     
+    // Store reference to modal for refreshing
+    this.loadModal = modal;
+    
+    this.renderLoadModalContent(modal, recordings);
+
+    // Event listeners
+    modal.querySelector('#closeLoadModal')?.addEventListener('click', () => {
+      modal.remove();
+      this.loadModal = null;
+    });
+
+    this.setupImportHandler(modal);
+    this.setupRecordingListHandlers(modal);
+
+    document.body.appendChild(modal);
+  }
+
+  private renderLoadModalContent(modal: HTMLElement, recordings: Recording[]): void {
     const recordingsList = recordings.map(recording => {
       const duration = recording.snapshots.length > 0 
         ? recording.snapshots[recording.snapshots.length - 1].time 
@@ -411,7 +430,7 @@ export class RecordingControls {
           <button id="closeLoadModal" class="text-neutral-400 hover:text-white">✕</button>
         </div>
         
-        <div class="space-y-0 mb-4">
+        <div class="space-y-0 mb-4" id="recordingsList">
           ${recordings.length > 0 ? recordingsList : '<p class="text-neutral-400 text-center py-8">No recordings found</p>'}
         </div>
 
@@ -420,12 +439,51 @@ export class RecordingControls {
         </div>
       </div>
     `;
+  }
 
-    // Event listeners
-    modal.querySelector('#closeLoadModal')?.addEventListener('click', () => {
-      modal.remove();
-    });
+  private refreshLoadModal(): void {
+    if (!this.loadModal) return;
+    
+    const recordings = this.recordingManager.getRecordings();
+    
+    // Only update the recordings list content, not the entire modal
+    const recordingsListContainer = this.loadModal.querySelector('#recordingsList');
+    if (!recordingsListContainer) return;
+    
+    const recordingsList = recordings.map(recording => {
+      const duration = recording.snapshots.length > 0 
+        ? recording.snapshots[recording.snapshots.length - 1].time 
+        : 0;
+      
+      return `
+        <div class="flex items-center justify-between p-3 hover:bg-neutral-800">
+          <div>
+            <div class="font-medium text-white cursor-pointer hover:text-blue-400 transition-colors playRecordingTitle" data-id="${recording.id}">${recording.name}</div>
+            <div class="text-sm text-neutral-400">
+              ${(duration / 1000).toFixed(1)}s • ${recording.devices.length} devices • ${recording.snapshots.length} frames
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button class="loadRecording btn-sm" data-id="${recording.id}">▶ Play</button>
+            <button class="exportRecording btn-sm" data-id="${recording.id}">💾</button>
+            <button class="deleteRecording btn-sm text-red-400" data-id="${recording.id}">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    // Update only the recordings list content
+    const newContent = recordings.length > 0 
+      ? recordingsList 
+      : '<p class="text-neutral-400 text-center py-8">No recordings found</p>';
+    
+    recordingsListContainer.innerHTML = newContent;
+    
+    // Re-setup only the recording list handlers (not the close/import handlers)
+    this.setupRecordingListHandlers(this.loadModal);
+  }
 
+  private setupImportHandler(modal: HTMLElement): void {
     modal.querySelector('#importRecording')?.addEventListener('click', async () => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -438,9 +496,8 @@ export class RecordingControls {
             await this.recordingManager.importRecording(file);
             alert('Recording imported successfully!');
             
-            // Close current modal and reopen with updated list
-            modal.remove();
-            this.showLoadModal();
+            // Refresh the modal content instead of closing and reopening
+            this.refreshLoadModal();
           } catch (e) {
             alert('Failed to import recording: ' + (e as Error).message);
           }
@@ -449,7 +506,9 @@ export class RecordingControls {
       
       input.click();
     });
+  }
 
+  private setupRecordingListHandlers(modal: HTMLElement): void {
     modal.querySelectorAll('.loadRecording').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = (btn as HTMLElement).dataset.id!;
@@ -457,6 +516,7 @@ export class RecordingControls {
         if (recording) {
           this.recordingManager.startPlayback(recording);
           modal.remove();
+          this.loadModal = null;
         }
       });
     });
@@ -468,6 +528,7 @@ export class RecordingControls {
         if (recording) {
           this.recordingManager.startPlayback(recording);
           modal.remove();
+          this.loadModal = null;
         }
       });
     });
@@ -487,13 +548,11 @@ export class RecordingControls {
         const id = (btn as HTMLElement).dataset.id!;
         if (confirm('Delete this recording?')) {
           this.recordingManager.deleteRecording(id);
-          modal.remove();
-          this.showLoadModal(); // Refresh the list
+          // Refresh the modal content instead of closing and reopening
+          this.refreshLoadModal();
         }
       });
     });
-
-    document.body.appendChild(modal);
   }
 
   public mount(parent: HTMLElement): void {
@@ -509,6 +568,12 @@ export class RecordingControls {
     this.container.remove();
     this.hideCountdown();
     this.hideRecordingModal();
+    
+    // Clean up load modal if it exists
+    if (this.loadModal) {
+      this.loadModal.remove();
+      this.loadModal = null;
+    }
   }
 
   private handleGlobalMouseUp = () => {
