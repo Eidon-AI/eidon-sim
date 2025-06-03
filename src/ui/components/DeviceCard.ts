@@ -547,7 +547,17 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   [dYaw, dPit, dRol].forEach(d => dialWrap.appendChild(d.wrap));
   el.appendChild(dialWrap);
 
+  // Throttle canvas updates to 10fps max to prevent browser freeze
+  let lastCanvasUpdate = 0;
+  const CANVAS_UPDATE_INTERVAL = 100; // 10fps max
+
   const updateDials = (s: DeviceState) =>{
+    const now = performance.now();
+    if (now - lastCanvasUpdate < CANVAS_UPDATE_INTERVAL) {
+      return; // Skip update if too frequent
+    }
+    lastCanvasUpdate = now;
+
     const [yaw,pit,rol] = eulerXYZ(s.quat);
     draw3DPrismIndicator(
       prism.canvas.getContext('2d')!,

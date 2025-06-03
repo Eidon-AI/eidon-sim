@@ -46,53 +46,60 @@ export function initScene(
   /* ------------ gamepad controller ----------------- */
   const gamepadController = new GamepadController(cam, controls);
 
-  /* ------------ camera control cube ------------ */
-  const cameraControl = new CameraControl(({ position, target }) => {
-    // Animate camera to new position
-    const duration = 500; // ms
-    const startPosition = cam.position.clone();
-    const startTarget = controls.target.clone();
-    const endPosition = new THREE.Vector3(...position);
-    const endTarget = new THREE.Vector3(...target);
-    const startTime = performance.now();
+  /* ------------ scene objects ------------------- */
+  const leftArm = new VectorArm(scene, store, 'left');
+  const rightArm = new VectorArm(scene, store, 'right');
+  const rig = new SkeletalRig(scene, store, solver);
 
-    function animate() {
-      const elapsed = performance.now() - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Ease in-out
-      const t = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-      
-      cam.position.lerpVectors(startPosition, endPosition, t);
-      controls.target.lerpVectors(startTarget, endTarget, t);
-      controls.update();
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    }
-
-    animate();
+  /* ------------ camera control ------------------- */
+  const cameraControl = new CameraControl(pos => {
+    cam.position.set(pos.position[0], pos.position[1], pos.position[2]);
+    cam.lookAt(pos.target[0], pos.target[1], pos.target[2]);
+    controls.target.set(pos.target[0], pos.target[1], pos.target[2]);
+    controls.update();
   }, cam);
-  cameraControl.mount();
 
-  /* ------------ visuals ------------------------- */
-  new VectorArm(scene, store, 'left');
-  new VectorArm(scene, store, 'right');
-  new SkeletalRig(scene, store, solver);      // single model drives both arms
-
-  /* ------------ resize + loop ------------------- */
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth - 0, window.innerHeight);
-    cam.aspect = (window.innerWidth - 0) / window.innerHeight;
-    cam.updateProjectionMatrix();
-  });
-
-  const loop = () => {
-    requestAnimationFrame(loop);
+  /* ------------ render loop ---------------------- */
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
     renderer.render(scene, cam);
-  };
-  loop();
+  }
+  animate();
 
-  return gamepadController;
+  /* ------------ resize ----------------------------- */
+  const handleResize = () => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    cam.aspect = w / h;
+    cam.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  };
+  window.addEventListener('resize', handleResize);
+
+  // Return cleanup function and gamepad controller
+  return {
+    gamepadController,
+    destroy() {
+      console.log('Destroying scene...');
+      
+      // Clean up window event listeners
+      window.removeEventListener('resize', handleResize);
+      
+      // Clean up components
+      leftArm.destroy();
+      rightArm.destroy();
+      gamepadController.destroy();
+      cameraControl.destroy();
+      
+      // Clean up Three.js resources
+      renderer.dispose();
+      scene.clear();
+      
+      // Clean up controls
+      controls.dispose();
+      
+      console.log('Scene destroyed');
+    }
+  };
 }

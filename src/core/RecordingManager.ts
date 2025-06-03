@@ -40,8 +40,13 @@ export class RecordingManager extends EventTarget {
   private recordingStartTime = 0;
   private recordingInterval: number | null = null;
   private playbackInterval: number | null = null;
+  private playbackAnimationId: number | null = null;
   private audioContext: AudioContext | null = null;
   private temporaryDeviceIds: Set<string> = new Set(); // Track devices created for playback
+  
+  // Safeguards to prevent memory issues
+  private readonly MAX_RECORDING_DURATION = 10 * 60 * 1000; // 10 minutes max
+  private readonly MAX_SNAPSHOTS = 18000; // 30fps * 600s = 18,000 snapshots max
 
   constructor(
     private store: DeviceStore,
@@ -158,6 +163,15 @@ export class RecordingManager extends EventTarget {
     
     this.recordingInterval = window.setInterval(() => {
       if (this.currentRecording) {
+        // Safety check: stop recording if it gets too long
+        const currentTime = performance.now() - this.recordingStartTime;
+        if (currentTime > this.MAX_RECORDING_DURATION || 
+            this.currentRecording.snapshots.length > this.MAX_SNAPSHOTS) {
+          console.warn('Recording stopped automatically due to length limits');
+          this.stopRecording();
+          return;
+        }
+        
         this.currentRecording.snapshots.push(this.captureSnapshot());
       }
     }, 1000 / this.sampleRate);
@@ -177,8 +191,10 @@ export class RecordingManager extends EventTarget {
 
     this.currentRecording.endTime = Date.now();
     
-    // Save to localStorage
-    this.saveToLocalStorage(this.currentRecording);
+    // Save to localStorage asynchronously to avoid blocking
+    this.saveToLocalStorage(this.currentRecording).catch(e => {
+      console.error('Failed to save recording:', e);
+    });
 
     this.dispatchEvent(new CustomEvent('recordingStateChanged', { 
       detail: { state: 'stopped', recording: this.currentRecording } 
@@ -200,9 +216,14 @@ export class RecordingManager extends EventTarget {
     // Create temporary device states for devices that don't exist
     this.createTemporaryDevices(recording);
 
-    this.playbackInterval = window.setInterval(() => {
-      this.updatePlayback();
-    }, 16); // ~60fps for smooth playback
+    // Use requestAnimationFrame for smoother, more efficient playback
+    const playbackLoop = () => {
+      if (this.isPlayingBack && !this.isPaused) {
+        this.updatePlayback();
+        this.playbackAnimationId = requestAnimationFrame(playbackLoop);
+      }
+    };
+    this.playbackAnimationId = requestAnimationFrame(playbackLoop);
 
     this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
       detail: { state: 'playing', position: 0, duration: this.getRecordingDuration(recording) } 
@@ -213,9 +234,9 @@ export class RecordingManager extends EventTarget {
     if (!this.isPlayingBack || this.isPaused) return;
 
     this.isPaused = true;
-    if (this.playbackInterval) {
-      clearInterval(this.playbackInterval);
-      this.playbackInterval = null;
+    if (this.playbackAnimationId) {
+      cancelAnimationFrame(this.playbackAnimationId);
+      this.playbackAnimationId = null;
     }
 
     this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
@@ -229,9 +250,14 @@ export class RecordingManager extends EventTarget {
     this.isPaused = false;
     this.playbackStartTime = performance.now() - this.playbackPosition;
 
-    this.playbackInterval = window.setInterval(() => {
-      this.updatePlayback();
-    }, 16);
+    // Resume animation loop
+    const playbackLoop = () => {
+      if (this.isPlayingBack && !this.isPaused) {
+        this.updatePlayback();
+        this.playbackAnimationId = requestAnimationFrame(playbackLoop);
+      }
+    };
+    this.playbackAnimationId = requestAnimationFrame(playbackLoop);
 
     this.dispatchEvent(new CustomEvent('playbackStateChanged', { 
       detail: { state: 'playing', position: this.playbackPosition } 
@@ -244,9 +270,9 @@ export class RecordingManager extends EventTarget {
     this.isPlayingBack = false;
     this.isPaused = false;
     
-    if (this.playbackInterval) {
-      clearInterval(this.playbackInterval);
-      this.playbackInterval = null;
+    if (this.playbackAnimationId) {
+      cancelAnimationFrame(this.playbackAnimationId);
+      this.playbackAnimationId = null;
     }
 
     this.playbackPosition = 0;
@@ -373,14 +399,26 @@ export class RecordingManager extends EventTarget {
     return recording.snapshots[recording.snapshots.length - 1].time;
   }
 
-  private saveToLocalStorage(recording: Recording): void {
-    try {
-      const recordings = this.getLocalStorageRecordings();
-      recordings[recording.id] = recording;
-      localStorage.setItem('eidon_recordings', JSON.stringify(recordings));
-    } catch (e) {
-      console.error('Failed to save recording to localStorage:', e);
-    }
+  private async saveToLocalStorage(recording: Recording): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        // Use setTimeout to defer the heavy operation to avoid blocking main thread
+        setTimeout(() => {
+          try {
+            const recordings = this.getLocalStorageRecordings();
+            recordings[recording.id] = recording;
+            localStorage.setItem('eidon_recordings', JSON.stringify(recordings));
+            resolve();
+          } catch (e) {
+            console.error('Failed to save recording to localStorage:', e);
+            reject(e);
+          }
+        }, 0);
+      } catch (e) {
+        console.error('Failed to save recording to localStorage:', e);
+        reject(e);
+      }
+    });
   }
 
   private getLocalStorageRecordings(): Record<string, Recording> {
@@ -527,5 +565,36 @@ export class RecordingManager extends EventTarget {
       console.log(`Removed temporary device: ${deviceId}`);
     });
     this.temporaryDeviceIds.clear();
+  }
+
+  public destroy(): void {
+    // Stop any ongoing recording or playback
+    if (this.isRecording) {
+      this.stopRecording();
+    }
+    if (this.isPlayingBack) {
+      this.stopPlayback();
+    }
+
+    // Clean up intervals and animation frames
+    if (this.recordingInterval) {
+      clearInterval(this.recordingInterval);
+      this.recordingInterval = null;
+    }
+    if (this.playbackAnimationId) {
+      cancelAnimationFrame(this.playbackAnimationId);
+      this.playbackAnimationId = null;
+    }
+
+    // Clean up audio context
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+
+    // Clean up temporary devices
+    this.cleanupTemporaryDevices();
+
+    console.log('RecordingManager destroyed');
   }
 } 

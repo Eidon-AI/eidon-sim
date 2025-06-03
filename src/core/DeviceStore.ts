@@ -8,14 +8,18 @@ export class DeviceStore extends EventTarget {
   constructor(){
     super();
 
-    document.addEventListener('deviceColor', e => {
-      const { id, hex } =
-        (e as CustomEvent<{ id: string; hex: string }>).detail;
-      const s = this.map.get(id);
-      if (!s) return;
-      s.color = hex;
-      this.dispatchEvent(new CustomEvent('update', { detail: s }));
-    });
+    this.boundHandleDeviceColor = this.handleDeviceColor.bind(this);
+    document.addEventListener('deviceColor', this.boundHandleDeviceColor);
+  }
+
+  private boundHandleDeviceColor: (e: Event) => void;
+
+  private handleDeviceColor(e: Event) {
+    const { id, hex } = (e as CustomEvent<{ id: string; hex: string }>).detail;
+    const s = this.map.get(id);
+    if (!s) return;
+    s.color = hex;
+    this.dispatchEvent(new CustomEvent('update', { detail: s }));
   }
 
   private map = new Map<string, DeviceState>();
@@ -38,15 +42,18 @@ export class DeviceStore extends EventTarget {
   }
 
   /** Update device state during playback (bypasses live input blocking) */
-  updateDeviceForPlayback(id: string, updates: Partial<DeviceState>) {
-    const state = this.map.get(id);
-    if (!state) return;
+  updateDeviceForPlayback(deviceId: string, updates: Partial<DeviceState>) {
+    const device = this.map.get(deviceId);
+    if (!device) return;
 
     // Apply updates
-    Object.assign(state, updates);
-    
-    // Trigger update event
-    this.dispatchEvent(new CustomEvent('update', { detail: state }));
+    Object.assign(device, updates);
+
+    // Update lastSeen
+    device.lastSeen = performance.now();
+
+    // Dispatch update event
+    this.dispatchEvent(new CustomEvent('update', { detail: device }));
   }
 
   /* ---------- internal helpers ------------------------------- */
@@ -74,11 +81,19 @@ export class DeviceStore extends EventTarget {
   }
 
   /** Convenience: fetch latest tracker/glove by arm side & level */
-  getBy(side: 'left' | 'right', level: 'upper' | 'lower' | 'hand') {
-    for (const s of this.map.values()) {
-      if (s.arm?.side === side && s.arm?.level === level) return s;
-      if (level === 'hand' && s.kind === 'glove' && s.arm?.side === side) return s;
-    }
-    return undefined;
+  getBy(side: 'left' | 'right', level: 'upper' | 'lower' | 'hand'): DeviceState | undefined {
+    return [...this.map.values()].find(
+      s => s.arm?.side === side && s.arm?.level === level
+    );
+  }
+
+  destroy(): void {
+    // Clean up document event listener
+    document.removeEventListener('deviceColor', this.boundHandleDeviceColor);
+    
+    // Clear device map
+    this.map.clear();
+    
+    console.log('DeviceStore destroyed');
   }
 }

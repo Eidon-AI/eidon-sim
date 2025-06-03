@@ -139,4 +139,20 @@ export class HidManager extends EventTarget {
     /* Emit "report" event with raw DataView for DeviceStore */
     this.dispatchEvent(new CustomEvent('report', { detail: { id, data } }));
   }
+
+  public destroy(): void {
+    // Close all HID connections
+    this.devices.forEach(async (device) => {
+      try {
+        await device.close();
+      } catch (e) {
+        console.warn('Failed to close HID device:', e);
+      }
+    });
+    
+    // Clear device map
+    this.devices.clear();
+    
+    console.log('HidManager destroyed');
+  }
 }

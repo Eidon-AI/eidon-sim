@@ -10,7 +10,7 @@ export class RecordingControls {
   private isDraggingScrubber = false;
   private lastSeekTime = 0;
   private pausedForDrag = false;
-
+  
   constructor(recordingManager: RecordingManager) {
     this.recordingManager = recordingManager;
     this.container = this.createContainer();
@@ -352,11 +352,11 @@ export class RecordingControls {
 
     // Mouse events
     scrubber.addEventListener('mousedown', startDrag);
-    document.addEventListener('mouseup', endDrag);
+    document.addEventListener('mouseup', this.handleGlobalMouseUp);
 
     // Touch events for mobile
     scrubber.addEventListener('touchstart', startDrag);
-    scrubber.addEventListener('touchend', endDrag);
+    document.addEventListener('touchend', this.handleGlobalTouchEnd);
 
     // Input event for real-time updates during drag
     scrubber.addEventListener('input', handleInput);
@@ -492,8 +492,31 @@ export class RecordingControls {
   }
 
   public unmount(): void {
+    // Clean up global event listeners to prevent memory leaks
+    document.removeEventListener('mouseup', this.handleGlobalMouseUp);
+    document.removeEventListener('touchend', this.handleGlobalTouchEnd);
+    
+    // Clean up DOM elements
     this.container.remove();
     this.hideCountdown();
     this.hideRecordingModal();
   }
+
+  private handleGlobalMouseUp = () => {
+    if (this.isDraggingScrubber) {
+      this.isDraggingScrubber = false;
+      console.log('Drag ended - resuming automatic slider updates');
+      
+      // Resume playback if we paused it for dragging
+      if (this.pausedForDrag) {
+        this.pausedForDrag = false;
+        this.recordingManager.resumePlayback();
+        console.log('Resumed playback after dragging');
+      }
+    }
+  };
+
+  private handleGlobalTouchEnd = () => {
+    this.handleGlobalMouseUp(); // Same logic for touch
+  };
 } 

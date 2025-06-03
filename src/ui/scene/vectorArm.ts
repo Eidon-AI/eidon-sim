@@ -11,12 +11,21 @@ export class VectorArm {
   private arrowTips: THREE.Mesh[] = [];
   private upArrowTips: THREE.Mesh[] = [];
   private group: THREE.Group;
+  
+  // Geometry and material pools to prevent memory leaks
+  private tubeGeometry: THREE.CylinderGeometry;
+  private arrowGeometry: THREE.ConeGeometry;
+  private materialPool: Map<string, THREE.MeshBasicMaterial> = new Map();
 
   constructor(
     private scene: THREE.Scene,
     private store: DeviceStore,
     private side: 'left' | 'right'
   ) {
+    // Create shared geometries once
+    this.tubeGeometry = new THREE.CylinderGeometry(0.005, 0.005, 1, 8);
+    this.arrowGeometry = new THREE.ConeGeometry(0.01, 0.04, 8);
+    
     // Create placeholder lines and tubes
     ['#ff6', '#6ff', '#f6f'].forEach(col => {
       this.segs.push(this.build(col));
@@ -40,6 +49,13 @@ export class VectorArm {
     store.addEventListener('update', () => this.refresh());
   }
 
+  private getMaterial(color: string): THREE.MeshBasicMaterial {
+    if (!this.materialPool.has(color)) {
+      this.materialPool.set(color, new THREE.MeshBasicMaterial({ color }));
+    }
+    return this.materialPool.get(color)!;
+  }
+
   private build(color: string) {
     // Create a simple line geometry as placeholder - will be replaced with tube in refresh
     const geo = new THREE.BufferGeometry().setFromPoints([
@@ -54,15 +70,19 @@ export class VectorArm {
     const length = vec3.length(direction);
 
     if (length < 0.001) {
-      // Return empty geometry for zero-length vectors
-      const emptyGeo = new THREE.BufferGeometry();
-      const mat = new THREE.MeshBasicMaterial({ color });
-      return new THREE.Mesh(emptyGeo, mat);
+      // Return tube with empty scale for zero-length vectors
+      const material = this.getMaterial(color);
+      const tube = new THREE.Mesh(this.tubeGeometry, material);
+      tube.scale.set(1, 0, 1); // Scale Y to 0 for zero-length
+      tube.visible = false;
+      return tube;
     }
 
-    const tubeGeometry = new THREE.CylinderGeometry(0.005, 0.005, length, 8);
-    const tubeMaterial = new THREE.MeshBasicMaterial({ color });
-    const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+    const material = this.getMaterial(color);
+    const tube = new THREE.Mesh(this.tubeGeometry, material);
+
+    // Scale the shared geometry to the desired length
+    tube.scale.set(1, length, 1);
 
     // Position the tube at the midpoint
     const midpoint = vec3.lerp(vec3.create(), start, end, 0.5);
@@ -81,9 +101,8 @@ export class VectorArm {
   }
 
   private buildArrowTip(color: string) {
-    const coneGeometry = new THREE.ConeGeometry(0.01, 0.04, 8);
-    const coneMaterial = new THREE.MeshBasicMaterial({ color });
-    return new THREE.Mesh(coneGeometry, coneMaterial);
+    const material = this.getMaterial(color);
+    return new THREE.Mesh(this.arrowGeometry, material);
   }
 
   private refresh() {
@@ -151,22 +170,37 @@ export class VectorArm {
         return;
       }
       
-      // Show and update tube
+      // Show and update tube - reuse existing tube object
       tube.visible = true;
       tip.visible = true;
       
-      // Remove old tube and create new one with updated positions
-      this.group.remove(tube);
-      const colorHex = dev?.color ?? '#888';
-      const newTube = this.buildTube(pts[idx], pts[idx+1], colorHex);
-      this.tubeSegs[idx] = newTube;
-      this.group.add(newTube);
+      // Update tube position and scale instead of recreating
+      const direction = vec3.subtract(vec3.create(), pts[idx+1], pts[idx]);
+      const length = vec3.length(direction);
+      
+      if (length > 0.001) {
+        tube.scale.set(1, length, 1);
+        
+        // Position the tube at the midpoint
+        const midpoint = vec3.lerp(vec3.create(), pts[idx], pts[idx+1], 0.5);
+        tube.position.set(midpoint[0], midpoint[1], midpoint[2]);
+
+        // Orient the tube to point from start to end
+        const normalizedDirection = vec3.normalize(vec3.create(), direction);
+        tube.lookAt(
+          tube.position.x + normalizedDirection[0],
+          tube.position.y + normalizedDirection[1],
+          tube.position.z + normalizedDirection[2]
+        );
+        tube.rotateX(Math.PI / 2);
+      } else {
+        tube.scale.set(1, 0, 1); // Zero length
+      }
 
       /* position and orient arrow tip */
       tip.position.set(pts[idx+1][0], pts[idx+1][1], pts[idx+1][2]);
       
       // Calculate direction vector for orientation
-      const direction = vec3.subtract(vec3.create(), pts[idx+1], pts[idx]);
       if (vec3.length(direction) > 0) {
         vec3.normalize(direction, direction);
         tip.lookAt(
@@ -178,13 +212,17 @@ export class VectorArm {
         tip.rotateX(Math.PI / 2);
       }
       
-      (tip.material as THREE.MeshBasicMaterial).color.set(colorHex);
+      // Update material color using shared material
+      const colorHex = dev?.color ?? '#888';
+      const material = this.getMaterial(colorHex);
+      tube.material = material;
+      tip.material = material;
     });
 
     /* ---- update up vector segments ---- */
     const devices = [up, low, glove];
     const startPoints = [shoulder, upperEnd, lowerEnd];
-    const segmentLengths = [HUM_LEN(), RAD_LEN(), HAND_LEN()]; // Forward vector segment lengths
+    const segmentLengths = [HUM_LEN(), RAD_LEN(), HAND_LEN()];
     
     startPoints.forEach((startPt, idx) => {
       const dev = devices[idx];
@@ -203,16 +241,32 @@ export class VectorArm {
       const upVectorLength = segmentLengths[idx] * 0.2;
       const upEnd = vec3.scaleAndAdd(vec3.create(), startPt, upVector, upVectorLength);
       
-      // Show and update up tube
+      // Show and update up tube - reuse existing tube object
       upTube.visible = true;
       upTip.visible = true;
       
-      // Remove old tube and create new one with updated positions
-      this.group.remove(upTube);
-      const colorHex = dev?.color ?? '#888';
-      const newUpTube = this.buildTube(startPt, upEnd, colorHex);
-      this.upTubeSegs[idx] = newUpTube;
-      this.group.add(newUpTube);
+      // Update tube position and scale instead of recreating
+      const upDirection = vec3.subtract(vec3.create(), upEnd, startPt);
+      const upLength = vec3.length(upDirection);
+      
+      if (upLength > 0.001) {
+        upTube.scale.set(1, upLength, 1);
+        
+        // Position the tube at the midpoint
+        const midpoint = vec3.lerp(vec3.create(), startPt, upEnd, 0.5);
+        upTube.position.set(midpoint[0], midpoint[1], midpoint[2]);
+
+        // Orient the tube to point from start to end
+        const normalizedUp = vec3.normalize(vec3.create(), upDirection);
+        upTube.lookAt(
+          upTube.position.x + normalizedUp[0],
+          upTube.position.y + normalizedUp[1],
+          upTube.position.z + normalizedUp[2]
+        );
+        upTube.rotateX(Math.PI / 2);
+      } else {
+        upTube.scale.set(1, 0, 1); // Zero length
+      }
 
       /* position and orient up vector arrow tip */
       upTip.position.set(upEnd[0], upEnd[1], upEnd[2]);
@@ -229,7 +283,26 @@ export class VectorArm {
         upTip.rotateX(Math.PI / 2);
       }
       
-      (upTip.material as THREE.MeshBasicMaterial).color.set(colorHex);
+      // Update material color using shared material
+      const colorHex = dev?.color ?? '#888';
+      const material = this.getMaterial(colorHex);
+      upTube.material = material;
+      upTip.material = material;
     });
+  }
+
+  public destroy(): void {
+    // Clean up geometries
+    this.tubeGeometry.dispose();
+    this.arrowGeometry.dispose();
+    
+    // Clean up materials
+    this.materialPool.forEach(material => material.dispose());
+    this.materialPool.clear();
+    
+    // Remove from scene
+    this.scene.remove(this.group);
+    
+    console.log('VectorArm destroyed');
   }
 }

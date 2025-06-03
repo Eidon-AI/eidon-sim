@@ -15,10 +15,18 @@ import { RoArmController } from '../core/RoArmController';
 import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
 import { RecordingControls } from './components/RecordingControls';
+import { renderCard } from './components/DeviceCard';
 
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
 let logRef:    HTMLPreElement | null = null;
+let recordingManager: RecordingManager;
+let recordingControls: RecordingControls;
+let gamepadController: any;
+let sceneDestroy: (() => void) | null = null;
+let gamepadButtonInterval: number | null = null;
+let hidManager: HidManager | null = null;
+let deviceStore: DeviceStore | null = null;
 
 /* export so DeviceCard can import it */
 export function setSelected(id: string | null) {
@@ -32,6 +40,16 @@ export function setSelected(id: string | null) {
     logRef.textContent = '';
   }
 }
+
+export function log(msg: string) {
+  if (!logRef) return;
+  const ts = new Date().toLocaleTimeString();
+  logRef.textContent += `[${ts}] ${msg}\n`;
+  logRef.scrollTop = logRef.scrollHeight;
+}
+
+// For debugging
+(window as any).setSelected = setSelected;
 
 export function mount(root: HTMLElement) {
   /* ------------------------------------------------------------
@@ -69,11 +87,21 @@ export function mount(root: HTMLElement) {
   /* ------------------------------------------------------------
    * 3. Core singletons
    * ---------------------------------------------------------- */
-  const hid   = new HidManager();
   const store = new DeviceStore();
-  const solver= new ArmSolver(store);
-  const roCtrl = new RoArmController(store);
-  const recordingManager = new RecordingManager(store, solver);
+  deviceStore = store;
+  const hid   = new HidManager();
+  hidManager = hid;
+  const solver = new ArmSolver(store);
+  const ro = new RoArmController(store);
+
+  const { gamepadController: gc, destroy } = initScene(canvas, store, solver);
+  gamepadController = gc;
+  sceneDestroy = destroy;
+
+  recordingManager = new RecordingManager(store, solver);
+  recordingControls = new RecordingControls(recordingManager);
+  recordingControls.mount(document.body);
+
   storeRef = store;
 
   /* ---------- HID → store pipeline ---------- */
@@ -129,16 +157,13 @@ export function mount(root: HTMLElement) {
   mountStereoCam(sidebar);
 
   /* ------------ Ro-Arm control ------------ */
-  if (prefs.roArmEnabled) mountRoArmCard(sidebar, roCtrl);
+  if (prefs.roArmEnabled) mountRoArmCard(sidebar, ro);
 
   /* ------------ Angle table ------------ */
   mountAnglePanel(sidebar, solver);
 
-  /* ------------ Three.js scene ------------ */
-  const gamepadController = initScene(canvas, store, solver);
-
   /* ------------ Recording Controls ------------ */
-  const recordingControls = new RecordingControls(recordingManager);
+  recordingControls = new RecordingControls(recordingManager);
   recordingControls.mount(root);
 
   /* ------------ Gamepad button in sidebar ------------ */
@@ -158,7 +183,7 @@ export function mount(root: HTMLElement) {
   };
 
   // Check periodically for gamepad connection changes
-  setInterval(updateGamepadButton, 1000);
+  gamepadButtonInterval = setInterval(updateGamepadButton, 1000);
   updateGamepadButton(); // Initial check
 
   // Create gamepad modal
@@ -231,4 +256,37 @@ export function mount(root: HTMLElement) {
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();
   iconOverlay.mount();
+
+  log('App mounted');
+}
+
+// Cleanup function for proper resource management
+export function unmount() {
+  if (recordingControls) {
+    recordingControls.unmount();
+  }
+  if (recordingManager) {
+    recordingManager.destroy();
+  }
+  if (sceneDestroy) {
+    sceneDestroy();
+    sceneDestroy = null;
+  }
+  
+  if (gamepadButtonInterval) {
+    clearInterval(gamepadButtonInterval);
+    gamepadButtonInterval = null;
+  }
+  
+  if (hidManager) {
+    hidManager.destroy();
+    hidManager = null;
+  }
+  
+  if (deviceStore) {
+    deviceStore.destroy();
+    deviceStore = null;
+  }
+  
+  console.log('App unmounted');
 }

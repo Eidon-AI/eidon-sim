@@ -44,6 +44,7 @@ export class CameraControl {
   private mouse: THREE.Vector2;
   private onViewChange: (view: CameraPosition) => void;
   private mainCamera: THREE.Camera;
+  private animationId: number | null = null;
 
   constructor(onViewChange: (view: CameraPosition) => void, mainCamera: THREE.Camera) {
     this.onViewChange = onViewChange;
@@ -128,7 +129,7 @@ export class CameraControl {
   }
 
   private animate() {
-    requestAnimationFrame(this.animate.bind(this));
+    this.animationId = requestAnimationFrame(this.animate.bind(this));
     
     // Create a correction quaternion to align with world axes
     const correction = new THREE.Quaternion().setFromEuler(
@@ -231,5 +232,43 @@ export class CameraControl {
     if (this.container.parentElement) {
       this.container.parentElement.removeChild(this.container);
     }
+  }
+
+  destroy() {
+    // Stop animation loop
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+
+    // Clean up Three.js resources
+    this.renderer.dispose();
+    this.scene.clear();
+
+    // Clean up geometries and materials
+    if (this.cube.geometry) {
+      this.cube.geometry.dispose();
+    }
+    if (Array.isArray(this.cube.material)) {
+      this.cube.material.forEach(material => material.dispose());
+    } else if (this.cube.material) {
+      this.cube.material.dispose();
+    }
+    
+    if (this.edges.geometry) {
+      this.edges.geometry.dispose();
+    }
+    if (this.edges.material) {
+      (this.edges.material as THREE.LineBasicMaterial).dispose();
+    }
+
+    // Remove event listeners
+    this.canvas.removeEventListener('click', this.onClick);
+    this.canvas.removeEventListener('mousemove', this.onMouseMove);
+
+    // Remove from DOM
+    this.unmount();
+
+    console.log('CameraControl destroyed');
   }
 } 
