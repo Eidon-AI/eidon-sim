@@ -266,8 +266,6 @@ export function mount(root: HTMLElement) {
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();
   iconOverlay.mount();
-
-  log('App mounted');
 }
 
 // Cleanup function for proper resource management

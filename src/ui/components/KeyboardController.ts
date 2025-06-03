@@ -8,36 +8,36 @@ interface CameraPosition {
 // CAD-style camera views mapped to number keys
 const KEYBOARD_VIEWS: Record<string, CameraPosition> = {
   '1': { // Front view
-    position: [0.15, 0, 5],
-    target: [0.15, 0, 0]
+    position: [0, 0, -5],
+    target: [0, 0, 0]
   },
   '2': { // Back view
-    position: [0.15, 0, -5],
-    target: [0.15, 0, 0]
+    position: [0, 0, 5],
+    target: [0, 0, 0]
   },
   '3': { // Right view
     position: [5, 0, 0],
-    target: [0.15, 0, 0]
+    target: [0, 0, 0]
   },
   '4': { // Left view
     position: [-5, 0, 0],
-    target: [0.15, 0, 0]
+    target: [0, 0, 0]
   },
   '5': { // Top view
-    position: [0.15, 5, 0],
-    target: [0.15, 0, 0]
+    position: [0, 5, 0],
+    target: [0, 0, 0]
   },
   '6': { // Bottom view
-    position: [0.15, -5, 0],
-    target: [0.15, 0, 0]
+    position: [0, -5, 0],
+    target: [0, 0, 0]
   },
   '7': { // Isometric view 1
     position: [3, 3, 3],
-    target: [0.15, 0, 0]
+    target: [0, 0, 0]
   },
   '8': { // Isometric view 2
     position: [-3, 3, -3],
-    target: [0.15, 0, 0]
+    target: [0, 0, 0]
   },
   '9': { // Default perspective (reset)
     position: [1.5, 1.5, -3],
@@ -70,7 +70,7 @@ export class KeyboardController {
     document.addEventListener('keydown', this.boundKeyHandler);
     
     console.log('KeyboardController: Number keys 1-9 mapped to camera views');
-    this.showHelp();
+    this.showConsoleHelp();
   }
 
   private handleKeyPress(event: KeyboardEvent): void {
@@ -113,7 +113,7 @@ export class KeyboardController {
   private showViewFeedback(viewName: string): void {
     // Create temporary feedback element
     const feedback = document.createElement('div');
-    feedback.className = 'fixed top-16 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-lg z-50 pointer-events-none';
+    feedback.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-lg z-50 pointer-events-none';
     feedback.textContent = `📹 ${viewName}`;
     
     document.body.appendChild(feedback);
@@ -130,14 +130,18 @@ export class KeyboardController {
     }, 1000);
   }
 
-  private showHelp(): void {
+  private showConsoleHelp(): void {
     console.log('🎹 Keyboard Camera Controls:');
     console.log('1️⃣ Front View    2️⃣ Back View     3️⃣ Right View');
     console.log('4️⃣ Left View     5️⃣ Top View      6️⃣ Bottom View');
     console.log('7️⃣ Isometric     8️⃣ Isometric 2   9️⃣ Default View');
     console.log('H - Show this help');
+  }
+
+  private showHelp(): void {
+    this.showConsoleHelp();
     
-    // Also show visual overlay
+    // Show visual overlay
     this.showHelpOverlay();
   }
 

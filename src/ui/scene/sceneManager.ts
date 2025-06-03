@@ -61,6 +61,7 @@ export function initScene(
   };
 
   const cameraControl = new CameraControl(cameraChangeHandler, cam);
+  cameraControl.mount();
   const keyboardController = new KeyboardController(cameraChangeHandler);
 
   /* ------------ render loop ---------------------- */
@@ -94,6 +95,7 @@ export function initScene(
       leftArm.destroy();
       rightArm.destroy();
       gamepadController.destroy();
+      cameraControl.unmount();
       cameraControl.destroy();
       keyboardController.destroy();
       

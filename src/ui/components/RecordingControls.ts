@@ -239,8 +239,9 @@ export class RecordingControls {
         this.recordingManager.pausePlayback();
       }, {
         width: 38,
-        fontWeight: 900,
+        fontWeight: 'bolder',
         letterSpacing: 1.5,
+        paddingLeft: 13
       });
       this.toolbar.appendChild(pauseBtn);
 
@@ -250,7 +251,10 @@ export class RecordingControls {
       const playBtn = this.createButton('▶', 'Resume', () => {
         this.recordingManager.resumePlayback();
       }, {
-        width: 38
+        width: 38,
+        fontWeight: 'bolder',
+        letterSpacing: 1.5,
+        paddingLeft: 13
       });
       this.toolbar.appendChild(playBtn);
 
@@ -283,16 +287,21 @@ export class RecordingControls {
     }
   }
 
-  private createButton(icon: string, tooltip: string, onClick: () => void, styles?: { width?: number, fontWeight?: number, letterSpacing?: number }): HTMLElement {
+  private createButton(icon: string, tooltip: string, onClick: () => void, styles?: Record<string, string | number>): HTMLElement {
     const btn = document.createElement('button');
     btn.className = 'px-3 py-2 rounded-full hover:bg-neutral-700 border border-transparent hover:border-neutral-600 transition-colors flex items-center gap-1 text-sm text-white';
-    btn.innerHTML = `<span>${icon}</span>`;
+    btn.innerHTML = icon;
     btn.title = tooltip;
     btn.addEventListener('click', onClick);
     if (styles) {
-      btn.style.width = `${styles.width?.toString()}px` || 'auto';
-      btn.style.fontWeight = styles.fontWeight?.toString() || 'normal';
-      btn.style.letterSpacing = `${styles.letterSpacing?.toString()}px` || 'normal';
+      Object.entries(styles).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          // Convert camelCase to kebab-case and handle number values
+          const cssProperty = key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+          const cssValue = typeof value === 'number' ? `${value}px` : String(value);
+          btn.style.setProperty(cssProperty, cssValue);
+        }
+      });
     }
     return btn;
   }

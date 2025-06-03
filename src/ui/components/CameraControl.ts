@@ -51,7 +51,7 @@ export class CameraControl {
     this.mainCamera = mainCamera;
     this.container = document.createElement('div');
     this.container.style.position = 'fixed';
-    this.container.style.top = '0';
+    this.container.style.top = '10px';
     this.container.style.right = '10px';
     this.container.style.width = '100px';
     this.container.style.height = '100px';
@@ -59,7 +59,8 @@ export class CameraControl {
     this.container.style.borderRadius = '8px';
     this.container.style.overflow = 'hidden';
     this.container.style.cursor = 'pointer';
-    this.container.className = 'z-5';
+    this.container.style.zIndex = '1000';
+    this.container.className = 'camera-control-cube';
 
     this.canvas = document.createElement('canvas');
     this.canvas.width = 100;
