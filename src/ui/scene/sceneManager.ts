@@ -184,8 +184,6 @@ export function initScene(
 
   // Function to switch model mode
   const switchModelMode = (useMultiple: boolean, visible: boolean) => {
-    console.log('🔧 switchModelMode called - useMultiple:', useMultiple, 'visible:', visible, 'current rigs:', rigs.length);
-
     // Clean up existing models
     cleanupModels();
 
@@ -197,7 +195,6 @@ export function initScene(
     }
     
     currentMultipleModelsState = useMultiple;
-    console.log('🔧 switchModelMode completed - new rigs count:', rigs.length, 'state:', currentMultipleModelsState);
   };
 
   // Initialize with default state - let applyInitialState() handle model creation
@@ -205,7 +202,6 @@ export function initScene(
   const initialMultipleModelsState = viewControls.getState().multipleModels;
   currentMultipleModelsState = null; // Will be set by first event
 
-  console.log('🔧 Initial states - riggedModel:', initialRiggedModelState, 'multipleModels:', initialMultipleModelsState);
 
   /* ------------ camera control ------------------- */
   const cameraChangeHandler = (pos: any) => {
@@ -235,16 +231,12 @@ export function initScene(
         rightArm.setVisible(enabled);
         break;
       case 'multipleModels':
-        console.log('🔧 multipleModels toggle - enabled:', enabled, 'current:', currentMultipleModelsState);
         // Only switch if the state is actually changing (or if this is the first time)
         if (currentMultipleModelsState === null || enabled !== currentMultipleModelsState) {
           // Get current visibility state of rigged models
           const currentRiggedModelState = viewControls.getState().riggedModel;
           // Switch model mode while preserving visibility state
           switchModelMode(enabled, currentRiggedModelState);
-          console.log('🔧 Model switch completed - new state:', currentMultipleModelsState);
-        } else {
-          console.log('🔧 Skipping model switch - state unchanged');
         }
         break;
     }

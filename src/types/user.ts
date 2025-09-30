@@ -10,7 +10,8 @@ export interface CurrentUser {
   signedAvatarUrl?: string | null;  // Optional signed URL for the avatar
   points: number;  // User's points from legacy system
   devices: Device[];  // User's devices
-  totalSecondsRecorded: number;  // Total duration of all recordings in seconds
+  totalSecondsRecorded: number;  // Total duration of all recordin`gs in seconds
+  totalRecordings: number;  // Total number of completed recordings
   recordingPercentage: number | null;  // Percentage of total system recordings this user has contributed
 
   // Migration flags
