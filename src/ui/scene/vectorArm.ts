@@ -26,7 +26,7 @@ export class VectorArm {
     this.tubeGeometry = new THREE.CylinderGeometry(0.005, 0.005, 1, 8);
     this.arrowGeometry = new THREE.ConeGeometry(0.01, 0.04, 8);
     
-    // Create placeholder lines and tubes
+    // Create initial lines and tubes
     ['#ff6', '#6ff', '#f6f'].forEach(col => {
       this.segs.push(this.build(col));
       this.tubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], col));
@@ -57,7 +57,7 @@ export class VectorArm {
   }
 
   private build(color: string) {
-    // Create a simple line geometry as placeholder - will be replaced with tube in refresh
+    // Create a simple line geometry - will be replaced with tube in refresh
     const geo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(), new THREE.Vector3(0, 0.1, 0)
     ]);

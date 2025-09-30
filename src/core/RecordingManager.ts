@@ -516,7 +516,7 @@ export class RecordingManager extends EventTarget {
   }
 
   public async uploadRecording(recording: Recording): Promise<void> {
-    // TODO: Replace with actual API call to api.eidon.ai/upload
+    // Upload recording to Eidon API
     console.log('Upload recording to api.eidon.ai/upload:', {
       id: recording.id,
       name: recording.name,

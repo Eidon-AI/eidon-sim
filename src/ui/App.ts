@@ -1,4 +1,4 @@
-console.log('Eidon Sim loaded..');
+console.log('Eidon Sym loaded..');
 
 // src/ui/App.ts
 import { HidManager }   from '../core/HidManager';
@@ -16,6 +16,9 @@ import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
 import { RecordingControls } from './components/RecordingControls';
 import { renderCard } from './components/DeviceCard';
+import { AuthModal } from './components/AuthModal';
+import { AuthManager } from '../core/AuthManager';
+import { LoginStateManager } from '../core/LoginStateManager';
 
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
@@ -27,6 +30,10 @@ let sceneDestroy: (() => void) | null = null;
 let gamepadButtonInterval: number | null = null;
 let hidManager: HidManager | null = null;
 let deviceStore: DeviceStore | null = null;
+let authModal: AuthModal | null = null;
+let authManager: AuthManager | null = null;
+let loginStateManager: LoginStateManager | null = null;
+let isAuthenticated = false;
 
 /* export so DeviceCard can import it */
 export function setSelected(id: string | null) {
@@ -52,17 +59,51 @@ export function log(msg: string) {
 (window as any).setSelected = setSelected;
 
 export function mount(root: HTMLElement) {
+  // Initialize login state manager
+  loginStateManager = LoginStateManager.getInstance();
+  isAuthenticated = loginStateManager.isLoggedIn();
+
+  // Always initialize the app first, then show auth modal if needed
+  initializeApp(root);
+
+  if (!isAuthenticated) {
+    // Show auth modal as overlay
+    showAuthModal(root);
+  }
+}
+
+function showAuthModal(root: HTMLElement) {
+  authModal = new AuthModal(
+    async () => {
+      try {
+        console.log('Starting OAuth sign in...');
+        await loginStateManager!.login();
+        console.log('OAuth sign in successful');
+        isAuthenticated = true;
+        authModal!.unmount();
+        authModal = null;
+      } catch (error) {
+        console.error('OAuth sign in failed:', error);
+        alert('Sign in failed. Please try again.');
+      }
+    },
+    () => {
+      console.log('Exploring anonymously');
+      isAuthenticated = true; // Allow anonymous access
+      authModal!.unmount();
+      authModal = null;
+    }
+  );
+
+  authModal.mount(root);
+}
+
+function initializeApp(root: HTMLElement) {
   /* ------------------------------------------------------------
    * 1. Inject sidebar + canvas markup
    * ---------------------------------------------------------- */
   root.innerHTML = `
     <div class="sidebar fixed bottom-0 right-0 w-80 flex flex-col bg-neutral-900/50 backdrop-blur-sm border-neutral-700 p-4 gap-2 overflow-y-auto z-10">
-      <div class="flex gap-2 justify-start">
-        <button id="btnConnect"    class="btn" style="font-size: 1.2rem;">✛</button>
-        <button id="btnCal"        class="btn">♺</button>
-        <div class="flex-1"></div>
-        <button id="btnPrefs"      class="btn" style="font-size: 1.4rem; padding-top: 2px;">⛭</button>
-      </div>
       <pre id="log" class="flex-1 overflow-auto text-xs bg-neutral-900/50 ph-2 border-neutral-700"></pre>
     </div>
     <div id="calOverlay" class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center text-4xl font-bold text-white z-50 hidden">
@@ -76,10 +117,6 @@ export function mount(root: HTMLElement) {
   /* ------------------------------------------------------------
    * 2. Grab the freshly-injected elements
    * ---------------------------------------------------------- */
-  const btnConnect    = document.getElementById('btnConnect')    as HTMLButtonElement;
-  const btnDisconnect = document.getElementById('btnDisconnect') as HTMLButtonElement;
-  const btnCal        = document.getElementById('btnCal')        as HTMLButtonElement;
-  const btnPrefs      = document.getElementById('btnPrefs')      as HTMLButtonElement;
   const canvas        = document.getElementById('gl')            as HTMLCanvasElement;
   const sidebar       = document.querySelector('.sidebar')       as HTMLDivElement;
   logRef = document.getElementById('log') as HTMLPreElement;
@@ -111,9 +148,13 @@ export function mount(root: HTMLElement) {
   });
 
   /* ------------------------------------------------------------
-   * 4. Buttons
+   * 4. Recording Controls (now navigation)
    * ---------------------------------------------------------- */
-  btnConnect.addEventListener('click', async () => {
+  recordingControls = new RecordingControls(recordingManager);
+  recordingControls.mount(root);
+
+  // Handle navigation events
+  document.addEventListener('navConnect', async () => {
     try {
       await hid.connect();
     } catch (err) {
@@ -122,9 +163,11 @@ export function mount(root: HTMLElement) {
     }
   });
 
-  btnDisconnect?.addEventListener('click', () => hid.disconnectAll());
-  btnCal?.addEventListener('click', () => hid.startCalibration());
-  btnPrefs?.addEventListener('click', () => {
+  document.addEventListener('navCalibrate', () => {
+    hid.startCalibration();
+  });
+
+  document.addEventListener('navPreferences', () => {
     // Implement preferences button functionality
     console.log('Preferences button clicked');
   });
@@ -162,9 +205,6 @@ export function mount(root: HTMLElement) {
   /* ------------ Angle table ------------ */
   mountAnglePanel(sidebar, solver);
 
-  /* ------------ Recording Controls ------------ */
-  recordingControls = new RecordingControls(recordingManager);
-  recordingControls.mount(root);
 
   /* ------------ Gamepad button in sidebar ------------ */
   const btnGamepad = document.createElement('button');
@@ -173,8 +213,8 @@ export function mount(root: HTMLElement) {
   btnGamepad.title = 'Gamepad Controls';
   btnGamepad.style.display = 'none'; // Hidden by default
 
-  // Insert after btnCal
-  btnCal.parentNode!.insertBefore(btnGamepad, btnCal.nextSibling);
+  // Insert at the beginning of sidebar
+  sidebar.insertBefore(btnGamepad, sidebar.firstChild);
 
   // Check gamepad status and show/hide button
   const updateGamepadButton = () => {
@@ -274,6 +314,12 @@ export function mount(root: HTMLElement) {
 
 // Cleanup function for proper resource management
 export function unmount() {
+  if (authModal) {
+    authModal.unmount();
+    authModal = null;
+  }
+  
+  
   if (recordingControls) {
     recordingControls.unmount();
   }

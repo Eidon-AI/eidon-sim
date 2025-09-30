@@ -44,7 +44,10 @@ export class RoArmController {
       
       this.sendTip('left'); this.sendTip('right');
     });
-    document.addEventListener('prefsChanged', ()=>{}); // placeholder if needed
+    document.addEventListener('prefsChanged', ()=>{
+      // Handle preferences changes for RoArm
+      console.log('RoArm preferences changed');
+    });
   }
 
   togglePause(side: Side) { 

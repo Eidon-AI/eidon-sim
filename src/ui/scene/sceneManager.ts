@@ -41,9 +41,9 @@ export function initScene(
     0.1,
     1000
   );
-  cam.position.set(1.5, 1.5, -3);
+  cam.position.set(0, 0, -6);
   const controls = new OrbitControls(cam, renderer.domElement);
-  controls.target.set(-0.1, 0.15, 0);
+  controls.target.set(0, 0, 0);
   controls.update();
 
   /* ------------ infinite grid plane ------------ */

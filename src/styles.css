@@ -2,6 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Variables for theming */
+:root {
+  --desktop-menu-width: calc(200px + env(safe-area-inset-left));
+  --brand-rgb: 233, 51, 112; /* #E93370  */
+  --brand-sub-rgb: 140, 8, 52; /* #8C0834 */
+  --video-capture-color: #e63946;
+  --audio-capture-color: #e85d04;
+  --image-capture-color: #2a9d8f;
+  --file-capture-color: #4caf50;
+  --warning-rgb: 255, 0, 0;
+
+  /* Single theme - Dark */
+  --link-rgb: 233, 51, 112; /* #E93370 */
+  --tooltip-background-color: rgba(155, 155, 155, 0.95);
+  --popup-background-rgb: 120, 109, 109;
+  --menubar-background-rgb: 0, 0, 0;
+  --background-rgb: 51, 51, 51; /* #333333 */
+  --foreground-rgb: 255, 255, 255; /* #ffffff */
+  --background-start-rgb: 86, 74, 76; /* #D2B8BA */
+  --background-mid-rgb: 62, 53, 54; /* #9E898A */
+  --background-end-rgb: 0, 0, 0; /* #000000 */
+  --button-border-color: rgba(255, 255, 255, 0.20);
+  --text-shadow: 1.5px 2px 2px #3f3738;
+  --card-background-rgb: 70, 63, 63; /* #463f3f */
+  --background-size: 100% 140vh;
+  --background-radial: radial-gradient(
+    167.67% 75.36% at 11.96% 5.24%,
+    rgb(86, 74, 76) 0%,
+    rgb(62, 53, 54) 25vw,
+    rgb(0, 0, 0) 100vw
+  ), #000;
+
+  --font-opensans: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-montserrat: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-wallpoet: 'Wallpoet', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-primary: var(--font-opensans), system-ui, sans-serif;
+  --font-heading: var(--font-montserrat), system-ui, sans-serif;
+}
+
+html {
+  height: 100%;
+  min-height: 100%;
+
+  overflow-y: scroll;
+  overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
+
+  color: rgb(var(--foreground-rgb));
+  background: var(--background-radial);
+  background-size: var(--background-size);
+  background-repeat: no-repeat;
+  background-attachment: scroll;
+}
+
+html.staging {
+  --brand-rgb: 232, 93, 4;
+  --brand-sub-rgb: 139, 50, 0; /* Calculated as 232-93, 93-43, 4-60 */
+}
+
+html.development {
+  --brand-rgb: 76, 175, 80;
+  --brand-sub-rgb: 1, 90, 14; /* Calculated as 76-93, 175-43, 80-60 */
+}
+
+body {
+  height: 100% !important;
+  min-height: 100%;
+  font-family: var(--font-primary);
+}
+
+hr {
+  border-color: var(--button-border-color);
+  border-width: 1px 0 0 0;
+}
+
+@media all and (display-mode: standalone) {
+  html {
+    height: 100vh;
+    min-height: 100vh;
+  }
+
+  body {
+    height: 100vh !important;
+    min-height: 100vh;
+  }
+}
+
+h1, h2, h3, h4, h5, h6,
+.heading-font {
+  font-family: var(--font-heading);
+}
+
 /* Light mode override */
 html[data-theme='light'] {
   --tw-bg-opacity: 1;
@@ -31,4 +123,274 @@ input, select {
 .modal label {
   display: flex;
   margin: 0;
+}
+
+/* Auth Modal Styles */
+.auth-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+}
+
+.auth-modal-container {
+  background: 
+    radial-gradient(50% 50% at 100% 100%, rgba(129, 12, 51, 0.50) 0%, rgba(129, 12, 51, 0.00) 100%) bottom right / 648px 648px no-repeat,
+    radial-gradient(140.65% 63.74% at 11.96% 5.24%, #840B34 0%, #0F0F0F 100%),
+    url('/auth-bg-curves.jpg') center/cover no-repeat;
+  border: 1px solid var(--button-border-color);
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 420px;
+  min-width: 320px;
+  width: 90%;
+  text-align: center;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  animation: slideInFromBottom 0.8s ease-out forwards;
+  position: relative;
+}
+
+.auth-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgb(var(--foreground-rgb));
+  font-size: 24px;
+  font-weight: 300;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.auth-modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.auth-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  width: 100%;
+  position: relative;
+  z-index: 2;
+}
+
+.logo-container {
+  width: 100%;
+  max-width: 306px;
+  z-index: 10;
+  text-align: center;
+}
+
+.logo {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.subtitle {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 300;
+  line-height: 22px;
+  letter-spacing: -0.48px;
+  opacity: 0.8;
+  color: rgb(var(--foreground-rgb));
+}
+
+.auth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.auth-button {
+  padding: 16px 32px;
+  border: none;
+  border-radius: 50px;
+  font-size: 16px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-heading);
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.auth-button.primary {
+  background: linear-gradient(135deg, rgb(var(--brand-rgb)) 0%, rgb(var(--brand-sub-rgb)) 100%);
+  color: white;
+  border: 1px solid var(--button-border-color);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 22px;
+  letter-spacing: -0.6px;
+}
+
+.auth-button.primary:hover {
+  background: linear-gradient(135deg, rgb(var(--brand-sub-rgb)) 0%, rgb(var(--brand-rgb)) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.3);
+}
+
+.auth-button:active {
+  transform: translateY(0);
+}
+
+.auth-link {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 22px;
+  letter-spacing: -0.48px;
+  margin-top: 16px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.auth-link:hover {
+  color: white;
+  transform: scale(1.02);
+}
+
+@keyframes slideInFromBottom {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Top Navigation Styles */
+.top-navigation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(var(--card-background-rgb), 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--button-border-color);
+}
+
+.nav-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.nav-left,
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-center {
+  flex: 1;
+  text-align: center;
+}
+
+.nav-title {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-weight: 400;
+  color: rgb(var(--foreground-rgb));
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.nav-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--button-border-color);
+  border-radius: 8px;
+  color: rgb(var(--foreground-rgb));
+  font-family: var(--font-primary);
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.nav-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.nav-button i {
+  font-size: 16px;
+  width: 16px;
+  text-align: center;
+}
+
+.nav-login {
+  background: linear-gradient(135deg, rgb(var(--brand-rgb)) 0%, rgb(var(--brand-sub-rgb)) 100%);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-login:hover {
+  background: linear-gradient(135deg, rgb(var(--brand-sub-rgb)) 0%, rgb(var(--brand-rgb)) 100%);
+  box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .nav-container {
+    padding: 8px 16px;
+  }
+  
+  .nav-title {
+    font-size: 20px;
+  }
+  
+  .nav-button span {
+    display: none;
+  }
+  
+  .nav-button {
+    padding: 8px 12px;
+  }
 }

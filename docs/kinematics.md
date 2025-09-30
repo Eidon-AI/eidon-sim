@@ -1,4 +1,4 @@
-# Eidon Sim · Kinematics Reference
+# Eidon Sym · Kinematics Reference
 
 > **Purpose**  This document formalises the maths that turn the raw HID reports from three IMUs per arm (upper‑arm, lower‑arm, glove) into the seven anatomical joint angles that drive the humanoid animation and robot actuators.
 
