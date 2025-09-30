@@ -1,19 +1,17 @@
 
 // src/ui/App.ts
-import { HidManager }   from '../core/HidManager';
+import { EidonTrackerManager } from '../core/EidonTrackerManager';
 import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
-import { RecordingManager } from '../core/RecordingManager';
+import { PlaybackManager } from '../core/PlaybackManager';
 import { mountAnglePanel } from './components/AnglePanel';
 import { mountDeviceList } from './components/DeviceList';
 import { mountPrefs } from './components/PreferencesModal';
-import { mountRoArmCard } from './components/RoArmCard';
 import { initScene }    from './scene/sceneManager';
 import { mountStereoCam } from './components/StereoCam';
-import { RoArmController } from '../core/RoArmController';
 import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
-import { RecordingControls } from './components/Controls';
+import { Controls } from './components/Controls';
 import { renderCard } from './components/DeviceCard';
 import { AuthModal } from './components/AuthModal';
 import { AuthManager } from '../core/AuthManager';
@@ -22,12 +20,12 @@ import { LoginStateManager } from '../core/LoginStateManager';
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
 let logRef:    HTMLPreElement | null = null;
-let recordingManager: RecordingManager;
-let recordingControls: RecordingControls;
+let playbackManager: PlaybackManager;
+let controls: Controls;
 let gamepadController: any;
 let sceneDestroy: (() => void) | null = null;
 let gamepadButtonInterval: number | null = null;
-let hidManager: HidManager | null = null;
+let trackerManager: EidonTrackerManager | null = null;
 let deviceStore: DeviceStore | null = null;
 let authModal: AuthModal | null = null;
 let authManager: AuthManager | null = null;
@@ -122,45 +120,36 @@ function initializeApp(root: HTMLElement) {
    * ---------------------------------------------------------- */
   const store = new DeviceStore();
   deviceStore = store;
-  const hid   = new HidManager();
-  hidManager = hid;
+  const tracker = new EidonTrackerManager();
+  trackerManager = tracker;
   const solver = new ArmSolver(store);
-  const ro = new RoArmController(store);
 
   const { gamepadController: gc, destroy } = initScene(canvas, store, solver);
   gamepadController = gc;
   sceneDestroy = destroy;
 
-  recordingManager = new RecordingManager(store, solver);
-  recordingControls = new RecordingControls(recordingManager);
-  recordingControls.mount(document.body);
+  playbackManager = new PlaybackManager(store, solver);
+  controls = new Controls(playbackManager, tracker);
+  controls.mount(root);
 
   storeRef = store;
 
-  /* ---------- HID → store pipeline ---------- */
-  hid.addEventListener('report', e => {
-    const { id, data } = (e as CustomEvent<{ id: string; data: DataView }>).detail;
-    store.handleRaw(id, data);
+  /* ---------- Tracker → store pipeline ---------- */
+  tracker.addEventListener('quaternionData', e => {
+    const { deviceId, quaternion, timestamp } = (e as CustomEvent<{ deviceId: string; quaternion: number[]; timestamp: number }>).detail;
+    // TODO: Update DeviceStore to handle quaternion data from Bluetooth
+    console.log('Quaternion data received:', { deviceId, quaternion, timestamp });
   });
 
   /* ------------------------------------------------------------
-   * 4. Recording Controls (now navigation)
+   * 4. Controls (navigation)
    * ---------------------------------------------------------- */
-  recordingControls = new RecordingControls(recordingManager);
-  recordingControls.mount(root);
+  // Controls already mounted above
 
   // Handle navigation events
-  document.addEventListener('navConnect', async () => {
-    try {
-      await hid.connect();
-    } catch (err) {
-      console.error(err);
-      alert(`WebHID error: ${err}`);
-    }
-  });
-
   document.addEventListener('navCalibrate', () => {
-    hid.startCalibration();
+    // TODO: Implement calibration for Bluetooth devices
+    console.log('Calibration requested');
   });
 
   document.addEventListener('navPreferences', () => {
@@ -189,13 +178,12 @@ function initializeApp(root: HTMLElement) {
   mountPrefs(root);
 
   /* ------------ Device list ------------ */
-  mountDeviceList(sidebar, hid, store);
+  // TODO: Update DeviceList to work with EidonTrackerManager
+  // mountDeviceList(sidebar, tracker, store);
 
   /* ------------ stereo cam ------------ */
   mountStereoCam(sidebar);
 
-  /* ------------ Ro-Arm control ------------ */
-  if (prefs.roArmEnabled) mountRoArmCard(sidebar, ro);
 
   /* ------------ Angle table ------------ */
   mountAnglePanel(sidebar, solver);
@@ -315,11 +303,11 @@ export function unmount() {
   }
   
   
-  if (recordingControls) {
-    recordingControls.unmount();
+  if (controls) {
+    controls.unmount();
   }
-  if (recordingManager) {
-    recordingManager.destroy();
+  if (playbackManager) {
+    playbackManager.destroy();
   }
   if (sceneDestroy) {
     sceneDestroy();
@@ -331,9 +319,9 @@ export function unmount() {
     gamepadButtonInterval = null;
   }
   
-  if (hidManager) {
-    hidManager.destroy();
-    hidManager = null;
+  if (trackerManager) {
+    trackerManager.destroy();
+    trackerManager = null;
   }
   
   if (deviceStore) {

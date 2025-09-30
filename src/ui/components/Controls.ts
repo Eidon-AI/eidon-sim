@@ -1,21 +1,26 @@
-import { RecordingManager, Recording } from '../../core/RecordingManager';
+import { PlaybackManager, Recording } from '../../core/PlaybackManager';
 import { LoginStateManager, LoginState } from '../../core/LoginStateManager';
 import { AuthModal } from './AuthModal';
 import { PaginatedRecordingsResponse } from '../../types/recording';
+import { EidonTrackerManager } from '../../core/EidonTrackerManager';
+import { DeviceModal } from './DeviceModal';
 
-export class RecordingControls {
+export class Controls {
   private container: HTMLElement;
   private toolbar: HTMLElement;
-  private recordingManager: RecordingManager;
+  private playbackManager: PlaybackManager;
   private loginStateManager: LoginStateManager;
+  private trackerManager: EidonTrackerManager;
   private authModal: AuthModal | null = null;
+  private deviceModal: DeviceModal | null = null;
   private recordingsModal: HTMLElement | null = null;
   private profileModal: HTMLElement | null = null;
   private currentRecordings: any[] = [];
   private unsubscribe: (() => void) | null = null;
   
-  constructor(recordingManager: RecordingManager) {
-    this.recordingManager = recordingManager;
+  constructor(playbackManager: PlaybackManager, trackerManager: EidonTrackerManager) {
+    this.playbackManager = playbackManager;
+    this.trackerManager = trackerManager;
     this.loginStateManager = LoginStateManager.getInstance();
     this.container = this.createContainer();
     this.toolbar = this.createToolbar();
@@ -29,6 +34,12 @@ export class RecordingControls {
     // Subscribe to login state changes
     this.unsubscribe = this.loginStateManager.addListener((state: LoginState) => {
       this.updateLoginButton(state);
+      this.handleLoginStateChange(state);
+    });
+    
+    // Listen for login requests from DeviceModal
+    document.addEventListener('requestLogin', () => {
+      this.showAuthModal();
     });
   }
 
@@ -64,9 +75,7 @@ export class RecordingControls {
     const loginBtn = this.toolbar.querySelector('#navLogin') as HTMLButtonElement;
 
     connectBtn.addEventListener('click', () => {
-      // Emit connect event for existing handlers
-      const event = new CustomEvent('navConnect');
-      document.dispatchEvent(event);
+      this.showDeviceModal();
     });
 
     recordingsBtn.addEventListener('click', () => {
@@ -120,6 +129,38 @@ export class RecordingControls {
     );
 
     this.authModal.mount(this.container.parentElement!);
+  }
+
+  private handleLoginStateChange(state: LoginState): void {
+    if (state.isLoggedIn && !this.deviceModal) {
+      // User just logged in, construct the modal
+      this.constructDeviceModal();
+    } else if (state.isLoggedIn && this.deviceModal) {
+      // User logged in and modal exists, update the modal UI
+      this.deviceModal.updateLoginState(true);
+    } else if (!state.isLoggedIn && this.deviceModal) {
+      // User logged out, update the modal UI but keep it constructed
+      this.deviceModal.updateLoginState(false);
+    }
+  }
+
+  private constructDeviceModal(): void {
+    if (this.deviceModal) return; // Already constructed
+    
+    this.deviceModal = new DeviceModal(this.trackerManager);
+    this.deviceModal.mount(this.container.parentElement!);
+    // Modal starts in closed state by default
+  }
+
+  private showDeviceModal(): void {
+    if (this.deviceModal) {
+      // If modal exists, toggle it
+      this.deviceModal.toggle();
+    } else {
+      // Fallback: construct modal if it doesn't exist (shouldn't happen normally)
+      this.constructDeviceModal();
+      this.deviceModal!.show();
+    }
   }
 
   private toggleRecordingsModal(): void {
@@ -561,7 +602,7 @@ export class RecordingControls {
     const statValues = videoModal.querySelectorAll('.sensor-stat .stat-value');
     statValues.forEach(stat => {
       stat.textContent = 'Error';
-      stat.style.color = '#f44336';
+      (stat as HTMLElement).style.color = '#f44336';
     });
   }
 
@@ -720,11 +761,10 @@ export class RecordingControls {
         userInfo.style.display = 'none';
       }
       
-      // Update devices button text with count
-      const devicesCount = state.profile?.devices?.length || 0;
+      // Keep devices button text simple
       const devicesBtn = this.toolbar.querySelector('#navConnect') as HTMLButtonElement;
       const devicesText = devicesBtn.querySelector('span') as HTMLSpanElement;
-      devicesText.textContent = `Devices (${devicesCount})`;
+      devicesText.textContent = 'Devices';
     } else {
       icon.className = 'fas fa-sign-in-alt';
       text.textContent = 'Login';
@@ -756,6 +796,12 @@ export class RecordingControls {
 
   public mount(parent: HTMLElement): void {
     parent.appendChild(this.container);
+    
+    // Check if user is already logged in and construct modal if needed
+    const currentState = this.loginStateManager.getState();
+    if (currentState.isLoggedIn) {
+      this.constructDeviceModal();
+    }
   }
 
   public unmount(): void {
@@ -767,6 +813,11 @@ export class RecordingControls {
     if (this.authModal) {
       this.authModal.unmount();
       this.authModal = null;
+    }
+    
+    if (this.deviceModal) {
+      this.deviceModal.unmount();
+      this.deviceModal = null;
     }
     
     if (this.recordingsModal) {

@@ -1,3 +1,7 @@
+import { quat, vec3 } from 'gl-matrix';
+
+export type DeviceKind = 'tracker' | 'glove';
+
 export interface Device {
     id: string;  // UUID from BaseEntity
     createdAt: Date;
@@ -9,6 +13,31 @@ export interface Device {
     connectionId: string;  // Connection identifier for the device
     userId: string;  // Foreign key to users table
   }
+
+export interface ConnectedDevice {
+  deviceId: string;
+  name: string;
+  role: DeviceRole;
+  lastDataUpdate: number; // timestamp
+  color?: string; // RGB string from database
+
+  // Data
+  quat: quat;
+  up: vec3;
+  fwd: vec3;
+  chainStart: vec3;
+  chainEnd: vec3;
+  firmwareVersion?: string;
+}
+
+export interface DeviceConnectionState {
+  connectedDevices: ConnectedDevice[];
+  
+  // Methods for checking connection status
+  isConnected(role: DeviceRole): boolean;
+  get disconnectedDevices(): DeviceRole[];
+  get totalConnectedDevices(): number;
+}
   
   // Enum types for Eidon devices
   

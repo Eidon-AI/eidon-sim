@@ -36,13 +36,6 @@ export function mountPrefs(root: HTMLElement) {
         <input id="pRightURL" type="text" class="ml-2 w-50">
       </label>
 
-      <label class="flex items-center">
-        <input id="pRoEn" type="checkbox" class="mr-2"> Enable Teleoperation
-      </label>
-      <label>L-arm URL <input id="pRoL" type="text" class="ml-2 w-50"></label>
-      <label>R-arm URL <input id="pRoR" type="text" class="ml-2 w-50"></label>
-
-      <label>Scale <input id="pRoScale" type="number" step="0.05" class="w-16 ml-2"></label>
 
       <div class="flex justify-end gap-2 mt-4">
         <button id="pCancel" class="btn">Cancel</button>
@@ -72,10 +65,6 @@ export function mountPrefs(root: HTMLElement) {
           stereoEnabled: prefs.stereoEnabled,
           leftURL: prefs.leftURL,
           rightURL: prefs.rightURL,
-          roArmEnabled: prefs.roArmEnabled,
-          roLeftURL: prefs.roLeftURL,
-          roRightURL: prefs.roRightURL,
-          roScale: prefs.roScale
         };
         setValues();
       }
@@ -95,10 +84,6 @@ export function mountPrefs(root: HTMLElement) {
     (document.getElementById('pStereoEn') as HTMLInputElement).checked = prefs.stereoEnabled;
     (document.getElementById('pLeftURL')  as HTMLInputElement).value = prefs.leftURL;
     (document.getElementById('pRightURL') as HTMLInputElement).value = prefs.rightURL;
-    (document.getElementById('pRoEn') as HTMLInputElement).checked = prefs.roArmEnabled;
-    (document.getElementById('pRoL') as HTMLInputElement).value   = prefs.roLeftURL;
-    (document.getElementById('pRoR') as HTMLInputElement).value   = prefs.roRightURL;
-    (document.getElementById('pRoScale') as HTMLInputElement).value   = prefs.roScale.toString();
   };
 
   /* restore original values */
@@ -120,10 +105,6 @@ export function mountPrefs(root: HTMLElement) {
     prefs.stereoEnabled = (document.getElementById('pStereoEn') as HTMLInputElement).checked;
     prefs.leftURL  = (document.getElementById('pLeftURL')  as HTMLInputElement).value;
     prefs.rightURL = (document.getElementById('pRightURL') as HTMLInputElement).value;
-    prefs.roArmEnabled = (document.getElementById('pRoEn')  as HTMLInputElement).checked;
-    prefs.roLeftURL    = (document.getElementById('pRoL') as HTMLInputElement).value;
-    prefs.roRightURL   = (document.getElementById('pRoR') as HTMLInputElement).value;
-    prefs.roScale      = parseFloat((document.getElementById('pRoScale') as HTMLInputElement).value);
 
     document.documentElement.dataset.theme = prefs.theme;
     savePrefs();

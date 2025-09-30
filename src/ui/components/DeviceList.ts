@@ -1,7 +1,7 @@
 import { HidManager } from '../../core/HidManager';
 import { DeviceStore } from '../../core/DeviceStore';
 import { renderCard }  from './DeviceCard';
-import { DeviceState } from '../../types/types';
+import { DeviceState } from '../../types/device';
 
 // Define sorting order for consistent device display
 const ARM_SIDE_ORDER = { 'left': 0, 'right': 1 };

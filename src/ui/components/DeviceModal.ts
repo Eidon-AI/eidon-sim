@@ -1,0 +1,613 @@
+import { EidonTrackerManager, EidonDevice } from '../../core/EidonTrackerManager';
+import { DeviceRole, DEVICE_ROLE_NAMES } from '../../core/constants';
+import { LoginStateManager } from '../../core/LoginStateManager';
+
+export class DeviceModal {
+  private container: HTMLElement;
+  private modal: HTMLElement;
+  private trackerManager: EidonTrackerManager;
+  private loginStateManager: LoginStateManager;
+  private isVisible = false;
+  private savedDevices: EidonDevice[] = [];
+  private discoveredDevices: EidonDevice[] = [];
+
+  constructor(trackerManager: EidonTrackerManager) {
+    this.trackerManager = trackerManager;
+    this.loginStateManager = LoginStateManager.getInstance();
+    this.container = this.createContainer();
+    this.modal = this.createModal();
+    this.container.appendChild(this.modal);
+    
+    this.setupEventListeners();
+    
+    // Check initial login state and apply appropriate styling
+    const initialState = this.loginStateManager.getState();
+    if (!initialState.isLoggedIn) {
+      this.container.className = 'device-modal-container logged-out fixed left-0 top-15 bottom-0 z-50';
+    }
+    
+    this.loadSavedDevices();
+    
+    // Show arrow indicator by default when logged in
+    this.updateArrowVisibility();
+  }
+
+  private createContainer(): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'device-modal-container fixed left-0 top-15 bottom-0 z-50';
+    
+    // Add collapsed arrow indicator
+    const arrowIndicator = document.createElement('div');
+    arrowIndicator.className = 'device-modal-arrow absolute left-0 top-1/4 transform -translate-y-1/2 w-8 h-16 bg-neutral-800/70 backdrop-blur-sm border border-neutral-700/60 border-l-0 rounded-r-lg shadow-lg cursor-pointer hover:bg-neutral-700/70 transition-colors';
+    arrowIndicator.innerHTML = `
+      <div class="flex items-center justify-center h-full">
+        <i class="fas fa-chevron-right text-neutral-300"></i>
+      </div>
+    `;
+    arrowIndicator.addEventListener('click', () => this.show());
+    
+    container.appendChild(arrowIndicator);
+    return container;
+  }
+
+  private createModal(): HTMLElement {
+    const modal = document.createElement('div');
+    modal.className = 'device-modal w-full h-full transform -translate-x-full transition-transform duration-300';
+    
+    modal.innerHTML = `
+      <div class="device-modal-content">
+        <!-- Header with close button -->
+        <div class="flex justify-end mb-4">
+          <button class="device-modal-close">&times;</button>
+        </div>
+
+        <!-- Saved Devices Section -->
+        <div class="device-modal-body">
+          <div class="mb-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-lg font-semibold text-white saved-devices-title">Saved Devices</h3>
+              <button class="connect-all-btn bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-lg font-medium transition-colors text-sm">
+                <i class="fas fa-link mr-2"></i>
+                Connect to All
+              </button>
+            </div>
+            <div class="saved-devices-container space-y-2">
+              <!-- Devices will be populated here -->
+            </div>
+          </div>
+
+          <!-- Find Devices Section -->
+          <div class="border-t border-neutral-700/60 pt-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-lg font-semibold text-white">Find Devices</h3>
+              <button class="scan-btn text-blue-400 hover:text-blue-300 text-sm font-medium">
+                <i class="fas fa-search mr-1"></i>
+                Scan
+              </button>
+            </div>
+            <div class="discovered-devices-container space-y-2">
+              <!-- Discovered devices will be populated here -->
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    return modal;
+  }
+
+  private setupEventListeners(): void {
+    // Close button
+    const closeBtn = this.modal.querySelector('.device-modal-close') as HTMLButtonElement;
+    closeBtn.addEventListener('click', () => this.hide());
+
+    // Remove overlay click to close since we're not using an overlay anymore
+
+    // Connect all button
+    const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLButtonElement;
+    connectAllBtn.addEventListener('click', () => this.handleConnectAll());
+
+    // Scan button
+    const scanBtn = this.modal.querySelector('.scan-btn') as HTMLButtonElement;
+    scanBtn.addEventListener('click', () => this.handleScan());
+
+    // Tracker manager events
+    this.trackerManager.addEventListener('deviceConnected', (e: any) => {
+      this.updateDeviceConnectionStatus(e.detail.deviceId, true);
+    });
+
+    this.trackerManager.addEventListener('deviceDisconnected', (e: any) => {
+      this.updateDeviceConnectionStatus(e.detail.deviceId, false);
+    });
+
+    this.trackerManager.addEventListener('devicesDiscovered', (e: any) => {
+      this.updateDiscoveredDevices(e.detail);
+    });
+
+    // Listen for login state changes to update arrow visibility
+    this.loginStateManager.addListener(() => {
+      this.updateArrowVisibility();
+    });
+  }
+
+  private async loadSavedDevices(): Promise<void> {
+    try {
+      const state = this.loginStateManager.getState();
+      if (!state.isLoggedIn || !state.tokens?.token) {
+        console.log('User not logged in, showing login prompt');
+        this.showLoginPrompt();
+        return;
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+      if (!apiUrl) {
+        throw new Error('VITE_API_URL environment variable is not set');
+      }
+
+      const response = await fetch(`${apiUrl}/devices`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${state.tokens.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch devices: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const devicesData = await response.json();
+      console.log('Fetched devices from API:', devicesData);
+
+      // Convert API devices to EidonDevice format
+      this.savedDevices = this.convertApiDevicesToEidonDevices(devicesData);
+      this.renderSavedDevices();
+
+    } catch (error) {
+      console.error('Failed to load saved devices:', error);
+      // Fall back to login prompt
+      this.showLoginPrompt();
+    }
+  }
+
+  private showLoginPrompt(): void {
+    const container = this.modal.querySelector('.saved-devices-container') as HTMLElement;
+    const title = this.modal.querySelector('.saved-devices-title') as HTMLElement;
+    
+    if (!container || !title) return;
+
+    // Hide the title and connect button when logged out
+    title.style.display = 'none';
+    const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLElement;
+    if (connectAllBtn) {
+      connectAllBtn.style.display = 'none';
+    }
+    
+    // Show login prompt
+    container.innerHTML = `
+      <div class="text-center py-4">
+        <div class="text-neutral-400 mb-4">
+          <i class="fas fa-sign-in-alt text-4xl mb-3"></i>
+          <p class="text-sm">Sign in to save and manage your devices</p>
+        </div>
+        <button class="login-prompt-btn bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+          <i class="fas fa-sign-in-alt mr-2"></i>
+          Sign In
+        </button>
+      </div>
+    `;
+
+    // Add event listener for login button
+    const loginBtn = container.querySelector('.login-prompt-btn') as HTMLButtonElement;
+    if (loginBtn) {
+      loginBtn.addEventListener('click', () => {
+        // Dispatch event to trigger login modal
+        document.dispatchEvent(new CustomEvent('requestLogin'));
+      });
+    }
+  }
+
+  private convertApiDevicesToEidonDevices(apiDevices: any[]): EidonDevice[] {
+    return apiDevices.map(device => ({
+      id: device.id,
+      name: device.name,
+      role: this.mapApiRoleToDeviceRole(device.position),
+      macAddress: device.connectionId || device.id,
+      connectionId: device.connectionId || device.id,
+      isConnected: false, // Will be updated based on actual connection status
+      isHub: this.isHubRole(device.position),
+      parentHub: this.getParentHub(device, apiDevices),
+      color: this.mapApiColorToHex(device.color),
+      batteryLevel: device.batteryLevel,
+      firmwareVersion: device.firmwareVersion,
+      lastSeen: performance.now()
+    }));
+  }
+
+  private mapApiRoleToDeviceRole(apiPosition: number): DeviceRole {
+    // Map API position values to DeviceRole enum
+    switch (apiPosition) {
+      case 0: return DeviceRole.LEFT_HAND;
+      case 1: return DeviceRole.RIGHT_HAND;
+      case 2: return DeviceRole.LEFT_FOREARM;
+      case 3: return DeviceRole.RIGHT_FOREARM;
+      case 4: return DeviceRole.LEFT_HUB;
+      case 5: return DeviceRole.RIGHT_HUB;
+      case 6: return DeviceRole.CHEST;
+      default: return DeviceRole.UNKNOWN;
+    }
+  }
+
+  private isHubRole(apiPosition: number): boolean {
+    return apiPosition === 4 || apiPosition === 5 || apiPosition === 6; // LEFT_HUB, RIGHT_HUB, CHEST
+  }
+
+  private getParentHub(device: any, allDevices: any[]): string | undefined {
+    // For child devices, find their parent hub
+    if (device.position === 0 || device.position === 2) { // LEFT_HAND, LEFT_FOREARM
+      const leftHub = allDevices.find(d => d.position === 4); // LEFT_HUB
+      return leftHub?.id;
+    } else if (device.position === 1 || device.position === 3) { // RIGHT_HAND, RIGHT_FOREARM
+      const rightHub = allDevices.find(d => d.position === 5); // RIGHT_HUB
+      return rightHub?.id;
+    }
+    return undefined;
+  }
+
+  private mapApiColorToHex(apiColor: string): string {
+    // Convert API color format to hex
+    if (apiColor.startsWith('#')) {
+      return apiColor;
+    }
+    if (apiColor.startsWith('rgb')) {
+      // Convert rgb(r,g,b) to hex
+      const matches = apiColor.match(/\d+/g);
+      if (matches && matches.length >= 3) {
+        const r = parseInt(matches[0]).toString(16).padStart(2, '0');
+        const g = parseInt(matches[1]).toString(16).padStart(2, '0');
+        const b = parseInt(matches[2]).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+      }
+    }
+    return '#666666'; // Default color
+  }
+
+  private renderSavedDevices(): void {
+    const container = this.modal.querySelector('.saved-devices-container') as HTMLElement;
+    const title = this.modal.querySelector('.saved-devices-title') as HTMLElement;
+    if (!container || !title) return;
+
+    // Reset title to "Saved Devices" and show it
+    title.textContent = 'Saved Devices';
+    title.style.display = 'block';
+    
+    // Show the connect button
+    const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLElement;
+    if (connectAllBtn) {
+      connectAllBtn.style.display = 'block';
+    }
+
+    // Group devices by side
+    const leftDevices = this.savedDevices.filter(d => 
+      d.role === DeviceRole.LEFT_HUB || d.role === DeviceRole.LEFT_HAND || d.role === DeviceRole.LEFT_FOREARM
+    );
+    const rightDevices = this.savedDevices.filter(d => 
+      d.role === DeviceRole.RIGHT_HUB || d.role === DeviceRole.RIGHT_HAND || d.role === DeviceRole.RIGHT_FOREARM
+    );
+    const chestDevices = this.savedDevices.filter(d => d.role === DeviceRole.CHEST);
+
+    let html = '';
+
+    // Left side devices
+    if (leftDevices.length > 0) {
+      html += '<div class="device-group mb-4">';
+      html += '<div class="text-xs font-medium text-neutral-400 mb-2">Left Side</div>';
+      leftDevices.forEach(device => {
+        html += this.createDeviceCard(device);
+      });
+      html += '</div>';
+    }
+
+    // Right side devices
+    if (rightDevices.length > 0) {
+      html += '<div class="device-group mb-4">';
+      html += '<div class="text-xs font-medium text-neutral-400 mb-2">Right Side</div>';
+      rightDevices.forEach(device => {
+        html += this.createDeviceCard(device);
+      });
+      html += '</div>';
+    }
+
+    // Chest devices
+    if (chestDevices.length > 0) {
+      html += '<div class="device-group mb-4">';
+      html += '<div class="text-xs font-medium text-neutral-400 mb-2">Chest</div>';
+      chestDevices.forEach(device => {
+        html += this.createDeviceCard(device);
+      });
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+    this.attachDeviceEventListeners();
+  }
+
+  private createDeviceCard(device: EidonDevice): string {
+    const status = this.getDeviceStatus(device);
+    const statusColor = this.getStatusColor(status);
+    const roleName = DEVICE_ROLE_NAMES[device.role];
+
+    return `
+      <div class="device-card bg-neutral-700/30 border border-neutral-600/50 rounded-lg p-3 mb-2" data-device-id="${device.id}">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-3 h-3 rounded-full" style="background-color: ${device.color || '#666'}"></div>
+            <div>
+              <div class="text-sm font-medium text-white">${device.name}</div>
+              <div class="text-xs text-neutral-400">${roleName}</div>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <div class="text-xs px-2 py-1 rounded" style="background-color: ${statusColor}20; color: ${statusColor}">
+              ${status}
+            </div>
+            <button class="device-connect-btn text-blue-400 hover:text-blue-300 text-xs" data-device-id="${device.id}">
+              ${device.isConnected ? 'Disconnect' : 'Connect'}
+            </button>
+          </div>
+        </div>
+        <div class="flex items-center justify-between mt-2">
+          <div class="text-xs text-neutral-500">${device.macAddress}</div>
+          <div class="flex space-x-1">
+            <button class="device-edit-btn text-neutral-400 hover:text-white text-xs" data-device-id="${device.id}">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="device-delete-btn text-neutral-400 hover:text-red-400 text-xs" data-device-id="${device.id}">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private getDeviceStatus(device: EidonDevice): string {
+    if (device.isHub || device.role === DeviceRole.CHEST) {
+      return device.isConnected ? 'Connected' : 'Disconnected';
+    } else {
+      // Child device status
+      if (device.isConnected) {
+        return 'Connected via Hub';
+      } else if (device.parentHub) {
+        const parentDevice = this.savedDevices.find(d => d.id === device.parentHub);
+        if (parentDevice?.isConnected) {
+          return 'Available';
+        }
+      }
+      return 'Disconnected';
+    }
+  }
+
+  private getStatusColor(status: string): string {
+    switch (status) {
+      case 'Connected':
+      case 'Connected via Hub':
+        return '#10b981';
+      case 'Available':
+        return '#f59e0b';
+      case 'Disconnected':
+      default:
+        return '#ef4444';
+    }
+  }
+
+  private attachDeviceEventListeners(): void {
+    // Connect/Disconnect buttons
+    const connectBtns = this.modal.querySelectorAll('.device-connect-btn');
+    connectBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
+        if (deviceId) {
+          this.handleDeviceConnect(deviceId);
+        }
+      });
+    });
+
+    // Edit buttons
+    const editBtns = this.modal.querySelectorAll('.device-edit-btn');
+    editBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
+        if (deviceId) {
+          this.handleDeviceEdit(deviceId);
+        }
+      });
+    });
+
+    // Delete buttons
+    const deleteBtns = this.modal.querySelectorAll('.device-delete-btn');
+    deleteBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
+        if (deviceId) {
+          this.handleDeviceDelete(deviceId);
+        }
+      });
+    });
+  }
+
+  private async handleConnectAll(): Promise<void> {
+    const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLButtonElement;
+    if (!connectAllBtn) return;
+
+    try {
+      // Set loading state
+      connectAllBtn.disabled = true;
+      connectAllBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Connecting...';
+      console.log('Starting connection to all devices...');
+
+      await this.trackerManager.connectToAll();
+      
+      console.log('Successfully connected to all devices');
+    } catch (error) {
+      console.error('Failed to connect to all devices:', error);
+    } finally {
+      // Reset button state
+      connectAllBtn.disabled = false;
+      connectAllBtn.innerHTML = '<i class="fas fa-link mr-2"></i>Connect to All';
+    }
+  }
+
+  private async handleScan(): Promise<void> {
+    try {
+      const scanBtn = this.modal.querySelector('.scan-btn') as HTMLButtonElement;
+      scanBtn.disabled = true;
+      scanBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Scanning...';
+
+      await this.trackerManager.startDiscovery();
+    } catch (error) {
+      console.error('Device scan failed:', error);
+    } finally {
+      const scanBtn = this.modal.querySelector('.scan-btn') as HTMLButtonElement;
+      scanBtn.disabled = false;
+      scanBtn.innerHTML = '<i class="fas fa-search mr-1"></i>Scan';
+    }
+  }
+
+  private async handleDeviceConnect(deviceId: string): Promise<void> {
+    const device = this.savedDevices.find(d => d.id === deviceId);
+    if (!device) return;
+
+    const connectBtn = this.modal.querySelector(`[data-device-id="${deviceId}"] .device-connect-btn`) as HTMLButtonElement;
+    if (!connectBtn) return;
+
+    try {
+      if (device.isConnected) {
+        // Set loading state for disconnect
+        connectBtn.disabled = true;
+        connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Disconnecting...';
+        console.log(`Disconnecting device: ${deviceId}`);
+
+        await this.trackerManager.disconnectDevice(deviceId);
+        console.log(`Successfully disconnected device: ${deviceId}`);
+      } else {
+        // Set loading state for connect
+        connectBtn.disabled = true;
+        connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Connecting...';
+        console.log(`Connecting to device: ${deviceId}`);
+
+        const success = await this.trackerManager.connectToDevice(deviceId);
+        if (success) {
+          console.log(`Successfully connected to device: ${deviceId}`);
+        } else {
+          console.error(`Failed to connect to device: ${deviceId}`);
+        }
+      }
+    } catch (error) {
+      console.error(`Device connection failed for ${deviceId}:`, error);
+    } finally {
+      // Reset button state - the UI will be updated by the event listeners
+      connectBtn.disabled = false;
+      // The button text will be updated by updateDeviceConnectionStatus
+    }
+  }
+
+  private handleDeviceEdit(deviceId: string): void {
+    // TODO: Implement device editing
+    console.log('Edit device:', deviceId);
+  }
+
+  private handleDeviceDelete(deviceId: string): void {
+    // TODO: Implement device deletion
+    console.log('Delete device:', deviceId);
+  }
+
+  private updateDeviceConnectionStatus(deviceId: string, isConnected: boolean): void {
+    const device = this.savedDevices.find(d => d.id === deviceId);
+    if (device) {
+      device.isConnected = isConnected;
+      this.renderSavedDevices();
+    }
+  }
+
+  private updateDiscoveredDevices(devices: EidonDevice[]): void {
+    this.discoveredDevices = devices;
+    this.renderDiscoveredDevices();
+  }
+
+  private renderDiscoveredDevices(): void {
+    const container = this.modal.querySelector('.discovered-devices-container') as HTMLElement;
+    if (!container) return;
+
+    if (this.discoveredDevices.length === 0) {
+      container.innerHTML = '<div class="text-xs text-neutral-500 text-center py-4">No new devices found</div>';
+      return;
+    }
+
+    const html = this.discoveredDevices.map(device => this.createDeviceCard(device)).join('');
+    container.innerHTML = html;
+    this.attachDeviceEventListeners();
+  }
+
+  public show(): void {
+    this.isVisible = true;
+    this.container.classList.remove('hidden');
+    this.modal.classList.remove('-translate-x-full');
+    // Hide arrow indicator when modal is open
+    const arrow = this.container.querySelector('.device-modal-arrow') as HTMLElement;
+    if (arrow) arrow.style.display = 'none';
+  }
+
+  public hide(): void {
+    this.isVisible = false;
+    this.modal.classList.add('-translate-x-full');
+    // Show arrow indicator when modal is closed (if logged in)
+    this.updateArrowVisibility();
+  }
+
+  private updateArrowVisibility(): void {
+    const arrow = this.container.querySelector('.device-modal-arrow') as HTMLElement;
+    if (!arrow) return;
+
+    const isLoggedIn = this.loginStateManager.getState().isLoggedIn;
+    if (isLoggedIn && !this.isVisible) {
+      arrow.style.display = 'block';
+    } else {
+      arrow.style.display = 'none';
+    }
+  }
+
+  public toggle(): void {
+    if (this.isVisible) {
+      this.hide();
+    } else {
+      this.show();
+    }
+  }
+
+  public mount(parent: HTMLElement): void {
+    parent.appendChild(this.container);
+  }
+
+  public updateLoginState(isLoggedIn: boolean): void {
+    if (isLoggedIn) {
+      // User logged in, load saved devices
+      this.loadSavedDevices();
+      // Reset container position for logged in state
+      this.container.className = 'device-modal-container fixed left-0 top-15 bottom-0 z-50';
+    } else {
+      // User logged out, show login prompt
+      this.showLoginPrompt();
+      // Move container to match logged in position with custom CSS class
+      this.container.className = 'device-modal-container logged-out fixed left-0 top-15 bottom-0 z-50';
+    }
+    this.updateArrowVisibility();
+  }
+
+  public unmount(): void {
+    if (this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    }
+  }
+}
