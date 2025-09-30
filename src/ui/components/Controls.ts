@@ -34,19 +34,14 @@ export class RecordingControls {
         <i class="fas fa-plug"></i>
         <span>Connect</span>
       </button>
-      <button id="navCalibrate" class="nav-button" title="Calibrate">
-        <i class="fas fa-sync-alt"></i>
-        <span>Calibrate</span>
-      </button>
-      <div class="flex-1"></div>
-      <button id="navRecordings" class="nav-button" title="Recordings">
+      <button id="navRecordings" class="nav-button nav-recordings" title="Recordings (Login Required)" style="display: none;">
         <i class="fas fa-folder-open"></i>
         <span>Recordings</span>
       </button>
-      <button id="navPreferences" class="nav-button" title="Settings">
-        <i class="fas fa-cog"></i>
-        <span>Settings</span>
-      </button>
+      <div id="userInfo" class="user-info" style="display: none;">
+        <img id="userAvatar" class="user-avatar" src="" alt="User Avatar" />
+        <span id="userName" class="user-name"></span>
+      </div>
       <button id="navLogin" class="nav-button nav-login" title="Login">
         <i class="fas fa-sign-in-alt"></i>
         <span>Login</span>
@@ -59,9 +54,7 @@ export class RecordingControls {
 
   private attachEventListeners(): void {
     const connectBtn = this.toolbar.querySelector('#navConnect') as HTMLButtonElement;
-    const calibrateBtn = this.toolbar.querySelector('#navCalibrate') as HTMLButtonElement;
     const recordingsBtn = this.toolbar.querySelector('#navRecordings') as HTMLButtonElement;
-    const preferencesBtn = this.toolbar.querySelector('#navPreferences') as HTMLButtonElement;
     const loginBtn = this.toolbar.querySelector('#navLogin') as HTMLButtonElement;
 
     connectBtn.addEventListener('click', () => {
@@ -70,21 +63,9 @@ export class RecordingControls {
       document.dispatchEvent(event);
     });
 
-    calibrateBtn.addEventListener('click', () => {
-      // Emit calibrate event for existing handlers
-      const event = new CustomEvent('navCalibrate');
-      document.dispatchEvent(event);
-    });
-
     recordingsBtn.addEventListener('click', () => {
       // TODO: Implement recordings modal/page
       console.log('Recordings clicked');
-    });
-
-    preferencesBtn.addEventListener('click', () => {
-      // Emit preferences event for existing handlers
-      const event = new CustomEvent('navPreferences');
-      document.dispatchEvent(event);
     });
 
     loginBtn.addEventListener('click', () => {
@@ -134,17 +115,49 @@ export class RecordingControls {
 
   private updateLoginButton(state: LoginState): void {
     const loginBtn = this.toolbar.querySelector('#navLogin') as HTMLButtonElement;
+    const recordingsBtn = this.toolbar.querySelector('#navRecordings') as HTMLButtonElement;
+    const userInfo = this.toolbar.querySelector('#userInfo') as HTMLDivElement;
+    const userAvatar = this.toolbar.querySelector('#userAvatar') as HTMLImageElement;
+    const userName = this.toolbar.querySelector('#userName') as HTMLSpanElement;
     const icon = loginBtn.querySelector('i') as HTMLElement;
     const text = loginBtn.querySelector('span') as HTMLElement;
 
     if (state.isLoggedIn) {
       icon.className = 'fas fa-sign-out-alt';
       text.textContent = 'Logout';
-      loginBtn.title = `Logged in as ${state.user?.name || state.user?.email || 'User'}`;
+      loginBtn.title = `Logged in as ${state.profile?.fullName || state.user?.name || state.user?.email || 'User'}`;
+      
+      // Show recordings button with premium styling
+      recordingsBtn.style.display = 'flex';
+      recordingsBtn.className = 'nav-button nav-recordings nav-recordings-premium';
+      recordingsBtn.title = 'Recordings';
+      
+      // Show user info if profile is available
+      if (state.profile) {
+        userInfo.style.display = 'flex';
+        
+        // Set avatar (use signedAvatarUrl if available, otherwise avatarUrl)
+        const avatarUrl = state.profile.signedAvatarUrl || state.profile.avatarUrl;
+        if (avatarUrl) {
+          userAvatar.src = avatarUrl;
+          userAvatar.style.display = 'block';
+        } else {
+          userAvatar.style.display = 'none';
+        }
+        
+        // Set user name
+        userName.textContent = state.profile.fullName;
+      } else {
+        userInfo.style.display = 'none';
+      }
     } else {
       icon.className = 'fas fa-sign-in-alt';
       text.textContent = 'Login';
       loginBtn.title = 'Sign in to your account';
+      
+      // Hide recordings button and user info
+      recordingsBtn.style.display = 'none';
+      userInfo.style.display = 'none';
     }
   }
 

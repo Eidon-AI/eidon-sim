@@ -35,8 +35,6 @@ export class AuthManager {
       const currentUrl = window.location.origin + window.location.pathname;
       const authUrl = `${this.authUrl}?external-auth=redirect-with-token&redirect=${encodeURIComponent(currentUrl)}&response_type=token`;
 
-      console.log('Opening auth URL:', authUrl);
-
       // 2. Open the web page and wait for the callback
       const popup = window.open(
         authUrl,
@@ -69,15 +67,8 @@ export class AuthManager {
               // 4. Extract the token from result
               const url = new URL(popup.location.href);
               
-              console.log("Auth callback received:", popup.location.href);
-              console.log("Parsed URI:", url);
-              console.log("Query parameters:", url.searchParams);
-              
               const token = url.searchParams.get('token');
               const refreshToken = url.searchParams.get('refreshToken');
-              
-              console.log("Firebase token received:", token);
-              console.log("Refresh token received:", refreshToken);
               
               if (!token) {
                 throw new Error('No token received in callback');
@@ -91,13 +82,11 @@ export class AuthManager {
               this.getUserFromToken(token).then(user => {
                 this.currentUser = user;
                 this.saveAuthState();
-                console.log("Auth: Login completed");
                 resolve(authTokens);
               }).catch(error => {
                 console.error("Failed to get user info:", error);
                 // Still resolve with tokens even if user fetch fails
                 this.saveAuthState();
-                console.log("Auth: Login completed (without user info)");
                 resolve(authTokens);
               });
             }

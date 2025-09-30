@@ -517,18 +517,8 @@ export class RecordingManager extends EventTarget {
 
   public async uploadRecording(recording: Recording): Promise<void> {
     // Upload recording to Eidon API
-    console.log('Upload recording to api.eidon.ai/upload:', {
-      id: recording.id,
-      name: recording.name,
-      deviceCount: recording.devices.length,
-      snapshotCount: recording.snapshots.length,
-      duration: this.getRecordingDuration(recording),
-      data: recording
-    });
-    
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('Upload completed (simulated)');
   }
 
   // Getters for UI
@@ -587,7 +577,6 @@ export class RecordingManager extends EventTarget {
         // Trigger update event so UI and 3D scene know about this device
         this.store.dispatchEvent(new CustomEvent('update', { detail: tempDevice }));
         
-        console.log(`Created temporary device for playback: ${deviceInfo.id} (${deviceInfo.kind})`);
       }
     });
   }
@@ -600,7 +589,6 @@ export class RecordingManager extends EventTarget {
         document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id: deviceId } }));
       }
       this.store['map'].delete(deviceId);
-      console.log(`Removed temporary device: ${deviceId}`);
     });
     this.temporaryDeviceIds.clear();
   }
@@ -633,6 +621,5 @@ export class RecordingManager extends EventTarget {
     // Clean up temporary devices
     this.cleanupTemporaryDevices();
 
-    console.log('RecordingManager destroyed');
   }
 } 

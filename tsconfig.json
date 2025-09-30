@@ -5,7 +5,7 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "jsx": "react-jsx",
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true
   },

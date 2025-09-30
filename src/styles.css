@@ -366,6 +366,46 @@ input, select {
   text-align: center;
 }
 
+/* Premium recordings button style for logged-in users */
+.nav-recordings-premium {
+  background: linear-gradient(135deg, rgba(233, 51, 112, 0.2), rgba(140, 8, 52, 0.2));
+  border: 1px solid rgba(233, 51, 112, 0.4);
+  box-shadow: 0 0 20px rgba(233, 51, 112, 0.1);
+}
+
+.nav-recordings-premium:hover {
+  background: linear-gradient(135deg, rgba(233, 51, 112, 0.3), rgba(140, 8, 52, 0.3));
+  border-color: rgba(233, 51, 112, 0.6);
+  box-shadow: 0 0 25px rgba(233, 51, 112, 0.2);
+}
+
+/* User info display */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  white-space: nowrap;
+}
+
 .nav-login {
   background: linear-gradient(135deg, rgb(var(--brand-rgb)) 0%, rgb(var(--brand-sub-rgb)) 100%);
   border-color: rgba(255, 255, 255, 0.2);

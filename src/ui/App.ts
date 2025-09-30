@@ -1,4 +1,3 @@
-console.log('Eidon Sym loaded..');
 
 // src/ui/App.ts
 import { HidManager }   from '../core/HidManager';
@@ -14,7 +13,7 @@ import { mountStereoCam } from './components/StereoCam';
 import { RoArmController } from '../core/RoArmController';
 import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
-import { RecordingControls } from './components/RecordingControls';
+import { RecordingControls } from './components/Controls';
 import { renderCard } from './components/DeviceCard';
 import { AuthModal } from './components/AuthModal';
 import { AuthManager } from '../core/AuthManager';
@@ -76,9 +75,7 @@ function showAuthModal(root: HTMLElement) {
   authModal = new AuthModal(
     async () => {
       try {
-        console.log('Starting OAuth sign in...');
         await loginStateManager!.login();
-        console.log('OAuth sign in successful');
         isAuthenticated = true;
         authModal!.unmount();
         authModal = null;
@@ -88,7 +85,6 @@ function showAuthModal(root: HTMLElement) {
       }
     },
     () => {
-      console.log('Exploring anonymously');
       isAuthenticated = true; // Allow anonymous access
       authModal!.unmount();
       authModal = null;
@@ -169,7 +165,6 @@ function initializeApp(root: HTMLElement) {
 
   document.addEventListener('navPreferences', () => {
     // Implement preferences button functionality
-    console.log('Preferences button clicked');
   });
 
   /* ---- log update only for selected device ---- */
@@ -223,7 +218,7 @@ function initializeApp(root: HTMLElement) {
   };
 
   // Check periodically for gamepad connection changes
-  gamepadButtonInterval = setInterval(updateGamepadButton, 1000);
+  gamepadButtonInterval = window.setInterval(updateGamepadButton, 1000);
   updateGamepadButton(); // Initial check
 
   // Create gamepad modal
@@ -346,5 +341,4 @@ export function unmount() {
     deviceStore = null;
   }
   
-  console.log('App unmounted');
 }
