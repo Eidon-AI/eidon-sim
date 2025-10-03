@@ -18,15 +18,9 @@ export class HidManager extends EventTarget {
   constructor() {
     super();
     this.autoReconnect();
-
-    this.overlay = document.getElementById('calOverlay')!;
-    this.counter = document.getElementById('calCount')! as HTMLElement;
   }
 
   private devices = new Map<string, HIDDevice>();
-
-  private overlay: HTMLElement;
-  private counter: HTMLElement;
 
   async connect(): Promise<void> {
     const filters = [
@@ -69,18 +63,7 @@ export class HidManager extends EventTarget {
 
   startCalibration(deviceId: string | null = null) {
     console.log("Starting calibration");
-    let secs = 5;
-    this.overlay.classList.remove('hidden');
-    this.counter.textContent = String(secs);
-    const tick = setInterval(() => {
-      secs -= 1;
-      if (secs === 0) {
-        clearInterval(tick);
-        this.overlay.classList.add('hidden');
-        this.sendCalibrate();          // now actually send 01 01
-      }
-      this.counter.textContent = String(secs);
-    }, 1000);
+    this.sendCalibrate(deviceId);
   }
 
   sendCalibrate(deviceId: string | null = null) {

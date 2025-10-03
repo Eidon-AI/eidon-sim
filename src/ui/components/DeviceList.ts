@@ -1,14 +1,15 @@
 import { HidManager } from '../../core/HidManager';
 import { DeviceStore } from '../../core/DeviceStore';
 import { renderCard }  from './DeviceCard';
-import { DeviceState } from '../../types/device';
+import { ConnectedDevice } from '../../types/device';
+import styles from './styles/DeviceList.module.css';
 
 // Define sorting order for consistent device display
 const ARM_SIDE_ORDER = { 'left': 0, 'right': 1 };
 const ARM_LEVEL_ORDER = { 'upper': 0, 'lower': 1, 'hand': 2 };
 const KIND_ORDER = { 'tracker': 0, 'glove': 1 };
 
-function sortDevices(devices: DeviceState[]): DeviceState[] {
+function sortDevices(devices: ConnectedDevice[]): ConnectedDevice[] {
   return devices.sort((a, b) => {
     // 1. Sort by arm side (left first, then right)
     const aSide = a.arm?.side;
@@ -41,7 +42,7 @@ function sortDevices(devices: DeviceState[]): DeviceState[] {
 export function mountDeviceList(parent: HTMLElement, hid: HidManager, store: DeviceStore){
   const wrapper = document.createElement('div');
   wrapper.id = 'deviceList';
-  wrapper.className = 'border-b border-neutral-700';
+  wrapper.className = styles.wrapper;
   parent.appendChild(wrapper);
 
   // Track currently rendered devices to avoid unnecessary re-renders

@@ -1,4 +1,5 @@
 import { prefs } from '../../core/preferences';
+import styles from './styles/ViewControls.module.css';
 
 export interface ViewToggleState {
   grid: boolean;
@@ -84,11 +85,7 @@ export class ViewControls extends EventTarget {
 
   private createContainer(): HTMLElement {
     const container = document.createElement('div');
-    container.className = `
-      fixed bottom-0 left-0 z-40
-      bg-neutral-800/95
-      flex flex-col
-    `;
+    container.className = styles.container;
     return container;
   }
 
@@ -98,14 +95,7 @@ export class ViewControls extends EventTarget {
     icon: string
   ): HTMLElement {
     const button = document.createElement('button');
-    button.className = `
-      flex items-center justify-center w-10 h-10 text-base font-medium
-      transition-all duration-200
-      ${this.state[key] 
-        ? 'bg-neutral-800 text-white hover:bg-neutral-700 hover:text-neutral-200' 
-        : 'bg-neutral-900 text-white opacity-30 hover:bg-neutral-800 hover:opacity-50'
-      }
-    `;
+    button.className = `${styles.toggleButton} ${this.state[key] ? styles.active : styles.inactive}`;
     
     button.innerHTML = icon;
     button.title = label; // Native browser tooltip
@@ -137,21 +127,13 @@ export class ViewControls extends EventTarget {
 
   private createColorPicker(): HTMLElement {
     const container = document.createElement('div');
-    container.className = `
-      flex items-center justify-center w-10 h-10
-      bg-neutral-800 hover:bg-neutral-700
-      transition-all duration-200
-      relative group
-    `;
+    container.className = styles.colorPickerContainer;
 
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     // Ensure the color value is properly normalized
     colorInput.value = normalizeHexColor(this.state.surfaceColor);
-    colorInput.className = `
-      w-6 h-6 rounded border-0 cursor-pointer
-      appearance-none bg-transparent
-    `;
+    colorInput.className = styles.colorInput;
     colorInput.title = 'Surface Color';
 
     // Style the color input to look like a color swatch

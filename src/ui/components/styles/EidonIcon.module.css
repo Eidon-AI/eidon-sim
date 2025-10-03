@@ -1,0 +1,6 @@
+/* EidonIcon.module.css */
+
+.icon {
+  /* SVG styling is handled inline in the component */
+  /* This file exists for consistency but EidonIcon doesn't use Tailwind classes */
+}
