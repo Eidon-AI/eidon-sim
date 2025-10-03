@@ -1,0 +1,53 @@
+/* AnglePanel.module.css */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0.25rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.title {
+  font-weight: 500;
+}
+
+.toggleButton {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  width: 40px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.toggleButton:hover {
+  opacity: 0.8;
+}
+
+.anglesTable {
+  font-size: 0.75rem;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0.5rem 0;
+}
+
+.anglesTable th {
+  text-align: left;
+  font-weight: 500;
+}
+
+.anglesTable td {
+  text-align: right;
+}
+
+.anglesTable td:first-child {
+  text-align: left;
+  font-weight: 500;
+}

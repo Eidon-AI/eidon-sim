@@ -1,6 +1,7 @@
 import { EidonTrackerManager, EidonDevice } from '../../core/EidonTrackerManager';
 import { DeviceRole, DEVICE_ROLE_NAMES } from '../../core/constants';
 import { LoginStateManager } from '../../core/LoginStateManager';
+import styles from './styles/DeviceModal.module.css';
 
 export class DeviceModal {
   private container: HTMLElement;
@@ -23,7 +24,7 @@ export class DeviceModal {
     // Check initial login state and apply appropriate styling
     const initialState = this.loginStateManager.getState();
     if (!initialState.isLoggedIn) {
-      this.container.className = 'device-modal-container logged-out fixed left-0 top-15 bottom-0 z-50';
+      this.container.className = `${styles.container} ${styles.loggedOut}`;
     }
     
     this.loadSavedDevices();
@@ -34,14 +35,14 @@ export class DeviceModal {
 
   private createContainer(): HTMLElement {
     const container = document.createElement('div');
-    container.className = 'device-modal-container fixed left-0 top-15 bottom-0 z-50';
+    container.className = styles.container;
     
     // Add collapsed arrow indicator
     const arrowIndicator = document.createElement('div');
-    arrowIndicator.className = 'device-modal-arrow absolute left-0 top-1/4 transform -translate-y-1/2 w-8 h-16 bg-neutral-800/70 backdrop-blur-sm border border-neutral-700/60 border-l-0 rounded-r-lg shadow-lg cursor-pointer hover:bg-neutral-700/70 transition-colors';
+    arrowIndicator.className = styles.arrowIndicator;
     arrowIndicator.innerHTML = `
-      <div class="flex items-center justify-center h-full">
-        <i class="fas fa-chevron-right text-neutral-300"></i>
+      <div class="${styles.arrowContent}">
+        <i class="fas fa-chevron-right ${styles.arrowIcon}"></i>
       </div>
     `;
     arrowIndicator.addEventListener('click', () => this.show());
@@ -52,40 +53,40 @@ export class DeviceModal {
 
   private createModal(): HTMLElement {
     const modal = document.createElement('div');
-    modal.className = 'device-modal w-full h-full transform -translate-x-full transition-transform duration-300';
+    modal.className = styles.modal;
     
     modal.innerHTML = `
-      <div class="device-modal-content">
+      <div class="${styles.content}">
         <!-- Header with close button -->
-        <div class="flex justify-end mb-4">
-          <button class="device-modal-close">&times;</button>
+        <div class="${styles.header}">
+          <button class="${styles.closeButton}">&times;</button>
         </div>
 
         <!-- Saved Devices Section -->
-        <div class="device-modal-body">
-          <div class="mb-4">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-lg font-semibold text-white saved-devices-title">Saved Devices</h3>
-              <button class="connect-all-btn bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded-lg font-medium transition-colors text-sm">
+        <div class="${styles.body}">
+          <div class="${styles.section}">
+            <div class="${styles.sectionHeader}">
+              <h3 class="${styles.title} saved-devices-title">Saved Devices</h3>
+              <button class="${styles.connectAllBtn}">
                 <i class="fas fa-link mr-2"></i>
                 Connect to All
               </button>
             </div>
-            <div class="saved-devices-container space-y-2">
+            <div class="${styles.devicesContainer} saved-devices-container">
               <!-- Devices will be populated here -->
             </div>
           </div>
 
           <!-- Find Devices Section -->
-          <div class="border-t border-neutral-700/60 pt-4">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-lg font-semibold text-white">Find Devices</h3>
-              <button class="scan-btn text-blue-400 hover:text-blue-300 text-sm font-medium">
+          <div class="${styles.divider}">
+            <div class="${styles.sectionHeader}">
+              <h3 class="${styles.title}">Find Devices</h3>
+              <button class="${styles.scanBtn}">
                 <i class="fas fa-search mr-1"></i>
                 Scan
               </button>
             </div>
-            <div class="discovered-devices-container space-y-2">
+            <div class="${styles.devicesContainer} discovered-devices-container">
               <!-- Discovered devices will be populated here -->
             </div>
           </div>
@@ -98,17 +99,17 @@ export class DeviceModal {
 
   private setupEventListeners(): void {
     // Close button
-    const closeBtn = this.modal.querySelector('.device-modal-close') as HTMLButtonElement;
+    const closeBtn = this.modal.querySelector(`.${styles.closeButton}`) as HTMLButtonElement;
     closeBtn.addEventListener('click', () => this.hide());
 
     // Remove overlay click to close since we're not using an overlay anymore
 
     // Connect all button
-    const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLButtonElement;
+    const connectAllBtn = this.modal.querySelector(`.${styles.connectAllBtn}`) as HTMLButtonElement;
     connectAllBtn.addEventListener('click', () => this.handleConnectAll());
 
     // Scan button
-    const scanBtn = this.modal.querySelector('.scan-btn') as HTMLButtonElement;
+    const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
     scanBtn.addEventListener('click', () => this.handleScan());
 
     // Tracker manager events
@@ -186,12 +187,12 @@ export class DeviceModal {
     
     // Show login prompt
     container.innerHTML = `
-      <div class="text-center py-4">
-        <div class="text-neutral-400 mb-4">
-          <i class="fas fa-sign-in-alt text-4xl mb-3"></i>
-          <p class="text-sm">Sign in to save and manage your devices</p>
+      <div class="${styles.loginPrompt}">
+        <div class="${styles.loginPromptIcon}">
+          <i class="fas fa-sign-in-alt"></i>
+          <p class="${styles.loginPromptText}">Sign in to save and manage your devices</p>
         </div>
-        <button class="login-prompt-btn bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors">
+        <button class="${styles.loginPromptBtn}">
           <i class="fas fa-sign-in-alt mr-2"></i>
           Sign In
         </button>
@@ -199,7 +200,7 @@ export class DeviceModal {
     `;
 
     // Add event listener for login button
-    const loginBtn = container.querySelector('.login-prompt-btn') as HTMLButtonElement;
+    const loginBtn = container.querySelector(`.${styles.loginPromptBtn}`) as HTMLButtonElement;
     if (loginBtn) {
       loginBtn.addEventListener('click', () => {
         // Dispatch event to trigger login modal
@@ -301,8 +302,8 @@ export class DeviceModal {
 
     // Left side devices
     if (leftDevices.length > 0) {
-      html += '<div class="device-group mb-4">';
-      html += '<div class="text-xs font-medium text-neutral-400 mb-2">Left Side</div>';
+      html += `<div class="${styles.deviceGroup}">`;
+      html += `<div class="${styles.groupTitle}">Left Side</div>`;
       leftDevices.forEach(device => {
         html += this.createDeviceCard(device);
       });
@@ -311,8 +312,8 @@ export class DeviceModal {
 
     // Right side devices
     if (rightDevices.length > 0) {
-      html += '<div class="device-group mb-4">';
-      html += '<div class="text-xs font-medium text-neutral-400 mb-2">Right Side</div>';
+      html += `<div class="${styles.deviceGroup}">`;
+      html += `<div class="${styles.groupTitle}">Right Side</div>`;
       rightDevices.forEach(device => {
         html += this.createDeviceCard(device);
       });
@@ -321,8 +322,8 @@ export class DeviceModal {
 
     // Chest devices
     if (chestDevices.length > 0) {
-      html += '<div class="device-group mb-4">';
-      html += '<div class="text-xs font-medium text-neutral-400 mb-2">Chest</div>';
+      html += `<div class="${styles.deviceGroup}">`;
+      html += `<div class="${styles.groupTitle}">Chest</div>`;
       chestDevices.forEach(device => {
         html += this.createDeviceCard(device);
       });
@@ -339,31 +340,31 @@ export class DeviceModal {
     const roleName = DEVICE_ROLE_NAMES[device.role];
 
     return `
-      <div class="device-card bg-neutral-700/30 border border-neutral-600/50 rounded-lg p-3 mb-2" data-device-id="${device.id}">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-3">
-            <div class="w-3 h-3 rounded-full" style="background-color: ${device.color || '#666'}"></div>
-            <div>
-              <div class="text-sm font-medium text-white">${device.name}</div>
-              <div class="text-xs text-neutral-400">${roleName}</div>
+      <div class="${styles.deviceCard}" data-device-id="${device.id}">
+        <div class="${styles.cardTop}">
+          <div class="${styles.cardLeft}">
+            <div class="${styles.colorIndicator}" style="background-color: ${device.color || '#666'}"></div>
+            <div class="${styles.deviceInfo}">
+              <div class="${styles.deviceName}">${device.name}</div>
+              <div class="${styles.deviceRole}">${roleName}</div>
             </div>
           </div>
-          <div class="flex items-center space-x-2">
-            <div class="text-xs px-2 py-1 rounded" style="background-color: ${statusColor}20; color: ${statusColor}">
+          <div class="${styles.cardRight}">
+            <div class="${styles.statusBadge}" style="background-color: ${statusColor}20; color: ${statusColor}">
               ${status}
             </div>
-            <button class="device-connect-btn text-blue-400 hover:text-blue-300 text-xs" data-device-id="${device.id}">
+            <button class="${styles.connectBtn}" data-device-id="${device.id}">
               ${device.isConnected ? 'Disconnect' : 'Connect'}
             </button>
           </div>
         </div>
-        <div class="flex items-center justify-between mt-2">
-          <div class="text-xs text-neutral-500">${device.macAddress}</div>
-          <div class="flex space-x-1">
-            <button class="device-edit-btn text-neutral-400 hover:text-white text-xs" data-device-id="${device.id}">
+        <div class="${styles.cardBottom}">
+          <div class="${styles.macAddress}">${device.macAddress}</div>
+          <div class="${styles.actionButtons}">
+            <button class="${styles.editBtn}" data-device-id="${device.id}">
               <i class="fas fa-edit"></i>
             </button>
-            <button class="device-delete-btn text-neutral-400 hover:text-red-400 text-xs" data-device-id="${device.id}">
+            <button class="${styles.deleteBtn}" data-device-id="${device.id}">
               <i class="fas fa-trash"></i>
             </button>
           </div>
@@ -404,7 +405,7 @@ export class DeviceModal {
 
   private attachDeviceEventListeners(): void {
     // Connect/Disconnect buttons
-    const connectBtns = this.modal.querySelectorAll('.device-connect-btn');
+    const connectBtns = this.modal.querySelectorAll(`.${styles.connectBtn}`);
     connectBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
         const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
@@ -415,7 +416,7 @@ export class DeviceModal {
     });
 
     // Edit buttons
-    const editBtns = this.modal.querySelectorAll('.device-edit-btn');
+    const editBtns = this.modal.querySelectorAll(`.${styles.editBtn}`);
     editBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
         const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
@@ -426,7 +427,7 @@ export class DeviceModal {
     });
 
     // Delete buttons
-    const deleteBtns = this.modal.querySelectorAll('.device-delete-btn');
+    const deleteBtns = this.modal.querySelectorAll(`.${styles.deleteBtn}`);
     deleteBtns.forEach(btn => {
       btn.addEventListener('click', (e) => {
         const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
@@ -438,7 +439,7 @@ export class DeviceModal {
   }
 
   private async handleConnectAll(): Promise<void> {
-    const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLButtonElement;
+    const connectAllBtn = this.modal.querySelector(`.${styles.connectAllBtn}`) as HTMLButtonElement;
     if (!connectAllBtn) return;
 
     try {
@@ -461,7 +462,7 @@ export class DeviceModal {
 
   private async handleScan(): Promise<void> {
     try {
-      const scanBtn = this.modal.querySelector('.scan-btn') as HTMLButtonElement;
+      const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
       scanBtn.disabled = true;
       scanBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Scanning...';
 
@@ -469,7 +470,7 @@ export class DeviceModal {
     } catch (error) {
       console.error('Device scan failed:', error);
     } finally {
-      const scanBtn = this.modal.querySelector('.scan-btn') as HTMLButtonElement;
+      const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
       scanBtn.disabled = false;
       scanBtn.innerHTML = '<i class="fas fa-search mr-1"></i>Scan';
     }
@@ -541,7 +542,7 @@ export class DeviceModal {
     if (!container) return;
 
     if (this.discoveredDevices.length === 0) {
-      container.innerHTML = '<div class="text-xs text-neutral-500 text-center py-4">No new devices found</div>';
+      container.innerHTML = `<div class="${styles.noDevices}">No new devices found</div>`;
       return;
     }
 
@@ -553,21 +554,21 @@ export class DeviceModal {
   public show(): void {
     this.isVisible = true;
     this.container.classList.remove('hidden');
-    this.modal.classList.remove('-translate-x-full');
+    this.modal.classList.add(styles.show);
     // Hide arrow indicator when modal is open
-    const arrow = this.container.querySelector('.device-modal-arrow') as HTMLElement;
+    const arrow = this.container.querySelector(`.${styles.arrowIndicator}`) as HTMLElement;
     if (arrow) arrow.style.display = 'none';
   }
 
   public hide(): void {
     this.isVisible = false;
-    this.modal.classList.add('-translate-x-full');
+    this.modal.classList.remove(styles.show);
     // Show arrow indicator when modal is closed (if logged in)
     this.updateArrowVisibility();
   }
 
   private updateArrowVisibility(): void {
-    const arrow = this.container.querySelector('.device-modal-arrow') as HTMLElement;
+    const arrow = this.container.querySelector(`.${styles.arrowIndicator}`) as HTMLElement;
     if (!arrow) return;
 
     const isLoggedIn = this.loginStateManager.getState().isLoggedIn;
@@ -595,12 +596,12 @@ export class DeviceModal {
       // User logged in, load saved devices
       this.loadSavedDevices();
       // Reset container position for logged in state
-      this.container.className = 'device-modal-container fixed left-0 top-15 bottom-0 z-50';
+      this.container.className = styles.container;
     } else {
       // User logged out, show login prompt
       this.showLoginPrompt();
       // Move container to match logged in position with custom CSS class
-      this.container.className = 'device-modal-container logged-out fixed left-0 top-15 bottom-0 z-50';
+      this.container.className = `${styles.container} ${styles.loggedOut}`;
     }
     this.updateArrowVisibility();
   }

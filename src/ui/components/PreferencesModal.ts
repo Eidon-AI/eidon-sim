@@ -25,6 +25,7 @@ export function mountPrefs(root: HTMLElement) {
 
       <label>Surface <input id="pSurf" type="color" class="ml-2"></label>
       <label>Joints  <input id="pJoint" type="color" class="ml-2"></label>
+      <label>Sym Color <input id="pSymColor" type="color" class="ml-2"></label>
 
       <label class="flex items-center">
         <input id="pStereoEn" type="checkbox" class="mr-2"> Enable POV
@@ -62,6 +63,7 @@ export function mountPrefs(root: HTMLElement) {
           fingerAlpha: prefs.fingerAlpha,
           meshSurface: prefs.meshSurface,
           meshJoints: prefs.meshJoints,
+          symColor: prefs.symColor,
           stereoEnabled: prefs.stereoEnabled,
           leftURL: prefs.leftURL,
           rightURL: prefs.rightURL,
@@ -81,6 +83,7 @@ export function mountPrefs(root: HTMLElement) {
     // (document.getElementById('pTheme')as HTMLSelectElement).value = prefs.theme;
     (document.getElementById('pSurf') as HTMLInputElement).value = prefs.meshSurface;
     (document.getElementById('pJoint')as HTMLInputElement).value = prefs.meshJoints;
+    (document.getElementById('pSymColor') as HTMLInputElement).value = prefs.symColor;
     (document.getElementById('pStereoEn') as HTMLInputElement).checked = prefs.stereoEnabled;
     (document.getElementById('pLeftURL')  as HTMLInputElement).value = prefs.leftURL;
     (document.getElementById('pRightURL') as HTMLInputElement).value = prefs.rightURL;
@@ -102,6 +105,7 @@ export function mountPrefs(root: HTMLElement) {
     // prefs.theme       = (document.getElementById('pTheme') as HTMLSelectElement).value as any;
     prefs.meshSurface = (document.getElementById('pSurf') as HTMLInputElement).value;
     prefs.meshJoints  = (document.getElementById('pJoint')as HTMLInputElement).value;
+    prefs.symColor = (document.getElementById('pSymColor') as HTMLInputElement).value;
     prefs.stereoEnabled = (document.getElementById('pStereoEn') as HTMLInputElement).checked;
     prefs.leftURL  = (document.getElementById('pLeftURL')  as HTMLInputElement).value;
     prefs.rightURL = (document.getElementById('pRightURL') as HTMLInputElement).value;

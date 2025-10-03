@@ -22,9 +22,7 @@ let storeRef:  DeviceStore | null = null;
 let logRef:    HTMLPreElement | null = null;
 let playbackManager: PlaybackManager;
 let controls: Controls;
-let gamepadController: any;
 let sceneDestroy: (() => void) | null = null;
-let gamepadButtonInterval: number | null = null;
 let trackerManager: EidonTrackerManager | null = null;
 let deviceStore: DeviceStore | null = null;
 let authModal: AuthModal | null = null;
@@ -124,8 +122,7 @@ function initializeApp(root: HTMLElement) {
   trackerManager = tracker;
   const solver = new ArmSolver(store);
 
-  const { gamepadController: gc, destroy } = initScene(canvas, store, solver);
-  gamepadController = gc;
+  const { destroy } = initScene(canvas, store, solver);
   sceneDestroy = destroy;
 
   playbackManager = new PlaybackManager(store, solver);

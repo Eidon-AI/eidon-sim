@@ -1,5 +1,6 @@
 // src/ui/components/AnglePanel.ts
 import { ArmSolver } from '../../core/ArmSolver';
+import styles from './styles/AnglePanel.module.css';
 
 // Global state for angle mode toggle - load from localStorage
 let useActuatorAngles = localStorage.getItem('useActuatorAngles') === 'true';
@@ -9,18 +10,18 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
    * Build wrapper element and inject table markup
    * ---------------------------------------------------------- */
   const wrapper = document.createElement('div');
-  wrapper.className = 'flex flex-col pb-1';
+  wrapper.className = styles.wrapper;
   wrapper.innerHTML = `
-    <div class="flex items-center justify-between mb-1">
-      <h3 class="font-medium">
+    <div class="${styles.header}">
+      <h3 class="${styles.title}">
         📐 Actuator Angles
       </h3>
-      <button id="angleMode" class="px-2" style="width: 40px;">
+      <button id="angleMode" class="${styles.toggleButton}" style="width: 40px;">
         ${useActuatorAngles ? '◻️' : '▶'}
       </button>
     </div>
 
-    <table class="text-xs w-full border-separate border-spacing-x-2" id="tblAngles">
+    <table class="${styles.anglesTable}" id="tblAngles">
       <thead>
         <tr>
           <th></th><th>Yaw</th><th>Pitch</th><th>Roll</th>
@@ -28,8 +29,8 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
         </tr>
       </thead>
       <tbody>
-        <tr id="rowL"><td>L</td>${'<td class="text-right">-</td>'.repeat(7)}</tr>
-        <tr id="rowR"><td>R</td>${'<td class="text-right">-</td>'.repeat(7)}</tr>
+        <tr id="rowL"><td>L</td>${'<td>-</td>'.repeat(7)}</tr>
+        <tr id="rowR"><td>R</td>${'<td>-</td>'.repeat(7)}</tr>
       </tbody>
     </table>
   `;

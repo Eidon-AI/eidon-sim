@@ -1,0 +1,170 @@
+/* AuthModal.module.css */
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+}
+
+.container {
+  background: 
+    radial-gradient(50% 50% at 100% 100%, rgba(129, 12, 51, 0.50) 0%, rgba(129, 12, 51, 0.00) 100%) bottom right / 648px 648px no-repeat,
+    radial-gradient(140.65% 63.74% at 11.96% 5.24%, #840B34 0%, #0F0F0F 100%),
+    url('/auth-bg-curves.jpg') center/cover no-repeat;
+  border: 1px solid var(--button-border-color);
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 420px;
+  min-width: 320px;
+  width: 90%;
+  text-align: center;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  animation: slideInFromBottom 0.8s ease-out forwards;
+  position: relative;
+}
+
+.closeButton {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgb(var(--foreground-rgb));
+  font-size: 24px;
+  font-weight: 300;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  width: 100%;
+  position: relative;
+  z-index: 2;
+}
+
+.logoContainer {
+  width: 100%;
+  max-width: 306px;
+  z-index: 10;
+  text-align: center;
+}
+
+.logo {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.subtitle {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  font-style: normal;
+  font-weight: 300;
+  line-height: 22px;
+  letter-spacing: -0.48px;
+  opacity: 0.8;
+  color: rgb(var(--foreground-rgb));
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.button {
+  padding: 16px 32px;
+  border: none;
+  border-radius: 50px;
+  font-size: 16px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-heading);
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.button.primary {
+  background: linear-gradient(135deg, rgb(var(--brand-rgb)) 0%, rgb(var(--brand-sub-rgb)) 100%);
+  color: white;
+  border: 1px solid var(--button-border-color);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 22px;
+  letter-spacing: -0.6px;
+}
+
+.button.primary:hover {
+  background: linear-gradient(135deg, rgb(var(--brand-sub-rgb)) 0%, rgb(var(--brand-rgb)) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.3);
+}
+
+.button:active {
+  transform: translateY(0);
+}
+
+.link {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 22px;
+  letter-spacing: -0.48px;
+  margin-top: 16px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link:hover {
+  color: white;
+  transform: scale(1.02);
+}
+
+@keyframes slideInFromBottom {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

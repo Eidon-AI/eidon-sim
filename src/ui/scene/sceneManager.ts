@@ -7,7 +7,6 @@ import { VectorArm } from './vectorArm';
 import { SkeletalRig } from './skeletalRig';
 import { CameraControl } from '../components/CameraControl';
 import { KeyboardController } from '../components/KeyboardController';
-import { GamepadController } from '../components/GamepadController';
 import { ViewControls } from '../components/ViewControls';
 import { prefs, savePrefs } from '../../core/preferences';
 
@@ -115,9 +114,6 @@ export function initScene(
   
   const { mesh: gridMesh, material: gridMaterial } = createInfiniteGrid();
   scene.add(gridMesh);
-
-  /* ------------ gamepad controller ----------------- */
-  const gamepadController = new GamepadController(cam, controls);
 
   /* ------------ view controls -------------------- */
   const viewControls = new ViewControls();
@@ -281,9 +277,8 @@ export function initScene(
   };
   window.addEventListener('resize', handleResize);
 
-  // Return cleanup function and gamepad controller
+  // Return cleanup function
   return {
-    gamepadController,
     destroy() {
       // Clean up window event listeners
       window.removeEventListener('resize', handleResize);
@@ -292,7 +287,6 @@ export function initScene(
       leftArm.destroy();
       rightArm.destroy();
       cleanupModels(); // Use our new cleanup function
-      gamepadController.destroy();
       cameraControl.unmount();
       cameraControl.destroy();
       keyboardController.destroy();

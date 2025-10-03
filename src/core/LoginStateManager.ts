@@ -1,5 +1,6 @@
 import { AuthManager, AuthUser, AuthTokens } from './AuthManager';
 import { CurrentUser } from '../types/user';
+import { prefs, savePrefs } from './preferences';
 
 export interface LoginState {
   isLoggedIn: boolean;
@@ -136,6 +137,12 @@ export class LoginStateManager {
       }
 
       const profile: CurrentUser = await response.json();
+      
+      // Update symColor in preferences if provided, otherwise keep default
+      if (profile.symColor) {
+        prefs.symColor = profile.symColor;
+        savePrefs();
+      }
       
       // Update state with profile data
       this.state = {

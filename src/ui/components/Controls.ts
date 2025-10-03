@@ -4,6 +4,7 @@ import { AuthModal } from './AuthModal';
 import { PaginatedRecordingsResponse } from '../../types/recording';
 import { EidonTrackerManager } from '../../core/EidonTrackerManager';
 import { DeviceModal } from './DeviceModal';
+import styles from './styles/Controls.module.css';
 
 export class Controls {
   private container: HTMLElement;
@@ -234,9 +235,9 @@ export class Controls {
 
   private createModal(content: string, isRecordingsModal: boolean = false): HTMLElement {
     const modal = document.createElement('div');
-    modal.className = 'controls-modal';
+    modal.className = styles.modal;
     if (isRecordingsModal) {
-      modal.classList.add('recordings-modal');
+      modal.classList.add(styles.recordingsModal);
     }
     modal.innerHTML = `
       <div class="controls-modal-content">
@@ -478,7 +479,7 @@ export class Controls {
   private async showVideoModal(videoUrl: string, recording: any): Promise<void> {
     // Create video modal with loading state
     const videoModal = document.createElement('div');
-    videoModal.className = 'video-modal-overlay';
+    videoModal.className = styles.videoModalOverlay;
     videoModal.innerHTML = `
       <div class="video-modal-container">
         <button class="video-modal-close">
@@ -639,9 +640,9 @@ export class Controls {
 
   private createUserProfileModal(profile: any): HTMLElement {
     const modal = document.createElement('div');
-    modal.className = 'controls-modal';
+    modal.className = styles.modal;
     
-    const avatarUrl = profile.signedAvatarUrl || profile.avatarUrl;
+    const avatarUrl = profile.avatarUrl;
     const formatDuration = (seconds: number) => {
       const hours = Math.floor(seconds / 3600);
       const minutes = Math.floor((seconds % 3600) / 60);
@@ -746,8 +747,8 @@ export class Controls {
       if (state.profile) {
         userInfo.style.display = 'flex';
         
-        // Set avatar (use signedAvatarUrl if available, otherwise avatarUrl)
-        const avatarUrl = state.profile.signedAvatarUrl || state.profile.avatarUrl;
+        // Set avatar
+        const avatarUrl = state.profile.avatarUrl;
         if (avatarUrl) {
           userAvatar.src = avatarUrl;
           userAvatar.style.display = 'block';
@@ -784,13 +785,13 @@ export class Controls {
 
   private createContainer(): HTMLElement {
     const container = document.createElement('div');
-    container.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 z-40';
+    container.className = styles.container;
     return container;
   }
 
   private createToolbar(): HTMLElement {
     const toolbar = document.createElement('div');
-    toolbar.className = 'bg-neutral-900/50 backdrop-blur-sm border border-neutral-700/60 rounded-full px-6 py-3 shadow-lg flex items-center gap-3 text-white';
+    toolbar.className = styles.toolbar;
     return toolbar;
   }
 

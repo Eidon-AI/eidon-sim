@@ -55,7 +55,7 @@ export class IconOverlay {
     this.titleElement.style.fontFamily = 'var(--font-wallpoet)';
     this.titleElement.style.fontSize = '24px';
     this.titleElement.style.fontWeight = '400';
-    this.titleElement.style.color = prefs.meshSurface;
+    this.titleElement.style.color = prefs.symColor;
     this.titleElement.style.textShadow = 'var(--text-shadow)';
     this.titleElement.style.letterSpacing = '1px';
     this.container.appendChild(this.titleElement);
