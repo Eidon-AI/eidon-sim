@@ -428,11 +428,6 @@ export function renderCard(state: ConnectedDevice, hid: HidManager, store: Devic
   btnInfo.className = styles.btnInfo;
   topRow.appendChild(btnInfo);
 
-  const btnCal = document.createElement('button');
-  btnCal.textContent = '↻';
-  btnCal.className   = styles.btnCal;
-  topRow.appendChild(btnCal);
-
   const btnX = document.createElement('button');
   btnX.textContent = '✕';
   btnX.className   = styles.btnX;
@@ -451,7 +446,6 @@ export function renderCard(state: ConnectedDevice, hid: HidManager, store: Devic
     store.dispatchEvent(new CustomEvent('update', { detail: state }));
   };
 
-  btnCal.onclick = () => hid.sendCalibrate(state.id);
   btnX  .onclick = () => { hid.unpair(state.id); store['map'].delete(state.id); el.remove(); };
 
   btnInfo.onclick = ()=> {

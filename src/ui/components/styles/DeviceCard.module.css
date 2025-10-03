@@ -28,7 +28,6 @@
 }
 
 .btnInfo,
-.btnCal,
 .btnX {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
@@ -39,7 +38,6 @@
 }
 
 .btnInfo:hover,
-.btnCal:hover,
 .btnX:hover {
   opacity: 0.8;
 }

@@ -1,0 +1,146 @@
+/* App.module.css */
+
+.sidebar {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 20rem; /* w-80 */
+  display: flex;
+  flex-direction: column;
+  background-color: rgba(23, 23, 23, 0.5); /* bg-neutral-900/50 */
+  backdrop-filter: blur(4px); /* backdrop-blur-sm */
+  border: 1px solid #404040; /* border-neutral-700 */
+  padding: 1rem; /* p-4 */
+  gap: 0.5rem; /* gap-2 */
+  overflow-y: auto; /* overflow-y-auto */
+  z-index: 10; /* z-10 */
+}
+
+.log {
+  flex: 1; /* flex-1 */
+  overflow: auto; /* overflow-auto */
+  font-size: 0.75rem; /* text-xs */
+  background-color: rgba(23, 23, 23, 0.5); /* bg-neutral-900/50 */
+  padding-left: 0.5rem; /* ph-2 */
+  padding-right: 0.5rem; /* ph-2 */
+  border: 1px solid #404040; /* border-neutral-700 */
+}
+
+
+.canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw; /* w-screen */
+  height: 100%; /* h-full */
+}
+
+.gamepadModal {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.gamepadModal.show {
+  display: flex;
+}
+
+.gamepadContent {
+  background-color: rgba(64, 64, 64, 0.7); /* bg-neutral-800/70 */
+  backdrop-filter: blur(4px); /* backdrop-blur-sm */
+  padding: 1.25rem; /* p-5 */
+  border-radius: 0.5rem; /* rounded-lg */
+  width: 32rem; /* w-128 */
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem; /* space-y-3 */
+}
+
+.gamepadHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem; /* mb-2 */
+}
+
+.gamepadTitle {
+  font-weight: 700; /* font-bold */
+  font-size: 1.125rem; /* text-lg */
+}
+
+.gamepadClose {
+  color: rgb(163, 163, 163); /* text-neutral-400 */
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.gamepadClose:hover {
+  color: white; /* hover:text-white */
+}
+
+.gamepadStatus {
+  background-color: rgba(23, 23, 23, 0.5); /* bg-neutral-900/50 */
+  padding: 0.75rem; /* p-3 */
+  border-radius: 0.25rem; /* rounded */
+  margin-bottom: 1rem; /* mb-4 */
+}
+
+.gamepadControls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.gamepadSection {
+  /* Individual control section styling */
+}
+
+.gamepadButtons {
+  margin-top: 15px;
+  text-align: center;
+  padding-top: 10px;
+  border-top: 1px solid #444;
+}
+
+.gamepadKeyboard {
+  margin-top: 15px;
+  text-align: center;
+  padding-top: 10px;
+  border-top: 1px solid #444;
+}
+
+.keyboardGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.9em;
+}
+
+.keyboardItem {
+  /* Individual keyboard shortcut item */
+}
+
+.fpsMovement {
+  margin-top: 12px;
+  font-size: 0.85em;
+}
+
+.fpsMovementLabel {
+  color: #4ade80;
+}
+
+.fpsMovementText {
+  color: #e5e7eb;
+}
+
+.helpText {
+  margin-top: 8px;
+  font-size: 0.85em;
+  color: #999;
+}

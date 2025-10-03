@@ -46,20 +46,20 @@ export class Controls {
 
   private render(): void {
     this.toolbar.innerHTML = `
-      <button id="navConnect" class="nav-button" title="Devices">
+      <button id="navConnect" class="${styles.navButton}" title="Devices">
         <i class="fas fa-microchip"></i>
         <span>Devices</span>
       </button>
-      <div id="navSeparator" class="nav-separator" style="display: none;"></div>
-      <button id="navRecordings" class="nav-button nav-recordings" title="Recordings (Login Required)" style="display: none;">
+      <div id="navSeparator" class="${styles.navSeparator}" style="display: none;"></div>
+      <button id="navRecordings" class="${styles.navButton} ${styles.navRecordings}" title="Recordings (Login Required)" style="display: none;">
         <i class="fas fa-folder-open"></i>
         <span>Recordings</span>
       </button>
-      <button id="userInfo" class="nav-button user-info" style="display: none;" title="User Profile">
-        <img id="userAvatar" class="user-avatar" src="" alt="User Avatar" />
-        <span id="userName" class="user-name"></span>
+      <button id="userInfo" class="${styles.navButton} ${styles.userInfo}" style="display: none;" title="User Profile">
+        <img id="userAvatar" class="${styles.userAvatar}" src="" alt="User Avatar" />
+        <span id="userName" class="${styles.userName}"></span>
       </button>
-      <button id="navLogin" class="nav-button nav-login" title="Login">
+      <button id="navLogin" class="${styles.navButton} ${styles.navLogin}" title="Login">
         <i class="fas fa-sign-in-alt"></i>
         <span>Login</span>
       </button>
@@ -240,16 +240,16 @@ export class Controls {
       modal.classList.add(styles.recordingsModal);
     }
     modal.innerHTML = `
-      <div class="controls-modal-content">
-        <button class="controls-modal-close">&times;</button>
-        <div class="controls-modal-body">
+      <div class="${styles.modalContent}">
+        <button class="${styles.modalClose}">&times;</button>
+        <div class="${styles.modalBody}">
           ${content}
         </div>
       </div>
     `;
     
     // Add close button functionality
-    const closeBtn = modal.querySelector('.controls-modal-close') as HTMLButtonElement;
+    const closeBtn = modal.querySelector(`.${styles.modalClose}`) as HTMLButtonElement;
     closeBtn.addEventListener('click', () => {
       modal.remove();
       if (modal === this.recordingsModal) {
@@ -308,16 +308,16 @@ export class Controls {
   private updateRecordingsModal(recordings: PaginatedRecordingsResponse | null, errorMessage?: string): void {
     if (!this.recordingsModal) return;
 
-    const modalBody = this.recordingsModal.querySelector('.controls-modal-body') as HTMLElement;
+    const modalBody = this.recordingsModal.querySelector(`.${styles.modalBody}`) as HTMLElement;
     
     if (errorMessage) {
-      modalBody.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+      modalBody.innerHTML = `<div class="${styles.errorMessage}">${errorMessage}</div>`;
       this.currentRecordings = [];
       return;
     }
 
     if (!recordings || !recordings.recordings || recordings.recordings.length === 0) {
-      modalBody.innerHTML = '<div class="no-recordings">No recordings found</div>';
+      modalBody.innerHTML = `<div class="${styles.noRecordings}">No recordings found</div>`;
       this.currentRecordings = [];
       return;
     }
@@ -355,20 +355,20 @@ export class Controls {
     };
 
     const recordingsGrid = recordings.recordings.map(recording => `
-      <div class="recording-card" data-recording-id="${recording.id}">
-        <div class="recording-thumbnail">
+      <div class="${styles.recordingCard}" data-recording-id="${recording.id}">
+        <div class="${styles.recordingThumbnail}">
           ${recording.thumbnailReadUrl ? 
             `<img src="${recording.thumbnailReadUrl}" alt="Recording thumbnail" />` :
-            `<div class="thumbnail-placeholder">No thumbnail</div>`
+            `<div class="${styles.thumbnailPlaceholder}">No thumbnail</div>`
           }
-          <button class="video-play-button" data-video-url="${recording.videoReadUrl}">
+          <button class="${styles.videoPlayButton}" data-video-url="${recording.videoReadUrl}">
             <i class="fas fa-play"></i>
           </button>
         </div>
-        <div class="recording-info">
-          <h4 class="recording-task">${formatTaskType(recording.taskType)}</h4>
-          <p class="recording-date">${formatDate(recording.createdAt.toString())}</p>
-          <button class="playback-button" title="Playback video + device simulation">
+        <div class="${styles.recordingInfo}">
+          <h4 class="${styles.recordingTask}">${formatTaskType(recording.taskType)}</h4>
+          <p class="${styles.recordingDate}">${formatDate(recording.createdAt.toString())}</p>
+          <button class="${styles.playbackButton}" title="Playback video + device simulation">
             <i class="fas fa-play-circle"></i>
             <span>Playback Data</span>
           </button>
@@ -379,11 +379,11 @@ export class Controls {
     const pagination = this.createPagination(recordings.pagination);
 
     return `
-      <div class="recordings-container">
-        <div class="recordings-header">
+      <div class="${styles.recordingsContainer}">
+        <div class="${styles.recordingsHeader}">
           <h3>Your Recordings (${recordings.pagination.total})</h3>
         </div>
-        <div class="recordings-grid">
+        <div class="${styles.recordingsGrid}">
           ${recordingsGrid}
         </div>
         ${pagination}
@@ -400,7 +400,7 @@ export class Controls {
 
     // Previous button
     if (pagination.hasPrev) {
-      pages.push(`<button class="page-button prev-button" data-page="${currentPage - 1}">
+      pages.push(`<button class="${styles.pageButton} prev-button" data-page="${currentPage - 1}">
         <i class="fas fa-chevron-left"></i> Previous
       </button>`);
     }
@@ -408,21 +408,21 @@ export class Controls {
     // Page numbers
     for (let i = 1; i <= totalPages; i++) {
       if (i === currentPage) {
-        pages.push(`<button class="page-button current-page">${i}</button>`);
+        pages.push(`<button class="${styles.pageButton} ${styles.pageButtonCurrentPage}">${i}</button>`);
       } else {
-        pages.push(`<button class="page-button" data-page="${i}">${i}</button>`);
+        pages.push(`<button class="${styles.pageButton}" data-page="${i}">${i}</button>`);
       }
     }
 
     // Next button
     if (pagination.hasNext) {
-      pages.push(`<button class="page-button next-button" data-page="${currentPage + 1}">
+      pages.push(`<button class="${styles.pageButton} next-button" data-page="${currentPage + 1}">
         Next <i class="fas fa-chevron-right"></i>
       </button>`);
     }
 
     return `
-      <div class="pagination">
+      <div class="${styles.pagination}">
         ${pages.join('')}
       </div>
     `;
@@ -481,38 +481,38 @@ export class Controls {
     const videoModal = document.createElement('div');
     videoModal.className = styles.videoModalOverlay;
     videoModal.innerHTML = `
-      <div class="video-modal-container">
-        <button class="video-modal-close">
+      <div class="${styles.videoModalContainer}">
+        <button class="${styles.videoModalClose}">
           <i class="fas fa-times"></i>
         </button>
-        <div class="video-modal-content">
-          <video class="video-player" controls>
+        <div class="${styles.videoModalContent}">
+          <video class="${styles.videoPlayer}" controls>
             <source src="${videoUrl}" type="video/mp4">
             Your browser does not support the video tag.
           </video>
-          <div class="video-modal-info">
-            <div class="sensor-data-overview">
+          <div class="${styles.videoModalInfo}">
+            <div class="${styles.sensorDataOverview}">
               <h4>Sensor Data Overview</h4>
-              <div class="sensor-stats-grid">
-                <div class="sensor-stat">
-                  <span class="stat-value">Loading...</span>
-                  <span class="stat-label">Devices</span>
+              <div class="${styles.sensorStatsGrid}">
+                <div class="${styles.sensorStat}">
+                  <span class="${styles.statValue}">Loading...</span>
+                  <span class="${styles.statLabel}">Devices</span>
                 </div>
-                <div class="sensor-stat">
-                  <span class="stat-value">Loading...</span>
-                  <span class="stat-label">Duration</span>
+                <div class="${styles.sensorStat}">
+                  <span class="${styles.statValue}">Loading...</span>
+                  <span class="${styles.statLabel}">Duration</span>
                 </div>
-                <div class="sensor-stat">
-                  <span class="stat-value">Loading...</span>
-                  <span class="stat-label">Sample Rate</span>
+                <div class="${styles.sensorStat}">
+                  <span class="${styles.statValue}">Loading...</span>
+                  <span class="${styles.statLabel}">Sample Rate</span>
                 </div>
-                <div class="sensor-stat">
-                  <span class="stat-value">Loading...</span>
-                  <span class="stat-label">Data Points</span>
+                <div class="${styles.sensorStat}">
+                  <span class="${styles.statValue}">Loading...</span>
+                  <span class="${styles.statLabel}">Data Points</span>
                 </div>
               </div>
-              <div class="video-modal-actions">
-                <button class="device-data-button" title="Playback video + device simulation">
+              <div class="${styles.videoModalActions}">
+                <button class="${styles.deviceDataButton}" title="Playback video + device simulation">
                   <i class="fas fa-play-circle"></i>
                   <span>Playback Device Data</span>
                 </button>
@@ -524,8 +524,8 @@ export class Controls {
     `;
 
     // Add event listeners
-    const closeBtn = videoModal.querySelector('.video-modal-close') as HTMLButtonElement;
-    const deviceDataBtn = videoModal.querySelector('.device-data-button') as HTMLButtonElement;
+    const closeBtn = videoModal.querySelector(`.${styles.videoModalClose}`) as HTMLButtonElement;
+    const deviceDataBtn = videoModal.querySelector(`.${styles.deviceDataButton}`) as HTMLButtonElement;
 
     closeBtn.addEventListener('click', () => {
       videoModal.remove();
@@ -630,7 +630,7 @@ export class Controls {
     const toolbarRect = this.toolbar.getBoundingClientRect();
     
     // Center horizontally and position below toolbar
-    const modalWidth = modal.classList.contains('recordings-modal') ? 1000 : 500; // Larger for recordings
+    const modalWidth = modal.classList.contains(styles.recordingsModal) ? 1000 : 500; // Larger for recordings
     const left = (toolbarRect.width - modalWidth) / 2;
     const top = toolbarRect.height + 16; // 16px gap below toolbar
     
@@ -657,48 +657,48 @@ export class Controls {
     };
     
     modal.innerHTML = `
-      <div class="controls-modal-content user-profile-modal">
-        <button class="controls-modal-close">&times;</button>
-        <div class="user-profile-header">
-          ${avatarUrl ? `<img src="${avatarUrl}" alt="Profile" class="profile-avatar-large" />` : ''}
-          <div class="profile-info">
-            <h3 class="profile-name">${profile.fullName}</h3>
-            ${profile.emailAddress ? `<p class="profile-email">${profile.emailAddress}</p>` : ''}
+      <div class="${styles.modalContent} ${styles.userProfileModal}">
+        <button class="${styles.modalClose}">&times;</button>
+        <div class="${styles.userProfileHeader}">
+          ${avatarUrl ? `<img src="${avatarUrl}" alt="Profile" class="${styles.profileAvatarLarge}" />` : ''}
+          <div class="${styles.profileInfo}">
+            <h3 class="${styles.profileName}">${profile.fullName}</h3>
+            ${profile.emailAddress ? `<p class="${styles.profileEmail}">${profile.emailAddress}</p>` : ''}
           </div>
         </div>
-        <div class="profile-stats">
-          <div class="stat-item">
-            <div class="stat-value">${profile.totalRecordings}</div>
-            <div class="stat-label">Recordings</div>
+        <div class="${styles.profileStats}">
+          <div class="${styles.statItem}">
+            <div class="${styles.statValue}">${profile.totalRecordings}</div>
+            <div class="${styles.statLabel}">Recordings</div>
           </div>
-          <div class="stat-item">
-            <div class="stat-value">${formatDuration(profile.totalSecondsRecorded)}</div>
-            <div class="stat-label">Total Recording Time</div>
+          <div class="${styles.statItem}">
+            <div class="${styles.statValue}">${formatDuration(profile.totalSecondsRecorded)}</div>
+            <div class="${styles.statLabel}">Total Recording Time</div>
           </div>
           ${profile.recordingPercentage ? `
-          <div class="stat-item">
-            <div class="stat-value">${profile.recordingPercentage.toFixed(1)}%</div>
-            <div class="stat-label">System Share</div>
+          <div class="${styles.statItem}">
+            <div class="${styles.statValue}">${profile.recordingPercentage.toFixed(1)}%</div>
+            <div class="${styles.statLabel}">System Share</div>
           </div>
           ` : ''}
           ${profile.devices && profile.devices.length > 0 ? `
-          <div class="stat-item">
-            <div class="stat-value">${profile.devices.length}</div>
-            <div class="stat-label">Devices</div>
+          <div class="${styles.statItem}">
+            <div class="${styles.statValue}">${profile.devices.length}</div>
+            <div class="${styles.statLabel}">Devices</div>
           </div>
           ` : ''}
         </div>
         ${profile.firstTime || profile.newUser ? `
-        <div class="profile-badges">
-          ${profile.newUser ? '<span class="badge new-user">New User</span>' : ''}
-          ${profile.firstTime ? '<span class="badge first-time">First Time</span>' : ''}
+        <div class="${styles.profileBadges}">
+          ${profile.newUser ? `<span class="${styles.badge} ${styles.badgeNewUser}">New User</span>` : ''}
+          ${profile.firstTime ? `<span class="${styles.badge} ${styles.badgeFirstTime}">First Time</span>` : ''}
         </div>
         ` : ''}
       </div>
     `;
     
     // Add close button functionality
-    const closeBtn = modal.querySelector('.controls-modal-close') as HTMLButtonElement;
+    const closeBtn = modal.querySelector(`.${styles.modalClose}`) as HTMLButtonElement;
     closeBtn.addEventListener('click', () => {
       modal.remove();
       this.profileModal = null;
@@ -735,7 +735,7 @@ export class Controls {
       
       // Show recordings button with premium styling
       recordingsBtn.style.display = 'flex';
-      recordingsBtn.className = 'nav-button nav-recordings nav-recordings-premium';
+      recordingsBtn.className = `${styles.navButton} ${styles.navRecordings} ${styles.navRecordingsPremium}`;
       
       // Update recordings button text with count
       const recordingsCount = state.profile?.totalRecordings || 0;
