@@ -20,7 +20,7 @@ export function createEidonIcon({ size, colors = defaultColors }: EidonIconProps
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
   svg.setAttribute('viewBox', '0 0 855.49998 855.49998');
-  svg.className = styles.icon;
+  svg.setAttribute('class', styles.icon);
 
   const paths = [
     {

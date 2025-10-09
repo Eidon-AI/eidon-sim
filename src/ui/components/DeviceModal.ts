@@ -557,7 +557,9 @@ export class DeviceModal {
     this.modal.classList.add(styles.show);
     // Hide arrow indicator when modal is open
     const arrow = this.container.querySelector(`.${styles.arrowIndicator}`) as HTMLElement;
-    if (arrow) arrow.style.display = 'none';
+    if (arrow) {
+      arrow.style.display = 'none';
+    }
   }
 
   public hide(): void {
@@ -573,9 +575,11 @@ export class DeviceModal {
 
     const isLoggedIn = this.loginStateManager.getState().isLoggedIn;
     if (isLoggedIn && !this.isVisible) {
-      arrow.style.display = 'block';
+      arrow.style.display = 'flex';
+      arrow.style.opacity = '1';
     } else {
       arrow.style.display = 'none';
+      arrow.style.opacity = '0';
     }
   }
 

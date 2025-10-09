@@ -7,6 +7,13 @@ export interface UpdateProfilePayload {
   symColor?: string;
 }
 
+// Avatar upload response from the server
+export interface AvatarUploadResponse {
+  uploadUrl: string;
+  filePath: string;
+  publicUrl: string;
+}
+
 /**
  * Background API manager for user profile updates
  * Failures are silent, successes are silent - frontend updates optimistically
@@ -89,5 +96,60 @@ export class UserApiManager {
       console.error('Failed to sync profile to server:', error);
       // Silent failure - user experience isn't affected
     }
+  }
+
+  /**
+   * Get signed upload URL for avatar
+   */
+  async getAvatarUploadUrl(tokens: AuthTokens): Promise<AvatarUploadResponse> {
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl) {
+      throw new Error('VITE_API_URL environment variable is not set');
+    }
+
+    const response = await fetch(`${apiUrl}/users/avatar/upload-url`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${tokens.token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get upload URL: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Upload avatar file to signed URL
+   */
+  async uploadAvatarToSignedUrl(file: File, uploadUrl: string): Promise<void> {
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'image/*'
+      },
+      body: file
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to upload avatar: ${response.status} ${response.statusText}`);
+    }
+  }
+
+  /**
+   * Complete avatar upload flow: get signed URL, upload file, return public URL
+   */
+  async uploadAvatar(file: File, tokens: AuthTokens): Promise<string> {
+    // Step 1: Get signed upload URL
+    const uploadData = await this.getAvatarUploadUrl(tokens);
+    
+    // Step 2: Upload file to signed URL
+    await this.uploadAvatarToSignedUrl(file, uploadData.uploadUrl);
+    
+    // Step 3: Return public URL for profile update
+    return uploadData.publicUrl;
   }
 }
