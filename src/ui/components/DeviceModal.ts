@@ -24,7 +24,9 @@ export class DeviceModal {
     // Check initial login state and apply appropriate styling
     const initialState = this.loginStateManager.getState();
     if (!initialState.isLoggedIn) {
-      this.container.className = `${styles.container} ${styles.loggedOut}`;
+      this.container.className = `${styles.container} ${styles.loggedOut} ${styles.modalHidden}`;
+    } else {
+      this.container.className = `${styles.container} ${styles.modalHidden}`;
     }
     
     this.loadSavedDevices();
@@ -179,10 +181,10 @@ export class DeviceModal {
     if (!container || !title) return;
 
     // Hide the title and connect button when logged out
-    title.style.display = 'none';
+    title.classList.add('display-hidden');
     const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLElement;
     if (connectAllBtn) {
-      connectAllBtn.style.display = 'none';
+      connectAllBtn.classList.add('display-hidden');
     }
     
     // Show login prompt
@@ -281,12 +283,12 @@ export class DeviceModal {
 
     // Reset title to "Saved Devices" and show it
     title.textContent = 'Saved Devices';
-    title.style.display = 'block';
+    title.classList.remove('display-hidden');
     
     // Show the connect button
     const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLElement;
     if (connectAllBtn) {
-      connectAllBtn.style.display = 'block';
+      connectAllBtn.classList.remove('display-hidden');
     }
 
     // Group devices by side
@@ -331,7 +333,30 @@ export class DeviceModal {
     }
 
     container.innerHTML = html;
+    this.setDeviceCardStyles();
     this.attachDeviceEventListeners();
+  }
+
+  private setDeviceCardStyles(): void {
+    const container = this.modal.querySelector('.saved-devices-container') as HTMLElement;
+    if (!container) return;
+
+    const colorIndicators = container.querySelectorAll(`.${styles.colorIndicator}[data-color]`);
+    colorIndicators.forEach(indicator => {
+      const color = indicator.getAttribute('data-color');
+      if (color) {
+        (indicator as HTMLElement).style.setProperty('--device-color', color);
+      }
+    });
+
+    const statusBadges = container.querySelectorAll(`.${styles.statusBadge}[data-status-color]`);
+    statusBadges.forEach(badge => {
+      const statusColor = badge.getAttribute('data-status-color');
+      if (statusColor) {
+        (badge as HTMLElement).style.setProperty('--status-color', statusColor);
+        (badge as HTMLElement).style.setProperty('--status-bg-color', `${statusColor}20`);
+      }
+    });
   }
 
   private createDeviceCard(device: EidonDevice): string {
@@ -343,14 +368,14 @@ export class DeviceModal {
       <div class="${styles.deviceCard}" data-device-id="${device.id}">
         <div class="${styles.cardTop}">
           <div class="${styles.cardLeft}">
-            <div class="${styles.colorIndicator}" style="background-color: ${device.color || '#666'}"></div>
+            <div class="${styles.colorIndicator}" data-color="${device.color || '#666'}"></div>
             <div class="${styles.deviceInfo}">
               <div class="${styles.deviceName}">${device.name}</div>
               <div class="${styles.deviceRole}">${roleName}</div>
             </div>
           </div>
           <div class="${styles.cardRight}">
-            <div class="${styles.statusBadge}" style="background-color: ${statusColor}20; color: ${statusColor}">
+            <div class="${styles.statusBadge}" data-status-color="${statusColor}">
               ${status}
             </div>
             <button class="${styles.connectBtn}" data-device-id="${device.id}">
@@ -548,23 +573,24 @@ export class DeviceModal {
 
     const html = this.discoveredDevices.map(device => this.createDeviceCard(device)).join('');
     container.innerHTML = html;
+    this.setDeviceCardStyles();
     this.attachDeviceEventListeners();
   }
 
   public show(): void {
     this.isVisible = true;
-    this.container.classList.remove('hidden');
-    this.modal.classList.add(styles.show);
+    this.container.classList.remove(styles.modalHidden);
     // Hide arrow indicator when modal is open
     const arrow = this.container.querySelector(`.${styles.arrowIndicator}`) as HTMLElement;
     if (arrow) {
       arrow.style.display = 'none';
+      arrow.style.opacity = '0';
     }
   }
 
   public hide(): void {
     this.isVisible = false;
-    this.modal.classList.remove(styles.show);
+    this.container.classList.add(styles.modalHidden);
     // Show arrow indicator when modal is closed (if logged in)
     this.updateArrowVisibility();
   }
@@ -574,12 +600,15 @@ export class DeviceModal {
     if (!arrow) return;
 
     const isLoggedIn = this.loginStateManager.getState().isLoggedIn;
+    console.log('Arrow visibility check:', { isLoggedIn, isVisible: this.isVisible });
+    
     if (isLoggedIn && !this.isVisible) {
-      arrow.style.display = 'flex';
       arrow.style.opacity = '1';
+      console.log('Showing arrow');
     } else {
       arrow.style.display = 'none';
       arrow.style.opacity = '0';
+      console.log('Hiding arrow');
     }
   }
 
@@ -600,12 +629,12 @@ export class DeviceModal {
       // User logged in, load saved devices
       this.loadSavedDevices();
       // Reset container position for logged in state
-      this.container.className = styles.container;
+      this.container.className = `${styles.container} ${styles.modalHidden}`;
     } else {
       // User logged out, show login prompt
       this.showLoginPrompt();
       // Move container to match logged in position with custom CSS class
-      this.container.className = `${styles.container} ${styles.loggedOut}`;
+      this.container.className = `${styles.container} ${styles.loggedOut} ${styles.modalHidden}`;
     }
     this.updateArrowVisibility();
   }

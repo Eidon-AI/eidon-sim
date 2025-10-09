@@ -1,4 +1,6 @@
 import { prefs } from '../../core/preferences';
+import { UserApiManager } from '../../core/UserApiManager';
+import { AuthManager } from '../../core/AuthManager';
 import styles from './styles/ViewControls.module.css';
 
 export interface ViewToggleState {
@@ -9,7 +11,7 @@ export interface ViewToggleState {
 }
 
 export interface ViewControlsState extends ViewToggleState {
-  surfaceColor: string;
+  symColor: string;
 }
 
 // Helper function to ensure hex color is in full 6-digit format
@@ -71,12 +73,12 @@ export class ViewControls extends EventTarget {
     // Load saved state or use defaults
     const savedToggleState = loadViewState();
 
-    // Ensure we have a valid hex color for the surface
-    const surfaceColor = normalizeHexColor(prefs.meshSurface);
+    // Get symColor from profile/preferences
+    const symColor = normalizeHexColor(prefs.symColor || '#E93570');
 
     this.state = {
       ...savedToggleState,
-      surfaceColor: surfaceColor
+      symColor: symColor
     };
 
     this.container = this.createContainer();
@@ -132,9 +134,9 @@ export class ViewControls extends EventTarget {
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
     // Ensure the color value is properly normalized
-    colorInput.value = normalizeHexColor(this.state.surfaceColor);
+    colorInput.value = normalizeHexColor(this.state.symColor);
     colorInput.className = styles.colorInput;
-    colorInput.title = 'Surface Color';
+    colorInput.title = 'Sym Color';
 
     // Style the color input to look like a color swatch
     colorInput.style.cssText = `
@@ -149,7 +151,10 @@ export class ViewControls extends EventTarget {
     colorInput.addEventListener('input', (e) => {
       const target = e.target as HTMLInputElement;
       const normalizedColor = normalizeHexColor(target.value);
-      this.state.surfaceColor = normalizedColor;
+      this.state.symColor = normalizedColor;
+      
+      // Update preferences optimistically
+      prefs.symColor = normalizedColor;
       
       // Dispatch event for instant visual update (no save)
       this.dispatchEvent(new CustomEvent('colorChange', {
@@ -165,7 +170,10 @@ export class ViewControls extends EventTarget {
     colorInput.addEventListener('change', (e) => {
       const target = e.target as HTMLInputElement;
       const normalizedColor = normalizeHexColor(target.value);
-      this.state.surfaceColor = normalizedColor;
+      this.state.symColor = normalizedColor;
+      
+      // Update preferences optimistically
+      prefs.symColor = normalizedColor;
       
       // Dispatch event for final save when picker closes
       this.dispatchEvent(new CustomEvent('colorChange', {
@@ -176,10 +184,45 @@ export class ViewControls extends EventTarget {
       document.dispatchEvent(new CustomEvent('colorChange', {
         detail: { color: normalizedColor, save: true }
       }));
+      
+      // Save to backend
+      this.saveSymColorToBackend(normalizedColor);
     });
 
     container.appendChild(colorInput);
     return container;
+  }
+
+  private async saveSymColorToBackend(color: string): Promise<void> {
+    try {
+      // Get auth tokens
+      const authManager = AuthManager.getInstance();
+      const tokens = authManager.getTokens();
+      
+      if (!tokens) {
+        console.log('User not authenticated, skipping backend save');
+        return;
+      }
+
+      // Use UserApiManager to update profile
+      const userApiManager = UserApiManager.getInstance();
+      await userApiManager.updateProfile({ symColor: color }, tokens);
+      
+      console.log('SymColor saved to backend:', color);
+    } catch (error) {
+      console.error('Failed to save symColor to backend:', error);
+    }
+  }
+
+  public updateSymColor(color: string): void {
+    const normalizedColor = normalizeHexColor(color);
+    this.state.symColor = normalizedColor;
+    
+    // Update the color picker input if it exists
+    const colorInput = this.container.querySelector(`.${styles.colorInput}`) as HTMLInputElement;
+    if (colorInput) {
+      colorInput.value = normalizedColor;
+    }
   }
 
   private render(): void {

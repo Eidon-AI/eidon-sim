@@ -29,6 +29,35 @@ export class UserApiManager {
   }
 
   /**
+   * Get current user profile from server
+   */
+  async getProfile(tokens: AuthTokens): Promise<any> {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL;
+      if (!apiUrl) {
+        throw new Error('VITE_API_URL environment variable is not set');
+      }
+
+      const response = await fetch(`${apiUrl}/users/profile`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${tokens.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch profile: ${response.status} ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to fetch profile from server:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update user profile with symColor change
    * Runs silently in background - any errors are logged but not shown to user
    */

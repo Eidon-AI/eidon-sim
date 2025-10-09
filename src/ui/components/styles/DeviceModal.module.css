@@ -3,15 +3,21 @@
 .container {
   pointer-events: none;
   position: fixed;
-  left: 0;
+  left: -400px; /* Move off-screen when collapsed */
   top: 3.75rem; /* top-15 */
   bottom: 0;
   width: 400px; /* Fixed width for the sidepanel */
   z-index: 50;
+  transition: left 300ms ease-in-out;
 }
 
-.container:not(.hidden) {
+.container:not(.modalHidden) {
   pointer-events: auto;
+  left: 0; /* Move on-screen when visible */
+}
+
+.container.modalHidden {
+  left: -400px; /* Ensure hidden containers stay off-screen */
 }
 
 .container.loggedOut {
@@ -26,12 +32,6 @@
   pointer-events: auto;
   width: 100%;
   height: 100%;
-  transform: translateX(-100%);
-  transition: transform 300ms ease-in-out;
-}
-
-.modal.show {
-  transform: translateX(0);
 }
 
 .content {
@@ -40,7 +40,6 @@
   border: 1px solid rgba(233, 51, 112, 0.4);
   border-radius: 12px;
   padding: 24px;
-  width: 100%;
   height: 100%;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   position: relative;
@@ -227,6 +226,10 @@
   border-radius: 50%;
 }
 
+.colorIndicator[data-color] {
+  background-color: var(--device-color, #666);
+}
+
 .deviceInfo {
   display: flex;
   flex-direction: column;
@@ -253,6 +256,11 @@
   font-size: 0.75rem;
   padding: 0.125rem 0.5rem;
   border-radius: 0.25rem;
+}
+
+.statusBadge[data-status-color] {
+  background-color: var(--status-bg-color);
+  color: var(--status-color);
 }
 
 .connectBtn {
@@ -309,9 +317,9 @@
 }
 
 .arrowIndicator {
-  position: absolute;
+  position: fixed;
   left: 0;
-  top: 50%;
+  top: 20%;
   transform: translateY(-50%);
   width: 2rem;
   height: 4rem;
@@ -323,8 +331,9 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   cursor: pointer;
   transition: all 0.3s ease;
-  z-index: 10;
-  opacity: 1;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: auto;
 }
 
 .arrowIndicator:hover {
@@ -355,4 +364,25 @@
   color: rgb(115, 115, 115);
   text-align: center;
   padding: 1rem 0;
+}
+
+/* Display state classes */
+.display-hidden {
+  display: none !important;
+}
+
+.display-visible {
+  display: block !important;
+}
+
+.flex-visible {
+  display: flex !important;
+}
+
+.opacity-visible {
+  opacity: 1 !important;
+}
+
+.opacity-hidden {
+  opacity: 0 !important;
 }

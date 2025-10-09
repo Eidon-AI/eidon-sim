@@ -716,8 +716,25 @@ export class Controls {
 
     // Add edit button functionality
     const editBtn = modal.querySelector('#editProfileBtn') as HTMLButtonElement;
-    editBtn.addEventListener('click', () => {
-      this.showEditProfileForm(modal, profile);
+    editBtn.addEventListener('click', async () => {
+      // Fetch latest profile data from backend before showing edit form
+      try {
+        const authManager = AuthManager.getInstance();
+        const tokens = authManager.getTokens();
+        
+        if (tokens) {
+          const userApiManager = UserApiManager.getInstance();
+          const latestProfile = await userApiManager.getProfile(tokens);
+          this.showEditProfileForm(modal, latestProfile);
+        } else {
+          // Fallback to current profile if not authenticated
+          this.showEditProfileForm(modal, profile);
+        }
+      } catch (error) {
+        console.error('Failed to fetch latest profile:', error);
+        // Fallback to current profile on error
+        this.showEditProfileForm(modal, profile);
+      }
     });
 
     // Close on overlay click - improved implementation
@@ -984,6 +1001,12 @@ export class Controls {
       // Show success and refresh profile
       const updatedProfile = { ...originalProfile, fullName, avatarUrl, symColor };
       this.showProfileModal(updatedProfile);
+      
+      // Sync the ViewControls color picker with the updated symColor
+      const viewControls = (window as any).viewControls;
+      if (viewControls && viewControls.updateSymColor) {
+        viewControls.updateSymColor(symColor);
+      }
 
     } catch (error) {
       console.error('Failed to save profile:', error);

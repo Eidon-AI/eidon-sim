@@ -119,6 +119,9 @@ export function initScene(
   const viewControls = new ViewControls();
   viewControls.mount();
   
+  // Expose ViewControls globally for other components to access
+  (window as any).viewControls = viewControls;
+  
   /* ------------ scene objects ------------------- */
   const leftArm = new VectorArm(scene, store, 'left');
   const rightArm = new VectorArm(scene, store, 'right');
