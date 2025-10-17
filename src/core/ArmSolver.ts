@@ -1,5 +1,6 @@
 import { quat, vec3 } from 'gl-matrix';
 import { DeviceStore } from './DeviceStore';
+import { DeviceRole } from '../types/device';
 import { eulerZYX, twistAroundX, elbowFlexDeg, rollAroundForward } from './mathUtils';
 import { JOINT_LIMITS, ANGLE_ALPHA } from './constants';
 
@@ -92,11 +93,15 @@ export class ArmSolver extends EventTarget {
   }
 
   private solveSide(side: 'left' | 'right'): SevenAngles | null {
-    const up   = this.store.getBy(side,'upper');
-    const low  = this.store.getBy(side,'lower');
+    const upRole = side === 'left' ? DeviceRole.ROLE_LEFT_HUB : DeviceRole.ROLE_RIGHT_HUB;
+    const lowRole = side === 'left' ? DeviceRole.ROLE_LEFT_FOREARM : DeviceRole.ROLE_RIGHT_FOREARM;
+    const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
+    
+    const up   = this.store.getByPosition(upRole);
+    const low  = this.store.getByPosition(lowRole);
     if(!up || !low) return null;
   
-    const handDev = this.store.getBy(side,'hand');         // glove optional
+    const handDev = this.store.getByPosition(handRole);         // glove optional
   
     const Q_TU = up.quat;
     const Q_TF = low.quat;

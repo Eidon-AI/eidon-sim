@@ -1,11 +1,13 @@
-import { PlaybackManager, Recording } from '../../core/PlaybackManager';
+import { PlaybackManager } from '../../core/PlaybackManager';
 import { LoginStateManager, LoginState } from '../../core/LoginStateManager';
 import { AuthModal } from './AuthModal';
-import { PaginatedRecordingsResponse } from '../../types/recording';
+import { PaginatedRecordingsResponse, RecordingWithUrls } from '../../types/recording';
+import { SensorRecording } from '../../types/sensorData';
 import { EidonTrackerManager } from '../../core/EidonTrackerManager';
 import { DeviceModal } from './DeviceModal';
 import { AuthManager } from '../../core/AuthManager';
 import { UserApiManager } from '../../core/UserApiManager';
+import { PlaybackView } from './PlaybackView';
 import styles from './styles/Controls.module.css';
 
 export class Controls {
@@ -18,6 +20,7 @@ export class Controls {
   private deviceModal: DeviceModal | null = null;
   private recordingsModal: HTMLElement | null = null;
   private profileModal: HTMLElement | null = null;
+  private playbackView: PlaybackView | null = null;
   private currentRecordings: any[] = [];
   private unsubscribe: (() => void) | null = null;
   
@@ -303,6 +306,14 @@ export class Controls {
 
     if (!response.ok) {
       const errorText = await response.text();
+      
+      // If unauthorized (401), log the user out
+      if (response.status === 401) {
+        console.log('Unauthorized response received, logging out user');
+        this.loginStateManager.logout();
+        throw new Error('Session expired. Please log in again.');
+      }
+      
       throw new Error(`Failed to fetch recordings: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
@@ -438,12 +449,12 @@ export class Controls {
     if (!this.recordingsModal) return;
 
     // Video play buttons
-    const videoButtons = this.recordingsModal.querySelectorAll('.video-play-button');
+    const videoButtons = this.recordingsModal.querySelectorAll(`.${styles.videoPlayButton}`);
     videoButtons.forEach(button => {
       button.addEventListener('click', (e) => {
         const target = e.target as HTMLElement;
-        const videoUrl = target.closest('.video-play-button')?.getAttribute('data-video-url');
-        const recordingCard = target.closest('.recording-card');
+        const videoUrl = target.closest(`.${styles.videoPlayButton}`)?.getAttribute('data-video-url');
+        const recordingCard = target.closest(`.${styles.recordingCard}`);
         const recordingId = recordingCard?.getAttribute('data-recording-id');
         
         if (videoUrl && recordingId) {
@@ -457,20 +468,21 @@ export class Controls {
     });
 
     // Playback buttons
-    const playbackButtons = this.recordingsModal.querySelectorAll('.playback-button');
+    const playbackButtons = this.recordingsModal.querySelectorAll(`.${styles.playbackButton}`);
     playbackButtons.forEach(button => {
       button.addEventListener('click', (e) => {
         const target = e.target as HTMLElement;
-        const recordingCard = target.closest('.recording-card');
+        const recordingCard = target.closest(`.${styles.recordingCard}`);
         const recordingId = recordingCard?.getAttribute('data-recording-id');
         if (recordingId) {
+          console.log('Playback button clicked for recording:', recordingId);
           this.handlePlayback(recordingId);
         }
       });
     });
 
     // Pagination buttons
-    const pageButtons = this.recordingsModal.querySelectorAll('.page-button[data-page]');
+    const pageButtons = this.recordingsModal.querySelectorAll(`.${styles.pageButton}[data-page]`);
     pageButtons.forEach(button => {
       button.addEventListener('click', async (e) => {
         const target = e.target as HTMLElement;
@@ -538,8 +550,11 @@ export class Controls {
     });
 
     deviceDataBtn.addEventListener('click', () => {
-      // TODO: Implement device data playback
-      console.log('Playback device data for video:', videoUrl);
+      // Get recording ID from the modal or recording data
+      const recordingId = recording.id;
+      this.handlePlayback(recordingId);
+      // Close video modal
+      videoModal.remove();
     });
 
     // Close on overlay click
@@ -617,9 +632,82 @@ export class Controls {
     return this.currentRecordings.find(recording => recording.id === recordingId) || null;
   }
 
-  private handlePlayback(recordingId: string): void {
-    // TODO: Implement playback functionality
-    console.log('Handle playback for recording:', recordingId);
+  private async handlePlayback(recordingId: string): Promise<void> {
+    try {
+      // 1. Find the API recording metadata
+      const apiRecording = this.findRecordingById(recordingId);
+      if (!apiRecording) {
+        console.error('Recording not found:', recordingId);
+        alert('Recording not found');
+        return;
+      }
+
+      // 2. Check if sensor data URL exists
+      if (!apiRecording.sensorDataReadUrl) {
+        console.error('No sensor data URL for recording:', recordingId);
+        alert('No sensor data available for this recording');
+        return;
+      }
+
+      // 3. Fetch the sensor data JSON from GCS
+      console.log('Fetching sensor data from:', apiRecording.sensorDataReadUrl);
+      const response = await fetch(apiRecording.sensorDataReadUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch sensor data: ${response.status} ${response.statusText}`);
+      }
+
+      const sensorData: SensorRecording = await response.json();
+      console.log('Sensor data loaded:', sensorData);
+
+      // 4. Validate sensor data
+      if (!sensorData.devices || !sensorData.snapshots) {
+        throw new Error('Invalid sensor data format: missing devices or snapshots');
+      }
+
+      // 5. Close the recordings modal
+      if (this.recordingsModal) {
+        this.closeModal(this.recordingsModal);
+      }
+
+      // 6. Animate camera to back view (key "2" position)
+      this.animateCameraToBackView();
+
+      // 7. Open playback view with video + controls
+      this.playbackView = new PlaybackView(
+        this.playbackManager,
+        sensorData,
+        apiRecording,
+        () => this.handlePlaybackExit()
+      );
+      this.playbackView.mount(document.body);
+      
+      console.log('Playback view opened for:', sensorData.name);
+
+    } catch (error) {
+      console.error('Failed to start playback:', error);
+      alert(`Failed to start playback: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private animateCameraToBackView(): void {
+    // Trigger camera animation to back view (position from KeyboardController key "2")
+    const viewControls = (window as any).viewControls;
+    if (viewControls) {
+      // Back view: position [0, 0, 5.5], slightly elevated
+      const backView = {
+        position: [0, 1, 5.5] as [number, number, number],  // Slightly elevated (y=1)
+        target: [0, 0.5, 0] as [number, number, number]     // Look at upper body
+      };
+      
+      // Use the view change system if available
+      document.dispatchEvent(new CustomEvent('cameraViewChange', { detail: backView }));
+    }
+  }
+
+  private handlePlaybackExit(): void {
+    this.playbackView = null;
+    console.log('Playback exited');
+    // Camera returns to user control automatically
   }
 
   private async loadRecordingsPage(page: number): Promise<void> {
@@ -1048,9 +1136,16 @@ export class Controls {
     this.updateEidonSymTitleColor(color);
   }
 
-  private closeModal(modal: HTMLElement): void {
-    modal.remove();
-    this.profileModal = null;
+  private closeModal(modal: HTMLElement | null): void {
+    if (modal) {
+      modal.remove();
+      if (modal === this.recordingsModal) {
+        this.recordingsModal = null;
+      }
+      if (modal === this.profileModal) {
+        this.profileModal = null;
+      }
+    }
   }
 
   private updateEidonSymTitleColor(color: string): void {

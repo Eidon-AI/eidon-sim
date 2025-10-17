@@ -1,37 +1,14 @@
 import { DeviceStore } from './DeviceStore';
 import { ArmSolver } from './ArmSolver';
-import { DeviceState } from '../types/device';
+import { Device, DeviceRole, DeviceColor, stringToDeviceRole } from '../types/device';
 import { vec3, quat } from 'gl-matrix';
+import { SensorRecording, DeviceSimple, SensorSnapshot } from '../types/sensorData';
 
-export interface RecordingDevice {
-  id: string;
-  kind: 'glove' | 'tracker';
-  color: string;
-  arm: { side: 'left' | 'right'; level: 'upper' | 'lower' | 'hand' };
-}
-
-export interface RecordingSnapshot {
-  time: number; // relative ms from start
-  deviceData: Record<string, {
-    quat: [number, number, number, number];
-    finger?: number[]; // only for gloves
-  }>;
-}
-
-export interface Recording {
-  id: string;
-  name: string;
-  startTime: number;
-  endTime: number;
-  sampleRate: number;
-  devices: RecordingDevice[];
-  snapshots: RecordingSnapshot[];
-}
 
 export class PlaybackManager extends EventTarget {
   private isPlayingBack = false;
   private isPaused = false;
-  private playbackRecording: Recording | null = null;
+  private playbackRecording: SensorRecording | null = null;
   private playbackPosition = 0; // current time in ms
   private playbackStartTime = 0;
   private playbackAnimationId: number | null = null;
@@ -44,7 +21,8 @@ export class PlaybackManager extends EventTarget {
     super();
   }
 
-  public startPlayback(recording: Recording): void {
+
+  public startPlayback(recording: SensorRecording): void {
     if (this.isPlayingBack) return;
 
     this.playbackRecording = recording;
@@ -180,7 +158,7 @@ export class PlaybackManager extends EventTarget {
     }));
   }
 
-  private findSnapshotAtTime(recording: Recording, time: number): RecordingSnapshot | null {
+  private findSnapshotAtTime(recording: SensorRecording, time: number): SensorSnapshot | null {
     const snapshots = recording.snapshots;
     if (snapshots.length === 0) return null;
 
@@ -197,63 +175,56 @@ export class PlaybackManager extends EventTarget {
     return bestSnapshot;
   }
 
-  private applySnapshot(snapshot: RecordingSnapshot): void {
+  private applySnapshot(snapshot: SensorSnapshot): void {
     // Apply device data using the new playback method
-    for (const [deviceId, data] of Object.entries(snapshot.deviceData)) {
-      // Prepare the updates object
+    // deviceData format: Record<string, [x, y, z, w]> - direct quaternion arrays
+    for (const [deviceId, quatArray] of Object.entries(snapshot.deviceData)) {
+      // Prepare the updates object with quaternion
       const updates: any = {
-        quat: [...data.quat]
+        quat: [...quatArray]  // quatArray is [x, y, z, w]
       };
-      
-      // Update finger data for gloves
-      if (data.finger) {
-        updates.finger = [...data.finger];
-        updates.fingerNorm = data.finger.map(f => f / 255);
-        updates.fingerDeg = data.finger.map(f => (f / 255) * 90);
-      }
 
-      // Recalculate derived vectors from quaternion
+      // Recalculate derived vectors from quaternion (all devices are trackers)
       const q = updates.quat;
       const deviceState = this.store['map'].get(deviceId);
       
       if (deviceState) {
-        if (deviceState.kind === 'tracker') {
-          // From parseTracker logic
-          const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
-          updates.up = [upZ[0], upZ[2], -upZ[1]] as vec3;
-          const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
-          updates.fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;
-        } else if (deviceState.kind === 'glove') {
-          // From parseGlove logic
-          const upZ = vec3.transformQuat(vec3.create(), [1, 0, 1], q);
-          updates.up = [upZ[0], upZ[2], -upZ[1]] as vec3;
-          const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
-          updates.fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;
-        }
+        // From parseTracker logic - transform quaternion to up/fwd vectors
+        const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
+        updates.up = [upZ[0], upZ[2], -upZ[1]] as vec3;
+        const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
+        updates.fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;
 
-        // Apply updates using the new playback method
+        // Apply updates using the playback method
         this.store.updateDeviceForPlayback(deviceId, updates);
       }
     }
   }
 
-  private getRecordingDuration(recording: Recording): number {
+  private getRecordingDuration(recording: SensorRecording): number {
     if (recording.snapshots.length === 0) return 0;
     return recording.snapshots[recording.snapshots.length - 1].time;
   }
 
-  private createTemporaryDevices(recording: Recording): void {
-    recording.devices.forEach(deviceInfo => {
+  private createTemporaryDevices(recording: SensorRecording): void {
+    recording.devices.forEach(deviceSimple => {
       // Check if device already exists in store
-      const existingDevice = this.store['map'].get(deviceInfo.id);
+      const existingDevice = this.store['map'].get(deviceSimple.id);
       
       if (!existingDevice) {
-        // Create temporary device state
-        const tempDevice: DeviceState = {
-          id: deviceInfo.id,
-          kind: deviceInfo.kind,
-          color: deviceInfo.color,
-          arm: deviceInfo.arm,
+        // Create temporary device state (all devices are trackers, no finger data)
+        const tempDevice: Device = {
+          // Device metadata
+          id: deviceSimple.id,
+          name: `Device ${deviceSimple.id}`,
+          position: stringToDeviceRole(deviceSimple.position),
+          color: DeviceColor.ORANGE, // Default color
+          connectionId: deviceSimple.connectionId,
+          userId: 'playback', // Placeholder for playback
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          
+          // DeviceData
           quat: quat.create(),
           up: vec3.create(),
           fwd: vec3.create(),
@@ -262,21 +233,12 @@ export class PlaybackManager extends EventTarget {
           lastSeen: performance.now()
         };
 
-        // Add finger properties for gloves
-        if (deviceInfo.kind === 'glove') {
-          tempDevice.finger = Array(16).fill(0);
-          tempDevice.fingerNorm = Array(16).fill(0);
-          tempDevice.fingerDeg = Array(16).fill(0);
-          tempDevice.fingerSmooth = Array(16).fill(0);
-        }
-
         // Add to store
-        this.store['map'].set(deviceInfo.id, tempDevice);
-        this.temporaryDeviceIds.add(deviceInfo.id);
+        this.store['map'].set(deviceSimple.id, tempDevice);
+        this.temporaryDeviceIds.add(deviceSimple.id);
         
         // Trigger update event so UI and 3D scene know about this device
         this.store.dispatchEvent(new CustomEvent('update', { detail: tempDevice }));
-        
       }
     });
   }

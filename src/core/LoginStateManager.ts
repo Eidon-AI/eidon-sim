@@ -133,6 +133,14 @@ export class LoginStateManager {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Profile fetch failed:', response.status, response.statusText, errorText);
+        
+        // If unauthorized (401), log the user out
+        if (response.status === 401) {
+          console.log('Unauthorized response received, logging out user');
+          this.logout();
+          return;
+        }
+        
         throw new Error(`Failed to fetch user profile: ${response.status} ${response.statusText}`);
       }
 

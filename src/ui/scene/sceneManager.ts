@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { DeviceStore } from '../../core/DeviceStore';
 import { ArmSolver } from '../../core/ArmSolver';
 import { VectorArm } from './vectorArm';
+import { ChestVector } from './chestVector';
 import { SkeletalRig } from './skeletalRig';
 import { CameraControl } from '../components/CameraControl';
 import { KeyboardController } from '../components/KeyboardController';
@@ -122,9 +123,108 @@ export function initScene(
   // Expose ViewControls globally for other components to access
   (window as any).viewControls = viewControls;
   
+  /* ------------ camera animation system --------- */
+  let cameraAnimation: {
+    startPos: THREE.Vector3;
+    endPos: THREE.Vector3;
+    startTarget: THREE.Vector3;
+    endTarget: THREE.Vector3;
+    center: THREE.Vector3;
+    startRadius: number;
+    endRadius: number;
+    startAngle: { theta: number; phi: number };
+    endAngle: { theta: number; phi: number };
+    progress: number;
+    duration: number;
+  } | null = null;
+
+  document.addEventListener('cameraViewChange', (e: Event) => {
+    const { position, target } = (e as CustomEvent).detail;
+    
+    const startPos = cam.position.clone();
+    const endPos = new THREE.Vector3(...position);
+    const startTarget = controls.target.clone();
+    const endTarget = new THREE.Vector3(...target);
+    
+    // Calculate the center point (average of start and end targets)
+    const center = new THREE.Vector3().addVectors(startTarget, endTarget).multiplyScalar(0.5);
+    
+    // Convert start and end positions to spherical coordinates around center
+    const startOffset = new THREE.Vector3().subVectors(startPos, center);
+    const endOffset = new THREE.Vector3().subVectors(endPos, center);
+    
+    const startRadius = startOffset.length();
+    const endRadius = endOffset.length();
+    
+    // Calculate spherical angles (theta = azimuthal, phi = polar)
+    const startTheta = Math.atan2(startOffset.x, startOffset.z);
+    const startPhi = Math.acos(startOffset.y / startRadius);
+    
+    const endTheta = Math.atan2(endOffset.x, endOffset.z);
+    const endPhi = Math.acos(endOffset.y / endRadius);
+    
+    // Choose shortest angular path (handle wrapping around 2π)
+    let deltaTheta = endTheta - startTheta;
+    if (deltaTheta > Math.PI) deltaTheta -= 2 * Math.PI;
+    if (deltaTheta < -Math.PI) deltaTheta += 2 * Math.PI;
+    
+    // Start camera animation with spherical interpolation
+    cameraAnimation = {
+      startPos,
+      endPos,
+      startTarget,
+      endTarget,
+      center,
+      startRadius,
+      endRadius,
+      startAngle: { theta: startTheta, phi: startPhi },
+      endAngle: { theta: startTheta + deltaTheta, phi: endPhi },
+      progress: 0,
+      duration: 0.8 // 0.8 second animation
+    };
+  });
+
+  // Update camera animation in render loop
+  function updateCameraAnimation(deltaTime: number) {
+    if (!cameraAnimation) return;
+
+    cameraAnimation.progress += deltaTime / cameraAnimation.duration;
+    
+    if (cameraAnimation.progress >= 1) {
+      // Animation complete
+      cam.position.copy(cameraAnimation.endPos);
+      controls.target.copy(cameraAnimation.endTarget);
+      controls.update();
+      cameraAnimation = null;
+    } else {
+      // Ease in-out cubic
+      const t = cameraAnimation.progress;
+      const eased = t < 0.5
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      
+      // Spherical interpolation for position (arc around center)
+      const theta = THREE.MathUtils.lerp(cameraAnimation.startAngle.theta, cameraAnimation.endAngle.theta, eased);
+      const phi = THREE.MathUtils.lerp(cameraAnimation.startAngle.phi, cameraAnimation.endAngle.phi, eased);
+      const radius = THREE.MathUtils.lerp(cameraAnimation.startRadius, cameraAnimation.endRadius, eased);
+      
+      // Convert spherical back to Cartesian
+      const x = radius * Math.sin(phi) * Math.sin(theta);
+      const y = radius * Math.cos(phi);
+      const z = radius * Math.sin(phi) * Math.cos(theta);
+      
+      cam.position.copy(cameraAnimation.center).add(new THREE.Vector3(x, y, z));
+      
+      // Linear interpolation for target
+      controls.target.lerpVectors(cameraAnimation.startTarget, cameraAnimation.endTarget, eased);
+      controls.update();
+    }
+  }
+  
   /* ------------ scene objects ------------------- */
   const leftArm = new VectorArm(scene, store, 'left');
   const rightArm = new VectorArm(scene, store, 'right');
+  const chestVector = new ChestVector(scene, store);
 
   // Model arrays - we'll populate these based on toggle state
   let rigs: SkeletalRig[] = [];
@@ -229,6 +329,9 @@ export function initScene(
         leftArm.setVisible(enabled);
         rightArm.setVisible(enabled);
         break;
+      case 'chestVector':
+        chestVector.setVisible(enabled);
+        break;
       case 'multipleModels':
         // Only switch if the state is actually changing (or if this is the first time)
         if (currentMultipleModelsState === null || enabled !== currentMultipleModelsState) {
@@ -259,8 +362,16 @@ export function initScene(
   viewControls.applyInitialState();
 
   /* ------------ render loop ---------------------- */
+  let lastTime = performance.now();
   function animate() {
     requestAnimationFrame(animate);
+    
+    const now = performance.now();
+    const deltaTime = (now - lastTime) / 1000; // Convert to seconds
+    lastTime = now;
+    
+    // Update camera animation if active
+    updateCameraAnimation(deltaTime);
     
     // Update grid shader uniform with camera position for proper distance fading
     gridMaterial.uniforms.uCameraPosition.value.copy(cam.position);
@@ -289,6 +400,7 @@ export function initScene(
       // Clean up components
       leftArm.destroy();
       rightArm.destroy();
+      chestVector.destroy();
       cleanupModels(); // Use our new cleanup function
       cameraControl.unmount();
       cameraControl.destroy();

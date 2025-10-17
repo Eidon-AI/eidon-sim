@@ -157,6 +157,15 @@ export class DeviceModal {
 
       if (!response.ok) {
         const errorText = await response.text();
+        
+        // If unauthorized (401), log the user out
+        if (response.status === 401) {
+          console.log('Unauthorized response received, logging out user');
+          this.loginStateManager.logout();
+          this.showLoginPrompt();
+          return;
+        }
+        
         throw new Error(`Failed to fetch devices: ${response.status} ${response.statusText} - ${errorText}`);
       }
 

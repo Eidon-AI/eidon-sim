@@ -7,6 +7,7 @@ export interface ViewToggleState {
   grid: boolean;
   riggedModel: boolean;
   vectorArms: boolean;
+  chestVector: boolean;
   multipleModels: boolean;
 }
 
@@ -40,6 +41,7 @@ function loadViewState(): ViewToggleState {
         grid: parsed.grid !== undefined ? parsed.grid : true,
         riggedModel: parsed.riggedModel !== undefined ? parsed.riggedModel : true,
         vectorArms: parsed.vectorArms !== undefined ? parsed.vectorArms : true,
+        chestVector: parsed.chestVector !== undefined ? parsed.chestVector : true,
         multipleModels: parsed.multipleModels !== undefined ? parsed.multipleModels : false
       };
       return result;
@@ -53,6 +55,7 @@ function loadViewState(): ViewToggleState {
     grid: true,
     riggedModel: true,
     vectorArms: true,
+    chestVector: true,
     multipleModels: false
   };
   return defaults;
@@ -118,6 +121,7 @@ export class ViewControls extends EventTarget {
       grid: this.state.grid,
       riggedModel: this.state.riggedModel,
       vectorArms: this.state.vectorArms,
+      chestVector: this.state.chestVector,
       multipleModels: this.state.multipleModels
     });
     
@@ -233,6 +237,7 @@ export class ViewControls extends EventTarget {
       this.createToggleButton('Toggle Grid', 'grid', '⊞'),
       this.createToggleButton('Toggle Skeleton', 'riggedModel', '🦴'),
       this.createToggleButton('Toggle Vectors', 'vectorArms', '↑'),
+      this.createToggleButton('Toggle Chest Vector', 'chestVector', '🫀'),
       this.createToggleButton('Toggle Multiple Models', 'multipleModels', '👥')
     ];
 
@@ -250,7 +255,7 @@ export class ViewControls extends EventTarget {
 
   public applyInitialState(): void {
     // Dispatch events for each toggle state so scene manager applies them
-    (['grid', 'riggedModel', 'vectorArms', 'multipleModels'] as const).forEach(key => {
+    (['grid', 'riggedModel', 'vectorArms', 'chestVector', 'multipleModels'] as const).forEach(key => {
       this.dispatchEvent(new CustomEvent('viewToggle', {
         detail: { type: key, enabled: this.state[key] }
       }));

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { vec3 } from 'gl-matrix';
 import { DeviceStore } from '../../core/DeviceStore';
 import { HUM_LEN, RAD_LEN, HAND_LEN } from '../../core/constants';
+import { DeviceRole } from '../../types/device';
 
 export class VectorArm {
   private segs: THREE.Line[] = [];
@@ -106,10 +107,18 @@ export class VectorArm {
   }
 
   private refresh() {
-    /* ---- gather devices ---- */
-    const up    = this.store.getBy(this.side, 'upper');
-    const low   = this.store.getBy(this.side, 'lower');
-    const glove = this.store.getBy(this.side, 'hand');      // may be undefined
+    /* ---- gather devices by exact position ---- */
+    const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
+    const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+    const leftForearm = this.store.getByPosition(DeviceRole.ROLE_LEFT_FOREARM);
+    const rightForearm = this.store.getByPosition(DeviceRole.ROLE_RIGHT_FOREARM);
+    const leftHand = this.store.getByPosition(DeviceRole.ROLE_LEFT_HAND);
+    const rightHand = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HAND);
+
+    // Map to arm-specific devices based on side
+    const hub = this.side === 'left' ? leftHub : rightHub;
+    const forearm = this.side === 'left' ? leftForearm : rightForearm;
+    const hand = this.side === 'left' ? leftHand : rightHand;
 
     /* ---- shoulder anchor ---- */
     const shoulder: vec3 = this.side === 'left'
@@ -141,16 +150,16 @@ export class VectorArm {
         : vec3.transformMat3(vec3.create(), v, leftYaw90Array);
 
     /* ---- compute chain step-by-step ---- */
-    const upperEnd = up
-      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(up.fwd), HUM_LEN())
+    const upperEnd = hub
+      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(hub.fwd), HUM_LEN())
       : vec3.clone(shoulder);
 
-    const lowerEnd = low
-      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(low.fwd), RAD_LEN())
+    const lowerEnd = forearm
+      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(forearm.fwd), RAD_LEN())
       : vec3.clone(upperEnd);
 
-    const handEnd  = glove
-      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(glove.fwd), HAND_LEN())
+    const handEnd  = hand
+      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(hand.fwd), HAND_LEN())
       : vec3.clone(lowerEnd);
 
     /* ---- update three line segments (forward vectors) ---- */
@@ -159,7 +168,7 @@ export class VectorArm {
     pts.forEach((p, idx) => {
       if (idx === 3) return;                       // no segment after hand
       
-      const dev = idx === 0 ? up : idx === 1 ? low : glove;
+      const dev = idx === 0 ? hub : idx === 1 ? forearm : hand;
       const tube = this.tubeSegs[idx];
       const tip = this.arrowTips[idx];
       
@@ -213,14 +222,14 @@ export class VectorArm {
       }
       
       // Update material color using shared material
-      const colorHex = dev?.color ?? '#888';
+      const colorHex = dev.color; // Use device backend color
       const material = this.getMaterial(colorHex);
       tube.material = material;
       tip.material = material;
     });
 
     /* ---- update up vector segments ---- */
-    const devices = [up, low, glove];
+    const devices = [hub, forearm, hand];
     const startPoints = [shoulder, upperEnd, lowerEnd];
     const segmentLengths = [HUM_LEN(), RAD_LEN(), HAND_LEN()];
     
@@ -284,7 +293,7 @@ export class VectorArm {
       }
       
       // Update material color using shared material
-      const colorHex = dev?.color ?? '#888';
+      const colorHex = dev.color; // Use device backend color
       const material = this.getMaterial(colorHex);
       upTube.material = material;
       upTip.material = material;
