@@ -21,7 +21,7 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
       <table class="${styles.anglesTable}" id="tblShoulder">
         <thead>
           <tr>
-            <th></th><th>Horz Abduction</th><th>Flexion</th><th>Rotation</th>
+            <th></th><th>Abduction</th><th>Flexion</th><th>Rotation</th>
           </tr>
         </thead>
         <tbody>

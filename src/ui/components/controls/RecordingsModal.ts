@@ -198,9 +198,11 @@ export class RecordingsModal {
     return `
       <div class="${styles.recordingsContainer}">
         <div class="${styles.recordingsHeader}">
-          <h3>Your Recordings (${recordings.pagination.total})</h3>
+          <div class="${styles.headerLeft}">
+            <h3>Your Recordings (${recordings.pagination.total})</h3>
+          </div>
+          ${pagination ? `<div class="${styles.headerRight}">${pagination}</div>` : ''}
         </div>
-        ${pagination}
         <div class="${styles.recordingsGrid}">
           ${recordingsGrid}
         </div>
@@ -214,12 +216,8 @@ export class RecordingsModal {
     const totalPages = pagination.totalPages;
 
     if (totalPages <= 1) {
-      pages.push(`<button class="${styles.pageButton} ${styles.pageButtonCurrentPage}">1</button>`);
-      return `
-        <div class="${styles.pagination}">
-          ${pages.join('')}
-        </div>
-      `;
+      // Don't show pagination if there's only one page
+      return '';
     }
 
     if (pagination.hasPrev) {

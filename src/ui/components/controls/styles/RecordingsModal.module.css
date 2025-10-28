@@ -57,7 +57,16 @@
 
 .recordingsHeader {
   margin-bottom: 24px;
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .recordingsHeader h3 {
@@ -66,6 +75,11 @@
   color: white;
   margin: 0;
   font-family: var(--font-heading);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
 }
 
 .recordingsGrid {
@@ -185,13 +199,9 @@
 /* Pagination Styles */
 .pagination {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  margin-top: 16px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .pageButton {
@@ -269,7 +279,7 @@
   font-size: 14px;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.7);
-  margin: 8px 0 0 0;
+  margin: 0;
 }
 
 @keyframes slideInFromTop {
