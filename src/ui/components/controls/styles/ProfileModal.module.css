@@ -1,0 +1,553 @@
+/* ProfileModal.module.css */
+
+.modal {
+  position: absolute;
+  z-index: 50;
+  animation: slideInFromTop 0.3s ease-out forwards;
+}
+
+.modalContent {
+  background: rgba(23, 23, 23, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(233, 51, 112, 0.4);
+  border-radius: 12px;
+  padding: 24px;
+  width: 500px;
+  max-width: 90vw;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.modalContent.editProfileForm {
+  width: 500px;
+  max-width: 90vw;
+}
+
+.modalClose {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 20px;
+  font-weight: 300;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.modalClose:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* User Profile Modal Styles */
+.userProfileModal {
+  padding: 24px;
+  width: 500px;
+}
+
+.userProfileHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.profileAvatarLarge {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(233, 51, 112, 0.6);
+}
+
+.profileInfo {
+  flex: 1;
+}
+
+.profileName {
+  font-size: 20px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 4px 0;
+  font-family: var(--font-heading);
+}
+
+.profileEmail {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0;
+}
+
+.profileStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+}
+
+.statItem {
+  text-align: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.statValue {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgb(var(--brand-rgb));
+  margin-bottom: 4px;
+  font-family: var(--font-heading);
+}
+
+.statLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.profileBadges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badgeNewUser {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.4);
+}
+
+.badgeFirstTime {
+  background: rgba(33, 150, 243, 0.2);
+  color: #2196f3;
+  border: 1px solid rgba(33, 150, 243, 0.4);
+}
+
+/* Edit Button */
+.editButton {
+  background: rgba(233, 51, 112, 0.1);
+  border: 1px solid rgba(233, 51, 112, 0.4);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.editButton:hover {
+  background: rgba(233, 51, 112, 0.2);
+  border-color: rgba(233, 51, 112, 0.6);
+}
+
+.editButton i {
+  font-size: 12px;
+}
+
+.adminBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.2) 0%, rgba(255, 193, 7, 0.1) 100%);
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 193, 7, 1);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 4px;
+}
+
+.adminBadge i {
+  font-size: 10px;
+}
+
+.adminBadgeLarge {
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* Edit Profile Form Styles */
+
+/* Main container */
+.editFormContainer {
+  width: 100%;
+}
+
+/* Form header with back button */
+.editFormHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* Back button */
+.backButton {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.backButton:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: white;
+}
+
+.editBackBtn {
+  min-width: 70px;
+}
+
+.backButton i {
+  font-size: 12px;
+}
+
+.backIcon {
+  margin-right: 2px;
+}
+
+.backText {
+  font-weight: 500;
+}
+
+/* Form title */
+.editFormTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+/* Form layout */
+.formRow {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.formRow .formGroup {
+  margin-bottom: 0;
+}
+
+/* Field groups */
+.nameFieldGroup {
+  position: relative;
+  width: 80%;
+}
+
+.colorFieldGroup {
+  position: relative;
+}
+
+.avatarFieldGroup {
+  position: relative;
+}
+
+/* Labels */
+.formLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 8px;
+}
+
+.nameLabel {
+  font-weight: 600;
+}
+
+.colorLabel {
+  font-weight: 600;
+}
+
+.avatarLabel {
+  font-weight: 600;
+}
+
+/* Inputs */
+.formInput {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: rgba(233, 51, 112, 0.6);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.formInput::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.nameInput {
+  font-weight: 500;
+  width: 100%;
+}
+
+/* Color picker */
+.colorPickerContainer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.colorInput {
+  width: 50px;
+  height: 40px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.colorPicker {
+  border: 2px solid rgba(233, 51, 112, 0.3);
+}
+
+.colorValue {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: monospace;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.colorHexDisplay {
+  font-weight: 600;
+}
+
+/* Avatar upload */
+.avatarUploadContainer {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  justify-content: flex-start;
+}
+
+.avatarPreview {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(233, 51, 112, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.avatarPreviewContainer {
+  position: relative;
+}
+
+.avatarPreviewImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.currentAvatarImg {
+  transition: opacity 0.2s ease;
+}
+
+.avatarPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 24px;
+}
+
+.avatarPlaceholderIcon {
+  font-size: 28px;
+}
+
+.fileInput {
+  display: none;
+}
+
+.avatarFileInput {
+  position: absolute;
+  opacity: 0;
+}
+
+.uploadButton {
+  background: rgba(233, 51, 112, 0.1);
+  border: 1px solid rgba(233, 51, 112, 0.4);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.uploadButton:hover {
+  background: rgba(233, 51, 112, 0.2);
+  border-color: rgba(233, 51, 112, 0.6);
+}
+
+.avatarUploadBtn {
+  min-width: 140px;
+}
+
+.uploadButton i {
+  font-size: 14px;
+}
+
+.uploadIcon {
+  margin-right: 4px;
+}
+
+.uploadText {
+  font-weight: 500;
+}
+
+/* Form actions */
+.formActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.editFormActions {
+  margin-top: 24px;
+}
+
+.cancelButton {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancelButton:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: white;
+}
+
+.editCancelBtn {
+  min-width: 80px;
+}
+
+.cancelText {
+  font-weight: 500;
+}
+
+.saveButton {
+  background: rgba(233, 51, 112, 0.8);
+  border: 1px solid rgba(233, 51, 112, 1);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: rgba(233, 51, 112, 1);
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.editSaveBtn {
+  min-width: 140px;
+}
+
+.saveButton i {
+  font-size: 12px;
+}
+
+.saveIcon {
+  margin-right: 4px;
+}
+
+.saveText {
+  font-weight: 600;
+}
+
+@keyframes slideInFromTop {
+  0% {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+

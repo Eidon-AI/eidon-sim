@@ -1,6 +1,7 @@
 import { PlaybackManager } from '../../core/PlaybackManager';
 import { SensorRecording } from '../../types/sensorData';
-import { RecordingWithUrls } from '../../types/recording';
+import { RecordingWithUrls, AdminRecording } from '../../types/recording';
+import { LoginStateManager } from '../../core/LoginStateManager';
 import styles from './styles/PlaybackView.module.css';
 
 export class PlaybackView {
@@ -8,22 +9,29 @@ export class PlaybackView {
   private videoElement: HTMLVideoElement | null = null;
   private playbackManager: PlaybackManager;
   private sensorData: SensorRecording;
-  private apiRecording: RecordingWithUrls;
+  private apiRecording: RecordingWithUrls | AdminRecording;
   private isPlaying: boolean = false;
   private isSeeking: boolean = false;
   private animationFrameId: number | null = null;
   private onExit: () => void;
+  private isAdmin: boolean = false;
 
   constructor(
     playbackManager: PlaybackManager,
     sensorData: SensorRecording,
-    apiRecording: RecordingWithUrls,
+    apiRecording: RecordingWithUrls | AdminRecording,
     onExit: () => void
   ) {
     this.playbackManager = playbackManager;
     this.sensorData = sensorData;
     this.apiRecording = apiRecording;
     this.onExit = onExit;
+    
+    // Check if current user is admin
+    const loginStateManager = LoginStateManager.getInstance();
+    const state = loginStateManager.getState();
+    this.isAdmin = state.profile?.isAdmin || false;
+    
     this.container = this.createContainer();
   }
 
@@ -38,6 +46,20 @@ export class PlaybackView {
           playsinline
         ></video>
       </div>
+      ${this.isAdmin && 'userFullName' in this.apiRecording ? `
+      <div class="${styles.adminInfoContainer}">
+        <div class="${styles.adminInfo}">
+          <div class="${styles.adminInfoLabel}">Recorded by:</div>
+          <div class="${styles.adminInfoValue}">
+            ${this.apiRecording.userFullName}${this.apiRecording.userEmail ? ` (${this.apiRecording.userEmail})` : ''}
+          </div>
+        </div>
+        <button class="${styles.copyButton}" data-copy-link title="Copy recording link">
+          <i class="fas fa-link"></i>
+          <span>Copy Link</span>
+        </button>
+      </div>
+      ` : ''}
       <div class="${styles.controlsContainer}">
         <div class="${styles.timelineContainer}">
           <div class="${styles.timeline}" data-timeline>
@@ -139,6 +161,12 @@ export class PlaybackView {
     // Exit button
     const exitBtn = this.container.querySelector('[data-exit]') as HTMLButtonElement;
     exitBtn.addEventListener('click', () => this.exit());
+
+    // Copy button (admin only)
+    const copyBtn = this.container.querySelector('[data-copy-link]') as HTMLButtonElement;
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => this.copyRecordingLink());
+    }
 
     // Keyboard shortcuts
     document.addEventListener('keydown', this.handleKeyPress);
@@ -361,6 +389,32 @@ export class PlaybackView {
     };
     
     document.dispatchEvent(new CustomEvent('cameraViewChange', { detail: defaultView }));
+  }
+
+  private copyRecordingLink(): void {
+    if (!('id' in this.apiRecording)) return;
+    
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set('recordingId', this.apiRecording.id);
+    const linkToCopy = url.toString();
+    
+    navigator.clipboard.writeText(linkToCopy).then(() => {
+      // Show success feedback
+      const copyBtn = this.container.querySelector('[data-copy-link]') as HTMLButtonElement;
+      if (copyBtn) {
+        const originalHTML = copyBtn.innerHTML;
+        copyBtn.innerHTML = '<i class="fas fa-check"></i><span>Copied!</span>';
+        copyBtn.classList.add(styles.copyButtonSuccess);
+        
+        setTimeout(() => {
+          copyBtn.innerHTML = originalHTML;
+          copyBtn.classList.remove(styles.copyButtonSuccess);
+        }, 2000);
+      }
+    }).catch(error => {
+      console.error('Failed to copy link:', error);
+      alert('Failed to copy link. Please try again.');
+    });
   }
 
   public destroy(): void {

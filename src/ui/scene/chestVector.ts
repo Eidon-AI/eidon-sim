@@ -23,11 +23,13 @@ export class ChestVector {
     this.tubeGeometry = new THREE.CylinderGeometry(0.005, 0.005, 1, 8); // Same as VectorArm
     this.arrowGeometry = new THREE.ConeGeometry(0.01, 0.04, 8); // Same as VectorArm
     
-    // Create chest vector elements
-    this.tubeSeg = this.buildTube([0,0,0], [0,0.1,0], '#ff6');
-    this.upTubeSeg = this.buildTube([0,0,0], [0,0.1,0], '#ff9');
-    this.arrowTip = this.buildArrowTip('#ff6');
-    this.upArrowTip = this.buildArrowTip('#ff9');
+    // Create chest vector elements - pink for forward, green for up
+    const forwardColor = '#ff69b4'; // Pink
+    const upColor = '#00ff00'; // Green
+    this.tubeSeg = this.buildTube([0,0,0], [0,0.1,0], forwardColor);
+    this.upTubeSeg = this.buildTube([0,0,0], [0,0.1,0], upColor);
+    this.arrowTip = this.buildArrowTip(forwardColor);
+    this.upArrowTip = this.buildArrowTip(upColor);
     
     this.group = new THREE.Group();
     this.group.add(this.tubeSeg);
@@ -102,12 +104,12 @@ export class ChestVector {
     // Chest anchor point (moved forward to avoid model overlap)
     const chestAnchor: vec3 = [0, 0.4, -0.2]; // Moved 30cm forward
     
-    // Chest forward vector length (representing torso orientation)
-    const chestLength = 0.15; // 15cm forward vector
+    // Chest forward vector length - fixed 0.35 unit length
+    const chestLength = 0.35; // Same as arm forward vectors
     const chestEnd = vec3.scaleAndAdd(vec3.create(), chestAnchor, chest.fwd, chestLength);
     
-    // Chest up vector length (representing torso tilt)
-    const upLength = 0.2; // 20cm up vector (longer)
+    // Chest up vector length - fixed 0.2 unit length
+    const upLength = 0.2; // Same as arm up vectors
     const upEnd = vec3.scaleAndAdd(vec3.create(), chestAnchor, chest.up, upLength);
     
     // Update forward vector tube
@@ -150,9 +152,9 @@ export class ChestVector {
       this.arrowTip.rotateX(Math.PI / 2);
     }
     
-    // Update forward vector material color
-    const colorHex = chest.color; // Use device backend color
-    const material = this.getMaterial(colorHex);
+    // Use fixed pink color for forward vector
+    const forwardColor = '#ff69b4'; // Pink
+    const material = this.getMaterial(forwardColor);
     this.tubeSeg.material = material;
     this.arrowTip.material = material;
 
@@ -196,9 +198,9 @@ export class ChestVector {
       this.upArrowTip.rotateX(Math.PI / 2);
     }
     
-    // Update up vector material color
-    const upColorHex = chest.color; // Use device backend color
-    const upMaterial = this.getMaterial(upColorHex);
+    // Use fixed green color for up vector
+    const upColor = '#00ff00'; // Green
+    const upMaterial = this.getMaterial(upColor);
     this.upTubeSeg.material = upMaterial;
     this.upArrowTip.material = upMaterial;
   }

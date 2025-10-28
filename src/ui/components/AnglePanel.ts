@@ -2,9 +2,6 @@
 import { ArmSolver } from '../../core/ArmSolver';
 import styles from './styles/AnglePanel.module.css';
 
-// Global state for angle mode toggle - load from localStorage
-let useActuatorAngles = localStorage.getItem('useActuatorAngles') === 'true';
-
 export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
   /* ------------------------------------------------------------
    * Build wrapper element and inject table markup
@@ -12,14 +9,15 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
   const wrapper = document.createElement('div');
   wrapper.className = styles.wrapper;
   wrapper.innerHTML = `
-    <div class="${styles.header}">
-      <h3 class="${styles.title}">
-        📐 Actuator Angles
-      </h3>
-      <button id="angleMode" class="${styles.toggleButton}" style="width: 40px;">
-        ${useActuatorAngles ? '◻️' : '▶'}
-      </button>
+    <div class="${styles.colorIndicator}">
+      <span class="${styles.colorDot}" style="background-color: #ff69b4;"></span>
+      <span class="${styles.colorLabel}">Forward</span>
+      <span class="${styles.colorDot}" style="background-color: #00ff00;"></span>
+      <span class="${styles.colorLabel}">Up</span>
     </div>
+    <h3 class="${styles.title}">
+      📐 Actuator Angles
+    </h3>
 
     <table class="${styles.anglesTable}" id="tblAngles">
       <thead>
@@ -45,36 +43,6 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
   const rowR = wrapper.querySelector('#rowR') as HTMLTableRowElement;
   const tdL  = (i: number) => rowL.children[i + 1] as HTMLTableCellElement;
   const tdR  = (i: number) => rowR.children[i + 1] as HTMLTableCellElement;
-  
-  /* ------------------------------------------------------------
-   * Toggle button functionality
-   * ---------------------------------------------------------- */
-  const toggleBtn = wrapper.querySelector('#angleMode') as HTMLButtonElement;
-  
-  toggleBtn.onclick = () => {
-    useActuatorAngles = !useActuatorAngles;
-    toggleBtn.textContent = useActuatorAngles ? '◻️' : '▶';
-    console.log('AnglePanel: Toggle clicked, new state:', useActuatorAngles);
-    
-    // Save to localStorage
-    localStorage.setItem('useActuatorAngles', useActuatorAngles.toString());
-    
-    // Dispatch event to notify skeletal rig of mode change
-    document.dispatchEvent(new CustomEvent('angleModeChanged', {
-      detail: { useActuatorAngles }
-    }));
-    console.log('AnglePanel: Event dispatched');
-  };
-
-  /* ------------------------------------------------------------
-   * Dispatch initial state on load
-   * ---------------------------------------------------------- */
-  setTimeout(() => {
-    document.dispatchEvent(new CustomEvent('angleModeChanged', {
-      detail: { useActuatorAngles }
-    }));
-    console.log('AnglePanel: Initial state dispatched:', useActuatorAngles);
-  }, 100);
 
   /* ------------------------------------------------------------
    * Update on solver event
@@ -86,9 +54,4 @@ export function mountAnglePanel(parent: HTMLElement, solver: ArmSolver) {
     if (left)  Object.values(left ).forEach((v, i) => tdL(i).textContent = `${v.toFixed(0)}°`);
     if (right) Object.values(right).forEach((v, i) => tdR(i).textContent = `${v.toFixed(0)}°`);
   });
-}
-
-// Export function to get current mode
-export function getAngleModeState() {
-  return useActuatorAngles;
 }

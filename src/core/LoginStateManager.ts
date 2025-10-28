@@ -44,8 +44,9 @@ export class LoginStateManager {
     this.updateState();
     
     // If user is already logged in, fetch their profile
+    // Use a flag to indicate this is initialization to handle errors differently
     if (this.state.isLoggedIn) {
-      await this.fetchUserProfile();
+      await this.fetchUserProfile(true);
     }
   }
 
@@ -108,7 +109,7 @@ export class LoginStateManager {
     }
   }
 
-  private async fetchUserProfile(): Promise<void> {
+  private async fetchUserProfile(isInitialization: boolean = false): Promise<void> {
     try {
       const tokens = this.authManager.getTokens();
       if (!tokens?.token) {
@@ -134,10 +135,18 @@ export class LoginStateManager {
         const errorText = await response.text();
         console.error('Profile fetch failed:', response.status, response.statusText, errorText);
         
-        // If unauthorized (401), log the user out
+        // If unauthorized (401), handle differently based on context
         if (response.status === 401) {
-          console.log('Unauthorized response received, logging out user');
-          this.logout();
+          if (isInitialization) {
+            // On initialization, just clear the auth state silently - don't force logout
+            console.log('Token expired or invalid on initialization, clearing auth state');
+            this.authManager.signOut();
+            this.updateState();
+          } else {
+            // During active session, log the user out
+            console.log('Unauthorized response received, logging out user');
+            this.logout();
+          }
           return;
         }
         

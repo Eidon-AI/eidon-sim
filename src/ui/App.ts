@@ -10,7 +10,7 @@ import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
 import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
-import { Controls } from './components/Controls';
+import { Controls } from './components/controls/Controls';
 import { renderCard } from './components/DeviceCard';
 import { AuthModal } from './components/AuthModal';
 import { AuthManager } from '../core/AuthManager';
@@ -53,17 +53,60 @@ export function log(msg: string) {
 // For debugging
 (window as any).setSelected = setSelected;
 
+let pendingRecordingId: string | null = null;
+
 export function mount(root: HTMLElement) {
   // Initialize login state manager
   loginStateManager = LoginStateManager.getInstance();
   isAuthenticated = loginStateManager.isLoggedIn();
 
+  // Listen for login state changes to retry loading recording
+  loginStateManager.addListener(async (state) => {
+    if (state.isLoggedIn && pendingRecordingId && controls) {
+      console.log('User logged in, retrying to load recording:', pendingRecordingId);
+      await tryLoadRecording(pendingRecordingId);
+    }
+  });
+
   // Always initialize the app first, then show auth modal if needed
   initializeApp(root);
+
+  // Check for recordingId URL parameter
+  checkUrlForRecordingId();
 
   if (!isAuthenticated) {
     // Show auth modal as overlay
     showAuthModal(root);
+  }
+}
+
+async function checkUrlForRecordingId() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const recordingId = urlParams.get('recordingId');
+  
+  if (!recordingId) return;
+  
+  console.log('Found recordingId in URL:', recordingId);
+  pendingRecordingId = recordingId;
+  
+  // Wait for controls to be initialized
+  if (!controls) {
+    setTimeout(() => checkUrlForRecordingId(), 100);
+    return;
+  }
+  
+  // Try to load the recording
+  await tryLoadRecording(recordingId);
+}
+
+async function tryLoadRecording(recordingId: string) {
+  try {
+    await controls.fetchAndPlayRecording(recordingId);
+    pendingRecordingId = null; // Clear on success
+  } catch (error) {
+    console.error('Failed to load recording from URL:', error);
+    // If 401, user will be prompted to login
+    // We'll retry when they log in
   }
 }
 

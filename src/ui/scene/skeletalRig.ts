@@ -18,7 +18,6 @@ export class SkeletalRig {
   private fingerMap:  Record<Side, THREE.Bone[]>  = { left: [], right: [] };
   private extraMeshes!: { surface: THREE.Mesh; joints: THREE.Mesh };
   private root: THREE.Group | null = null;
-  private useActuatorAngles: boolean = false;
   private pendingVisible: boolean = true; // Store visibility state until model loads
   private pendingPosition: { x: number; z: number } = { x: 0, z: 0 };
   private pendingScale: number = 1.0;
@@ -27,7 +26,6 @@ export class SkeletalRig {
   
   // Store event handler references for proper cleanup
   private deviceColorHandler: (e: Event) => void;
-  private angleModeHandler: (e: Event) => void;
   private recolorHandler: () => void;
   private anglesHandler: () => void;
 
@@ -61,11 +59,6 @@ export class SkeletalRig {
       }
     };
     
-    this.angleModeHandler = (e: Event) => {
-      const { useActuatorAngles } = (e as CustomEvent<any>).detail;
-      this.useActuatorAngles = useActuatorAngles;
-    };
-    
     this.recolorHandler = () => {
       if (this.extraMeshes) {
         const surfaceMaterial = this.extraMeshes.surface?.material as THREE.MeshStandardMaterial;
@@ -85,7 +78,6 @@ export class SkeletalRig {
     
     // Add event listeners
     document.addEventListener('deviceColor', this.deviceColorHandler);
-    document.addEventListener('angleModeChanged', this.angleModeHandler);
     
     loader.load(
       gltfPath,
@@ -181,11 +173,8 @@ export class SkeletalRig {
     // Prevent updates after destruction
     if (this.isDestroyed) return;
     
-    if (this.useActuatorAngles) {
-      this.applySideActuatorAngles(side);
-    } else {
-      this.applySideQuaternion(side);
-    }
+    // Always use actuator angles for the physical device
+    this.applySideActuatorAngles(side);
 
     /* ----- Fingers mapping (disabled - finger data removed from Device interface) ----- */
     // const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
@@ -447,7 +436,6 @@ export class SkeletalRig {
     
     // Clean up event listeners
     document.removeEventListener('deviceColor', this.deviceColorHandler);
-    document.removeEventListener('angleModeChanged', this.angleModeHandler);
     document.removeEventListener('prefsChanged', this.recolorHandler);
     
     // Remove solver event listener

@@ -1,0 +1,149 @@
+/* VideoModal.module.css */
+
+.videoModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(8px);
+}
+
+.videoModalContainer {
+  background: rgba(23, 23, 23, 0.95);
+  border: 1px solid rgba(233, 51, 112, 0.4);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 800px;
+  width: 90%;
+  max-height: 90vh;
+  position: relative;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.videoModalClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 24px;
+  font-weight: 300;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.videoModalClose:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.1);
+}
+
+.videoModalContent {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.videoModalInfo {
+  width: 100%;
+}
+
+.sensorDataOverview h4 {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 20px 0;
+  font-family: var(--font-heading);
+}
+
+.sensorStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.sensorStat {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px 12px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.sensorStat:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(233, 51, 112, 0.3);
+}
+
+.statValue {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: rgb(var(--brand-rgb));
+  font-family: var(--font-heading);
+  margin-bottom: 4px;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.videoModalActions {
+  display: flex;
+  justify-content: center;
+}
+
+.videoPlayer {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: 8px;
+  background: #000;
+}
+
+.deviceDataButton {
+  padding: 14px 28px;
+  background: linear-gradient(135deg, rgb(var(--brand-rgb)) 0%, rgb(var(--brand-sub-rgb)) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.deviceDataButton:hover {
+  background: linear-gradient(135deg, rgb(var(--brand-sub-rgb)) 0%, rgb(var(--brand-rgb)) 100%);
+  box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.3);
+  transform: translateY(-1px);
+}
+
+.deviceDataButton i {
+  font-size: 18px;
+}
+

@@ -45,5 +45,14 @@ export interface PaginatedRecordingsResponse {
   };
 }
 
+// Admin-only interface that extends Recording with signed URLs and user information
+export interface AdminRecording extends Recording {
+  videoReadUrl: string;
+  sensorDataReadUrl: string;
+  thumbnailReadUrl: string | null;
+  userFullName: string;
+  userEmail: string | null;
+}
+
 // Import User type (assuming it exists in user.ts)
 import { CurrentUser as User } from './user';

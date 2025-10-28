@@ -28,17 +28,21 @@ export class VectorArm {
     this.arrowGeometry = new THREE.ConeGeometry(0.01, 0.04, 8);
     
     // Create initial lines and tubes
-    ['#ff6', '#6ff', '#f6f'].forEach(col => {
-      this.segs.push(this.build(col));
-      this.tubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], col));
-      this.arrowTips.push(this.buildArrowTip(col));
-    });
+    // Forward vectors use pink color
+    const forwardColor = '#ff69b4'; // Pink
+    for (let i = 0; i < 3; i++) {
+      this.segs.push(this.build(forwardColor));
+      this.tubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], forwardColor));
+      this.arrowTips.push(this.buildArrowTip(forwardColor));
+    }
     
-    ['#ff9', '#9ff', '#f9f'].forEach(col => {
-      this.upSegs.push(this.build(col));
-      this.upTubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], col));
-      this.upArrowTips.push(this.buildArrowTip(col));
-    });
+    // Up vectors use green color
+    const upColor = '#00ff00'; // Green
+    for (let i = 0; i < 3; i++) {
+      this.upSegs.push(this.build(upColor));
+      this.upTubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], upColor));
+      this.upArrowTips.push(this.buildArrowTip(upColor));
+    }
     
     this.group = new THREE.Group();
     this.tubeSegs.forEach(tube => this.group.add(tube));
@@ -183,15 +187,19 @@ export class VectorArm {
       tube.visible = true;
       tip.visible = true;
       
-      // Update tube position and scale instead of recreating
-      const direction = vec3.subtract(vec3.create(), pts[idx+1], pts[idx]);
+      // Forward vector visualization - fixed 0.35 unit length in fwd direction
+      const fwdVector = rotFwd(dev.fwd);
+      const forwardLength = 0.35; // Fixed 0.35 unit length
+      const fwdEnd = vec3.scaleAndAdd(vec3.create(), pts[idx], fwdVector, forwardLength);
+      
+      const direction = vec3.subtract(vec3.create(), fwdEnd, pts[idx]);
       const length = vec3.length(direction);
       
       if (length > 0.001) {
         tube.scale.set(1, length, 1);
         
         // Position the tube at the midpoint
-        const midpoint = vec3.lerp(vec3.create(), pts[idx], pts[idx+1], 0.5);
+        const midpoint = vec3.lerp(vec3.create(), pts[idx], fwdEnd, 0.5);
         tube.position.set(midpoint[0], midpoint[1], midpoint[2]);
 
         // Orient the tube to point from start to end
@@ -207,23 +215,23 @@ export class VectorArm {
       }
 
       /* position and orient arrow tip */
-      tip.position.set(pts[idx+1][0], pts[idx+1][1], pts[idx+1][2]);
+      tip.position.set(fwdEnd[0], fwdEnd[1], fwdEnd[2]);
       
       // Calculate direction vector for orientation
-      if (vec3.length(direction) > 0) {
-        vec3.normalize(direction, direction);
+      if (vec3.length(fwdVector) > 0) {
+        const normalizedFwd = vec3.normalize(vec3.create(), fwdVector);
         tip.lookAt(
-          tip.position.x + direction[0],
-          tip.position.y + direction[1], 
-          tip.position.z + direction[2]
+          tip.position.x + normalizedFwd[0],
+          tip.position.y + normalizedFwd[1], 
+          tip.position.z + normalizedFwd[2]
         );
         // Rotate 90 degrees to point the cone tip in the right direction
         tip.rotateX(Math.PI / 2);
       }
       
-      // Update material color using shared material
-      const colorHex = dev.color; // Use device backend color
-      const material = this.getMaterial(colorHex);
+      // Use fixed pink color for forward vectors
+      const forwardColor = '#ff69b4'; // Pink
+      const material = this.getMaterial(forwardColor);
       tube.material = material;
       tip.material = material;
     });
@@ -231,7 +239,6 @@ export class VectorArm {
     /* ---- update up vector segments ---- */
     const devices = [hub, forearm, hand];
     const startPoints = [shoulder, upperEnd, lowerEnd];
-    const segmentLengths = [HUM_LEN(), RAD_LEN(), HAND_LEN()];
     
     startPoints.forEach((startPt, idx) => {
       const dev = devices[idx];
@@ -246,8 +253,8 @@ export class VectorArm {
       }
       
       const upVector = rotUp(dev.up);
-      // Make up vector length proportional to forward vector segment length (20% of segment length)
-      const upVectorLength = segmentLengths[idx] * 0.2;
+      // Fixed 0.2 unit length for up vector
+      const upVectorLength = 0.2;
       const upEnd = vec3.scaleAndAdd(vec3.create(), startPt, upVector, upVectorLength);
       
       // Show and update up tube - reuse existing tube object
@@ -292,9 +299,9 @@ export class VectorArm {
         upTip.rotateX(Math.PI / 2);
       }
       
-      // Update material color using shared material
-      const colorHex = dev.color; // Use device backend color
-      const material = this.getMaterial(colorHex);
+      // Use fixed green color for up vectors
+      const upColor = '#00ff00'; // Green
+      const material = this.getMaterial(upColor);
       upTube.material = material;
       upTip.material = material;
     });

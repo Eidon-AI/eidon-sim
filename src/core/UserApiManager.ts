@@ -97,7 +97,6 @@ export class UserApiManager {
         return;
       }
 
-      console.log('SymColor successfully synced to server:', symColor);
     } catch (error) {
       console.error('Failed to sync symColor to server:', error);
       // Silent failure - user experience isn't affected

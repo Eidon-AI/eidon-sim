@@ -89,7 +89,7 @@ export class DeviceModal {
               </button>
             </div>
             <div class="${styles.devicesContainer} discovered-devices-container">
-              <!-- Discovered devices will be populated here -->
+              <div class="${styles.noDevices}">Click "Scan" to find nearby devices</div>
             </div>
           </div>
         </div>
@@ -123,9 +123,7 @@ export class DeviceModal {
       this.updateDeviceConnectionStatus(e.detail.deviceId, false);
     });
 
-    this.trackerManager.addEventListener('devicesDiscovered', (e: any) => {
-      this.updateDiscoveredDevices(e.detail);
-    });
+    // Note: We're using HID device discovery instead of Bluetooth
 
     // Listen for login state changes to update arrow visibility
     this.loginStateManager.addListener(() => {
@@ -497,16 +495,79 @@ export class DeviceModal {
   private async handleScan(): Promise<void> {
     try {
       const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
+      const container = this.modal.querySelector('.discovered-devices-container') as HTMLElement;
+      
       scanBtn.disabled = true;
       scanBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Scanning...';
+      
+      // Show loading state in the container
+      if (container) {
+        container.innerHTML = `<div class="${styles.noDevices}"><i class="fas fa-spinner fa-spin mr-2"></i>Looking for USB devices...</div>`;
+      }
 
-      await this.trackerManager.startDiscovery();
+      // Use HID device discovery instead of Bluetooth
+      await this.scanForHidDevices();
     } catch (error) {
       console.error('Device scan failed:', error);
+      // Show error message in the container
+      const container = this.modal.querySelector('.discovered-devices-container') as HTMLElement;
+      if (container) {
+        container.innerHTML = `<div class="${styles.noDevices}">Scan failed. Please try again.</div>`;
+      }
     } finally {
       const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
       scanBtn.disabled = false;
       scanBtn.innerHTML = '<i class="fas fa-search mr-1"></i>Scan';
+    }
+  }
+
+  private async scanForHidDevices(): Promise<void> {
+    try {
+      // Check if WebHID is supported
+      if (!navigator.hid) {
+        throw new Error('WebHID not supported in this browser');
+      }
+
+      // Request HID devices (this will show the browser's device picker)
+      const devices = await navigator.hid.requestDevice({
+        filters: [
+          { vendorId: 0xE1D0, productId: 0x0001 }, // Eidon Glove
+          { vendorId: 0xE1D0, productId: 0x0002 }  // Eidon Tracker
+        ]
+      });
+
+      if (devices.length === 0) {
+        const container = this.modal.querySelector('.discovered-devices-container') as HTMLElement;
+        if (container) {
+          container.innerHTML = `<div class="${styles.noDevices}">No Eidon devices found. Make sure your devices are connected via USB.</div>`;
+        }
+        return;
+      }
+
+      // Convert HID devices to EidonDevice format and display them
+      const discoveredDevices: EidonDevice[] = devices.map(device => ({
+        id: `${device.vendorId.toString(16).padStart(4, '0')}-${device.productId.toString(16).padStart(4, '0')}-${device.productName?.toLowerCase().replace(/\s+/g, '-') || 'device'}`,
+        name: device.productName || 'Eidon Device',
+        role: DeviceRole.UNKNOWN, // Will be determined after connection
+        macAddress: device.serialNumber || 'USB',
+        connectionId: device.serialNumber || 'USB',
+        isConnected: false,
+        isHub: false,
+        color: '#666666',
+        lastSeen: performance.now()
+      }));
+
+      this.updateDiscoveredDevices(discoveredDevices);
+
+    } catch (error) {
+      if (error instanceof Error && error.name === 'NotAllowedError') {
+        const container = this.modal.querySelector('.discovered-devices-container') as HTMLElement;
+        if (container) {
+          container.innerHTML = `<div class="${styles.noDevices}">Device selection cancelled by user.</div>`;
+        }
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -576,7 +637,7 @@ export class DeviceModal {
     if (!container) return;
 
     if (this.discoveredDevices.length === 0) {
-      container.innerHTML = `<div class="${styles.noDevices}">No new devices found</div>`;
+      container.innerHTML = `<div class="${styles.noDevices}">No devices found. Make sure your devices are powered on and in pairing mode.</div>`;
       return;
     }
 
@@ -612,6 +673,7 @@ export class DeviceModal {
     console.log('Arrow visibility check:', { isLoggedIn, isVisible: this.isVisible });
     
     if (isLoggedIn && !this.isVisible) {
+      arrow.style.display = '';
       arrow.style.opacity = '1';
       console.log('Showing arrow');
     } else {
