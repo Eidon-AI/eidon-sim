@@ -1,0 +1,85 @@
+/* ViewControls.module.css */
+
+.container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  background-color: rgba(38, 38, 38, 0.95);
+  display: flex;
+  flex-direction: column;
+}
+
+.toggleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 200ms;
+  border: none;
+  cursor: pointer;
+}
+
+.toggleButton.active {
+  background-color: #262626;
+  color: white;
+}
+
+.toggleButton.active:hover {
+  background-color: #404040;
+  color: #e5e5e5;
+}
+
+.toggleButton.inactive {
+  background-color: #171717;
+  color: white;
+  opacity: 0.3;
+}
+
+.toggleButton.inactive:hover {
+  background-color: #262626;
+  opacity: 0.5;
+}
+
+.colorPickerContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: #262626;
+  transition: all 200ms;
+  position: relative;
+  cursor: pointer;
+}
+
+.colorPickerContainer:hover {
+  background-color: #404040;
+}
+
+.colorInput {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.25rem;
+  border: none;
+  cursor: pointer;
+  appearance: none;
+  background-color: transparent;
+}
+
+.colorInput::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.colorInput::-webkit-color-swatch {
+  border: none;
+  border-radius: 0.25rem;
+}
+
+.colorInput::-moz-color-swatch {
+  border: none;
+  border-radius: 0.25rem;
+}

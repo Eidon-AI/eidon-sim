@@ -4,6 +4,7 @@ import { prefs } from '../../core/preferences';
 export class IconOverlay {
   private container: HTMLDivElement;
   private icon!: SVGElement;
+  private titleElement!: HTMLDivElement;
   private boundUpdateIcon: () => void;
   private boundColorChange: (e: Event) => void;
 
@@ -14,10 +15,14 @@ export class IconOverlay {
     this.container.style.left = '20px';
     this.container.style.opacity = '9';
     this.container.style.pointerEvents = 'none';
+    this.container.style.display = 'flex';
+    this.container.style.alignItems = 'center';
+    this.container.style.gap = '12px';
     this.container.className = 'z-5';
 
-    // Create initial icon
+    // Create initial icon and title
     this.updateIcon();
+    this.createTitle();
 
     // Store bound function references for cleanup
     this.boundUpdateIcon = () => this.updateIcon();
@@ -41,7 +46,19 @@ export class IconOverlay {
     
     // Create a new icon with updated preferences
     this.icon = createEidonIcon({ size: 64 });
-    this.container.appendChild(this.icon);
+    this.container.insertBefore(this.icon, this.titleElement);
+  }
+
+  private createTitle(): void {
+    this.titleElement = document.createElement('div');
+    this.titleElement.textContent = 'Eidon Sym';
+    this.titleElement.style.fontFamily = 'var(--font-wallpoet)';
+    this.titleElement.style.fontSize = '24px';
+    this.titleElement.style.fontWeight = '400';
+    this.titleElement.style.color = prefs.symColor;
+    this.titleElement.style.textShadow = 'var(--text-shadow)';
+    this.titleElement.style.letterSpacing = '1px';
+    this.container.appendChild(this.titleElement);
   }
 
   private updateIconColor(color: string): void {
@@ -52,6 +69,11 @@ export class IconOverlay {
       const mainPath = paths[5]; // The last path (index 5)
       mainPath.setAttribute('fill', color);
       mainPath.setAttribute('stroke', color);
+    }
+    
+    // Update the title color as well
+    if (this.titleElement) {
+      this.titleElement.style.color = color;
     }
   }
 

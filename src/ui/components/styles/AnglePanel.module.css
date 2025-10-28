@@ -1,0 +1,56 @@
+/* AnglePanel.module.css */
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.angleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(23, 23, 23, 0.3);
+  border: 1px solid rgba(64, 64, 64, 0.4);
+  border-radius: 4px;
+}
+
+.groupTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.groupTitle i {
+  color: rgba(var(--brand-rgb), 1);
+}
+
+.anglesTable {
+  font-size: 0.75rem;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0.5rem 0;
+}
+
+.anglesTable th {
+  text-align: left;
+  font-weight: 500;
+}
+
+.anglesTable td {
+  text-align: right;
+}
+
+.anglesTable td:first-child {
+  text-align: left;
+  font-weight: 500;
+}

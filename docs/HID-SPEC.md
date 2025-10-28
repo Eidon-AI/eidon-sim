@@ -1,4 +1,4 @@
-# Eidon Sim – HID Protocol Specification (v0.2)
+# Eidon Sym – HID Protocol Specification (v0.2)
 
 ## 1 Overview
 Eidon devices use USB HID with VID `0xE1D0`.  

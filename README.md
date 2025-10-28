@@ -1,4 +1,4 @@
-# Eidon Sim 🦾
+# Eidon Sym 🦾
 
 > **Live-visual tele-operation UI for Eidon IMU Trackers (PID 0x0002) and Glove Controllers (PID 0x0001).**  
 > Streams orientation + finger data via WebHID, renders a humanoid arm and a vector-chain representation in Three.js, and outputs seven actuator angles per arm — all in a static, client-side web app.

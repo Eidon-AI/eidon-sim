@@ -1,4 +1,5 @@
-import './styles.css';
+import './globals.css';
+import '@fortawesome/fontawesome-free/css/all.min.css';
 import { mount } from './ui/App';
 
 window.addEventListener('DOMContentLoaded', () => {

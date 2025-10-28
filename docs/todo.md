@@ -1,4 +1,4 @@
-# Eidon Sim · TODO
+# Eidon Sym · TODO
 
 A living checklist of implementation tasks, grouped by milestone. Tick items off and re‑commit this doc as work progresses.
 
@@ -12,7 +12,7 @@ A living checklist of implementation tasks, grouped by milestone. Tick items off
 
 ---
 
-# TODO — Eidon Sim
+# TODO — Eidon Sym
 
 ## Milestone 1  (bootstrap)
 - [x] Vite + TS scaffold, dark Tailwind theme

@@ -1,18 +1,20 @@
-import { DeviceState } from '../../types/types';
+import { ConnectedDevice } from '../../types/device';
 import { HidManager }  from '../../core/HidManager';
 import { DeviceStore } from '../../core/DeviceStore';
 import { eulerXYZ } from '../../core/mathUtils';
 import { setSelected } from '../App';
 import { vec3, quat } from 'gl-matrix';
+import styles from './styles/DeviceCard.module.css';
 
 function createDial(label: string) {
   const wrap  = document.createElement('div');
-  wrap.className = 'flex flex-col items-center';
+  wrap.className = styles.dialContainer;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 40;
+  canvas.className = styles.dialCanvas;
   const cap    = document.createElement('span');
   cap.textContent = label;
-  cap.className = 'text-[10px] mt-0.5';
+  cap.className = styles.dialLabel;
   wrap.appendChild(canvas);
   wrap.appendChild(cap);
   return { wrap, canvas };
@@ -20,12 +22,13 @@ function createDial(label: string) {
 
 function createUpVectorCanvas() {
   const wrap = document.createElement('div');
-  wrap.className = 'flex flex-col items-center';
+  wrap.className = styles.dialContainer;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 40;
+  canvas.className = styles.dialCanvas;
   const cap = document.createElement('span');
   cap.textContent = 'Top';
-  cap.className = 'text-[10px] mt-0.5';
+  cap.className = styles.dialLabel;
   wrap.appendChild(canvas);
   wrap.appendChild(cap);
   return { wrap, canvas };
@@ -33,12 +36,13 @@ function createUpVectorCanvas() {
 
 function createForwardVectorCanvas() {
   const wrap = document.createElement('div');
-  wrap.className = 'flex flex-col items-center';
+  wrap.className = styles.dialContainer;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 40;
+  canvas.className = styles.dialCanvas;
   const cap = document.createElement('span');
   cap.textContent = 'Forward';
-  cap.className = 'text-[10px] mt-0.5';
+  cap.className = styles.dialLabel;
   wrap.appendChild(canvas);
   wrap.appendChild(cap);
   return { wrap, canvas };
@@ -46,12 +50,13 @@ function createForwardVectorCanvas() {
 
 function createPrismIndicatorCanvas() {
   const wrap = document.createElement('div');
-  wrap.className = 'flex flex-col items-center';
+  wrap.className = styles.dialContainer;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 40;
+  canvas.className = styles.dialCanvas;
   const cap = document.createElement('span');
   cap.textContent = 'Device';
-  cap.className = 'text-[10px] mt-0.5';
+  cap.className = styles.dialLabel;
   wrap.appendChild(canvas);
   wrap.appendChild(cap);
   return { wrap, canvas };
@@ -399,38 +404,33 @@ function draw3DPrismIndicator(
   });
 }
 
-export function renderCard(state: DeviceState, hid: HidManager, store: DeviceStore) {
+export function renderCard(state: ConnectedDevice, hid: HidManager, store: DeviceStore) {
 
   const el = document.createElement('div');
-  el.className = 'flex flex-col gap-2 border-b border-neutral-700 py-1';
+  el.className = styles.card;
 
   const topRow = document.createElement('div');
-  topRow.className = 'flex items-center gap-2 w-full';
+  topRow.className = styles.topRow;
 
   const colorBox = document.createElement('input');
   colorBox.type  = 'color';
   colorBox.value = state.color;
-  colorBox.className = 'w-5 h-6 border-none bg-transparent p-0';
+  colorBox.className = styles.colorBox;
   topRow.appendChild(colorBox);
 
   const label = document.createElement('span');
   label.textContent = `${state.kind} ${state.arm?.side ?? ''} ${state.arm?.level ?? ''}`;
-  label.className = 'flex-1';
+  label.className = styles.label;
   topRow.appendChild(label);
 
   const btnInfo = document.createElement('button');
   btnInfo.textContent = 'ⓘ';
-  btnInfo.className = 'px-2';
+  btnInfo.className = styles.btnInfo;
   topRow.appendChild(btnInfo);
-
-  const btnCal = document.createElement('button');
-  btnCal.textContent = '↻';
-  btnCal.className   = 'px-2';
-  topRow.appendChild(btnCal);
 
   const btnX = document.createElement('button');
   btnX.textContent = '✕';
-  btnX.className   = 'px-2';
+  btnX.className   = styles.btnX;
   topRow.appendChild(btnX);
 
   el.appendChild(topRow);
@@ -446,14 +446,13 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
     store.dispatchEvent(new CustomEvent('update', { detail: state }));
   };
 
-  btnCal.onclick = () => hid.sendCalibrate(state.id);
   btnX  .onclick = () => { hid.unpair(state.id); store['map'].delete(state.id); el.remove(); };
 
   btnInfo.onclick = ()=> {
-    const now = btnInfo.classList.toggle('text-blue-400'); // highlight
+    const now = btnInfo.classList.toggle(styles.highlighted);
     // remove highlight from other cards
     document.querySelectorAll('.btnInfo').forEach(b=>{
-      if(b!==btnInfo) b.classList.remove('text-blue-400');
+      if(b!==btnInfo) b.classList.remove(styles.highlighted);
     });
     setSelected(now ? state.id : null);
   };
@@ -473,23 +472,23 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   // Finger bars
   if(state.finger){
     const container = document.createElement('div');
-    container.className = 'w-full mt-2';
+    container.className = styles.fingerContainer;
     
     // Create rows with labels
     const fingerLabels = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'];
     const rows = fingerLabels.map((label, rowIndex) => {
       const row = document.createElement('div');
-      row.className = 'flex items-center gap-2';
+      row.className = styles.fingerRow;
       
       // Add label
       const labelEl = document.createElement('span');
       labelEl.textContent = label;
-      labelEl.className = 'text-[10px] w-8';
+      labelEl.className = styles.fingerLabel;
       row.appendChild(labelEl);
       
       // Add bars container
       const barsContainer = document.createElement('div');
-      barsContainer.className = 'flex-1 flex gap-1';
+      barsContainer.className = styles.barsContainer;
       
       // Number of bars for this row (4 for thumb, 3 for others)
       const numBars = rowIndex === 0 ? 4 : 3;
@@ -497,12 +496,12 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
       
       for(let i = 0; i < numBars; i++) {
         const bar = document.createElement('div');
-        bar.className = 'h-1 bg-neutral-700 flex-1 relative';
+        bar.className = styles.bar;
         bar.dataset['idx'] = String(startIdx + i);
         
         // Add inner bar for the filled portion
         const innerBar = document.createElement('div');
-        innerBar.className = 'absolute inset-0';
+        innerBar.className = styles.innerBar;
         bar.appendChild(innerBar);
         
         barsContainer.appendChild(bar);
@@ -534,7 +533,7 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
 
   /* ----- Euler dials ----- */
   const dialWrap = document.createElement('div');
-  dialWrap.className = 'flex gap-1 m-auto';          // push to right
+  dialWrap.className = styles.dialWrap;
   const prism = createPrismIndicatorCanvas();
   const dYaw = createDial('Yaw');
   const dPit = createDial('Pitch');
@@ -551,7 +550,7 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   let lastCanvasUpdate = 0;
   const CANVAS_UPDATE_INTERVAL = 50; // 10fps max
 
-  const updateDials = (s: DeviceState) =>{
+  const updateDials = (s: ConnectedDevice) =>{
     const now = performance.now();
     if (now - lastCanvasUpdate < CANVAS_UPDATE_INTERVAL) {
       return; // Skip update if too frequent
@@ -577,7 +576,7 @@ export function renderCard(state: DeviceState, hid: HidManager, store: DeviceSto
   /* run immediately and on every device update */
   updateDials(state);
   store.addEventListener('update', ev=>{
-    const s = (ev as CustomEvent<DeviceState>).detail;
+    const s = (ev as CustomEvent<ConnectedDevice>).detail;
     if(s.id===state.id) updateDials(s);
   });
 

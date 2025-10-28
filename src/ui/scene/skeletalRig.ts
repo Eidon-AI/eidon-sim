@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { ArmSolver } from '../../core/ArmSolver';
 import { DeviceStore } from '../../core/DeviceStore';
+import { DeviceRole } from '../../types/device';
 import { prefs } from '../../core/preferences';
 import { quat } from 'gl-matrix';
 
@@ -17,7 +18,6 @@ export class SkeletalRig {
   private fingerMap:  Record<Side, THREE.Bone[]>  = { left: [], right: [] };
   private extraMeshes!: { surface: THREE.Mesh; joints: THREE.Mesh };
   private root: THREE.Group | null = null;
-  private useActuatorAngles: boolean = false;
   private pendingVisible: boolean = true; // Store visibility state until model loads
   private pendingPosition: { x: number; z: number } = { x: 0, z: 0 };
   private pendingScale: number = 1.0;
@@ -26,7 +26,6 @@ export class SkeletalRig {
   
   // Store event handler references for proper cleanup
   private deviceColorHandler: (e: Event) => void;
-  private angleModeHandler: (e: Event) => void;
   private recolorHandler: () => void;
   private anglesHandler: () => void;
 
@@ -47,7 +46,7 @@ export class SkeletalRig {
     // Create bound event handlers for proper cleanup
     this.deviceColorHandler = (e: Event) => {
       const { id, hex } = (e as CustomEvent<any>).detail;
-      const dev = this.store.getBy('right','hand');
+      const dev = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HAND);
       if (dev && dev.id===id) {
         this.handMesh.left.forEach(mesh => {
           if (mesh.material) (mesh.material as THREE.MeshStandardMaterial).color.set(hex);
@@ -60,15 +59,12 @@ export class SkeletalRig {
       }
     };
     
-    this.angleModeHandler = (e: Event) => {
-      const { useActuatorAngles } = (e as CustomEvent<any>).detail;
-      this.useActuatorAngles = useActuatorAngles;
-    };
-    
     this.recolorHandler = () => {
       if (this.extraMeshes) {
-        this.extraMeshes.surface?.material?.color?.set?.(prefs.meshSurface);
-        this.extraMeshes.joints?.material?.color?.set?.(prefs.meshJoints);
+        const surfaceMaterial = this.extraMeshes.surface?.material as THREE.MeshStandardMaterial;
+        const jointsMaterial = this.extraMeshes.joints?.material as THREE.MeshStandardMaterial;
+        surfaceMaterial?.color?.set?.(prefs.meshSurface);
+        jointsMaterial?.color?.set?.(prefs.meshJoints);
       }
     };
     
@@ -78,11 +74,11 @@ export class SkeletalRig {
       
       this.applySide('left');  
       this.applySide('right');
+      this.updateChestYaw();
     };
     
     // Add event listeners
     document.addEventListener('deviceColor', this.deviceColorHandler);
-    document.addEventListener('angleModeChanged', this.angleModeHandler);
     
     loader.load(
       gltfPath,
@@ -178,56 +174,80 @@ export class SkeletalRig {
     // Prevent updates after destruction
     if (this.isDestroyed) return;
     
-    if (this.useActuatorAngles) {
-      this.applySideActuatorAngles(side);
-    } else {
-      this.applySideQuaternion(side);
-    }
+    // Always use actuator angles for the physical device
+    this.applySideActuatorAngles(side);
 
-    /* ----- Fingers mapping (same for both modes) ----- */
-    const glove = this.store.getBy(side, 'hand');
-    const src = glove?.fingerSmooth ?? glove?.fingerNorm;
+    /* ----- Fingers mapping (disabled - finger data removed from Device interface) ----- */
+    // const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
+    // const glove = this.store.getByPosition(handRole);
+    // const src = glove?.fingerSmooth ?? glove?.fingerNorm;
 
-    if (src) {
-      const bones = this.fingerMap[side];
-      const sgnYaw = side === 'left' ? 1 : -1;   // outward fan
+    // if (src) {
+    //   const bones = this.fingerMap[side];
+    //   const sgnYaw = side === 'left' ? 1 : -1;   // outward fan
 
-      src.forEach((v, idx) => {
-        const bend = v * 90 * d2r;
+    //   src.forEach((v: number, idx: number) => {
+    //     const bend = v * 90 * d2r;
 
-        switch (idx) {
-          /* Thumb first joint */
-          case 0:  
-            bones[0].rotation.y = -bend;
-            break;                // flex
-          case 1:  
-            bones[1].rotation.z = (v - 45) * 90 * d2r;
-            break;       // yaw
-          case 2:  
-            bones[2].rotation.z = bend;
-            break;                // Thumb2
-          case 3:  
-            bones[3].rotation.z = bend;
-            break;                // Thumb3
-          default: {
-            const f = Math.floor((idx-4) / 3);   // digit 0..3 (Index..Pinky)
-            const base = 4 + f*3;                // start idx for that digit
-            const bFlex = bones[4 + f*3];        // MCP flex
-            const bYaw  = bones[4 + f*3 + 1];    // MCP yaw
-            const bPIP  = bones[4 + f*3 + 2];    // PIP
+    //     switch (idx) {
+    //       /* Thumb first joint */
+    //       case 0:  
+    //         bones[0].rotation.y = -bend;
+    //         break;                // flex
+    //       case 1:  
+    //         bones[1].rotation.z = (v - 45) * 90 * d2r;
+    //         break;       // yaw
+    //       case 2:  
+    //         bones[2].rotation.z = bend;
+    //         break;                // Thumb2
+    //       case 3:  
+    //         bones[3].rotation.z = bend;
+    //         break;                // Thumb3
+    //       default: {
+    //         const f = Math.floor((idx-4) / 3);   // digit 0..3 (Index..Pinky)
+    //         const base = 4 + f*3;                // start idx for that digit
+    //         const bFlex = bones[4 + f*3];        // MCP flex
+    //         const bYaw  = bones[4 + f*3 + 1];    // MCP yaw
+    //         const bPIP  = bones[4 + f*3 + 2];    // PIP
 
-            if (idx === base)        bFlex.rotation.z = bend - 25*d2r;
-            else if (idx === base+1) bYaw.rotation.x  =  sgnYaw * -bend;
-            else if (idx === base+2) {
-              bPIP.rotation.x = bend;           // PIP
-              /* estimate DIP (third) as half PIP bend */
-              const dipBone = this.mapFinger(side,['Index','Middle','Ring','Pinky'][f],3);
-              dipBone.rotation.x = bend * 0.5;
-            }
-          }
-        }
-      });
-    }
+    //         if (idx === base)        bFlex.rotation.z = bend - 25*d2r;
+    //         else if (idx === base+1) bYaw.rotation.x  =  sgnYaw * -bend;
+    //         else if (idx === base+2) {
+    //           bPIP.rotation.x = bend;           // PIP
+    //           /* estimate DIP (third) as half PIP bend */
+    //           const dipBone = this.mapFinger(side,['Index','Middle','Ring','Pinky'][f],3);
+    //           dipBone.rotation.x = bend * 0.5;
+    //         }
+    //       }
+    //     }
+    //   });
+    // }
+  }
+
+  /* ------------ Update model yaw based on chest UP vector ----- */
+  private updateChestYaw(): void {
+    if (!this.root) return;
+    
+    const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+    if (!chest || !chest.up) return;
+    
+    // Project chest UP vector onto yaw plane (XZ plane, horizontal plane)
+    // chest.up is [x, y, z] in sensor space
+    // For yaw calculation, we need the projection onto the horizontal plane
+    const upX = chest.up[0];  // Left/Right component
+    const upZ = chest.up[2];  // Forward/Back component (Y/Z swap from sensor)
+    
+    // Calculate yaw angle from UP vector projection onto XZ plane
+    // atan2(z, x) gives us the angle in the horizontal plane
+    const yawRad = Math.atan2(upZ, upX);
+    
+    // Convert to degrees
+    const yawDeg = yawRad / d2r;
+    
+    // Apply rotation to model root
+    // The model currently has 180° offset at initialization, so we add that
+    // to maintain the same orientation as before, but now aligned with chest UP
+    this.root.rotation.y = (yawDeg + 180) * d2r;
   }
 
   /* ------------ Quaternion-based rotation (smooth) ---- */
@@ -238,7 +258,8 @@ export class SkeletalRig {
     const arm = this.armBones[side];
 
     /* Shoulder: Use quaternion directly to avoid angle wrapping */
-    const upperDevice = this.store.getBy(side, 'upper');
+    const upperRole = side === 'left' ? DeviceRole.ROLE_LEFT_HUB : DeviceRole.ROLE_RIGHT_HUB;
+    const upperDevice = this.store.getByPosition(upperRole);
     if (upperDevice) {
       const deviceQuat = upperDevice.quat;
       
@@ -268,7 +289,8 @@ export class SkeletalRig {
     }
 
     /* Elbow: Use quaternion-based calculation when devices available */
-    const lowerDevice = this.store.getBy(side, 'lower');
+    const lowerRole = side === 'left' ? DeviceRole.ROLE_LEFT_FOREARM : DeviceRole.ROLE_RIGHT_FOREARM;
+    const lowerDevice = this.store.getByPosition(lowerRole);
     if (upperDevice && lowerDevice) {
       // Calculate relative rotation between upper and lower arm
       const upperQuat = upperDevice.quat;
@@ -294,7 +316,8 @@ export class SkeletalRig {
     }
 
     /* Wrist: Use relative quaternion between hand and forearm if both devices available */
-    const handDevice = this.store.getBy(side, 'hand');
+    const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
+    const handDevice = this.store.getByPosition(handRole);
     if (handDevice && lowerDevice) {
       // Calculate relative rotation between forearm and hand
       const lowerQuat = lowerDevice.quat;
@@ -429,7 +452,8 @@ export class SkeletalRig {
       (this.extraMeshes.surface.material as THREE.MeshStandardMaterial).color.set(color);
       
       // Force material to update
-      this.extraMeshes.surface.material.needsUpdate = true;
+      const surfaceMaterial = this.extraMeshes.surface.material as THREE.MeshStandardMaterial;
+      surfaceMaterial.needsUpdate = true;
     }
   }
 
@@ -439,7 +463,6 @@ export class SkeletalRig {
     
     // Clean up event listeners
     document.removeEventListener('deviceColor', this.deviceColorHandler);
-    document.removeEventListener('angleModeChanged', this.angleModeHandler);
     document.removeEventListener('prefsChanged', this.recolorHandler);
     
     // Remove solver event listener

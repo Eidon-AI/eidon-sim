@@ -1,21 +1,22 @@
 import { prefs, savePrefs } from '../../core/preferences';
+import styles from './styles/PreferencesModal.module.css';
 
 export function mountPrefs(root: HTMLElement) {
   const modal = document.createElement('div');
-  modal.className = 'flex fixed inset-0 bg-black/60 hidden items-center justify-center z-50';
+  modal.className = `${styles.modal} ${styles.hidden}`;
   modal.innerHTML = `
-    <div class="modal bg-neutral-800/70 backdrop-blur-sm p-5 rounded-lg w-128 space-y-3">
-      <div class="flex justify-between items-center mb-2">
-        <h3 class="font-bold text-lg">Preferences</h3>
-        <button id="pClose" class="text-neutral-400 hover:text-white">✕</button>
+    <div class="${styles.content}">
+      <div class="${styles.header}">
+        <h3 class="${styles.title}">Preferences</h3>
+        <button id="pClose" class="${styles.closeButton}">✕</button>
       </div>
 
-      <label>Humerus (m)<input id="pHum" type="number" step="0.01" class="w-16 ml-2 color-black"></label>
-      <label>Radius (m) <input id="pRad" type="number" step="0.01" class="w-16 ml-2"></label>
-      <label>Hand  (m) <input id="pHand" type="number" step="0.01" class="w-16 ml-2"></label>
+      <label class="${styles.label}">Humerus (m)<input id="pHum" type="number" step="0.01" class="${styles.input}"></label>
+      <label class="${styles.label}">Radius (m) <input id="pRad" type="number" step="0.01" class="${styles.input}"></label>
+      <label class="${styles.label}">Hand  (m) <input id="pHand" type="number" step="0.01" class="${styles.input}"></label>
 
-      <label>Angle α <input id="pAng" type="number" step="0.05" class="w-16 ml-2"></label>
-      <label>Finger α<input id="pFin" type="number" step="0.05" class="w-16 ml-2"></label>
+      <label class="${styles.label}">Angle α <input id="pAng" type="number" step="0.05" class="${styles.input}"></label>
+      <label class="${styles.label}">Finger α<input id="pFin" type="number" step="0.05" class="${styles.input}"></label>
 
       <!-- <label>Theme
         <select id="pTheme" class="ml-2">
@@ -23,30 +24,24 @@ export function mountPrefs(root: HTMLElement) {
         </select>
       </label> -->
 
-      <label>Surface <input id="pSurf" type="color" class="ml-2"></label>
-      <label>Joints  <input id="pJoint" type="color" class="ml-2"></label>
+      <label class="${styles.label}">Surface <input id="pSurf" type="color" class="${styles.colorInput}"></label>
+      <label class="${styles.label}">Joints  <input id="pJoint" type="color" class="${styles.colorInput}"></label>
+      <label class="${styles.label}">Sym Color <input id="pSymColor" type="color" class="${styles.colorInput}"></label>
 
-      <label class="flex items-center">
-        <input id="pStereoEn" type="checkbox" class="mr-2"> Enable POV
+      <label class="${styles.checkboxLabel}">
+        <input id="pStereoEn" type="checkbox" class="${styles.checkbox}"> Enable POV
       </label>
-      <label>L-eye URL
-        <input id="pLeftURL" type="text" class="ml-2 w-50">
+      <label class="${styles.label}">L-eye URL
+        <input id="pLeftURL" type="text" class="${styles.urlInput}">
       </label>
-      <label>R-eye URL
-        <input id="pRightURL" type="text" class="ml-2 w-50">
+      <label class="${styles.label}">R-eye URL
+        <input id="pRightURL" type="text" class="${styles.urlInput}">
       </label>
 
-      <label class="flex items-center">
-        <input id="pRoEn" type="checkbox" class="mr-2"> Enable Teleoperation
-      </label>
-      <label>L-arm URL <input id="pRoL" type="text" class="ml-2 w-50"></label>
-      <label>R-arm URL <input id="pRoR" type="text" class="ml-2 w-50"></label>
 
-      <label>Scale <input id="pRoScale" type="number" step="0.05" class="w-16 ml-2"></label>
-
-      <div class="flex justify-end gap-2 mt-4">
-        <button id="pCancel" class="btn">Cancel</button>
-        <button id="pSave" class="btn">Save</button>
+      <div class="${styles.actions}">
+        <button id="pCancel" class="${styles.button}">Cancel</button>
+        <button id="pSave" class="${styles.button}">Save</button>
       </div>
     </div>`;
   root.appendChild(modal);
@@ -58,8 +53,8 @@ export function mountPrefs(root: HTMLElement) {
   const btnPrefs = document.getElementById('btnPrefs');
   if (btnPrefs) {
     btnPrefs.onclick = () => {
-      modal.classList.toggle('hidden');
-      if (!modal.classList.contains('hidden')) {
+      modal.classList.toggle(styles.hidden);
+      if (!modal.classList.contains(styles.hidden)) {
         // Store original values when opening
         originalValues = {
           humLen: prefs.humLen,
@@ -69,13 +64,10 @@ export function mountPrefs(root: HTMLElement) {
           fingerAlpha: prefs.fingerAlpha,
           meshSurface: prefs.meshSurface,
           meshJoints: prefs.meshJoints,
+          symColor: prefs.symColor,
           stereoEnabled: prefs.stereoEnabled,
           leftURL: prefs.leftURL,
           rightURL: prefs.rightURL,
-          roArmEnabled: prefs.roArmEnabled,
-          roLeftURL: prefs.roLeftURL,
-          roRightURL: prefs.roRightURL,
-          roScale: prefs.roScale
         };
         setValues();
       }
@@ -92,13 +84,10 @@ export function mountPrefs(root: HTMLElement) {
     // (document.getElementById('pTheme')as HTMLSelectElement).value = prefs.theme;
     (document.getElementById('pSurf') as HTMLInputElement).value = prefs.meshSurface;
     (document.getElementById('pJoint')as HTMLInputElement).value = prefs.meshJoints;
+    (document.getElementById('pSymColor') as HTMLInputElement).value = prefs.symColor;
     (document.getElementById('pStereoEn') as HTMLInputElement).checked = prefs.stereoEnabled;
     (document.getElementById('pLeftURL')  as HTMLInputElement).value = prefs.leftURL;
     (document.getElementById('pRightURL') as HTMLInputElement).value = prefs.rightURL;
-    (document.getElementById('pRoEn') as HTMLInputElement).checked = prefs.roArmEnabled;
-    (document.getElementById('pRoL') as HTMLInputElement).value   = prefs.roLeftURL;
-    (document.getElementById('pRoR') as HTMLInputElement).value   = prefs.roRightURL;
-    (document.getElementById('pRoScale') as HTMLInputElement).value   = prefs.roScale.toString();
   };
 
   /* restore original values */
@@ -117,28 +106,25 @@ export function mountPrefs(root: HTMLElement) {
     // prefs.theme       = (document.getElementById('pTheme') as HTMLSelectElement).value as any;
     prefs.meshSurface = (document.getElementById('pSurf') as HTMLInputElement).value;
     prefs.meshJoints  = (document.getElementById('pJoint')as HTMLInputElement).value;
+    prefs.symColor = (document.getElementById('pSymColor') as HTMLInputElement).value;
     prefs.stereoEnabled = (document.getElementById('pStereoEn') as HTMLInputElement).checked;
     prefs.leftURL  = (document.getElementById('pLeftURL')  as HTMLInputElement).value;
     prefs.rightURL = (document.getElementById('pRightURL') as HTMLInputElement).value;
-    prefs.roArmEnabled = (document.getElementById('pRoEn')  as HTMLInputElement).checked;
-    prefs.roLeftURL    = (document.getElementById('pRoL') as HTMLInputElement).value;
-    prefs.roRightURL   = (document.getElementById('pRoR') as HTMLInputElement).value;
-    prefs.roScale      = parseFloat((document.getElementById('pRoScale') as HTMLInputElement).value);
 
     document.documentElement.dataset.theme = prefs.theme;
     savePrefs();
-    modal.classList.add('hidden');
+    modal.classList.add(styles.hidden);
   };
 
   /* cancel */
   document.getElementById('pCancel')!.onclick = () => {
     restoreValues();
-    modal.classList.add('hidden');
+    modal.classList.add(styles.hidden);
   };
 
   /* close */
   document.getElementById('pClose')!.onclick = () => {
     restoreValues();
-    modal.classList.add('hidden');
+    modal.classList.add(styles.hidden);
   };
 }

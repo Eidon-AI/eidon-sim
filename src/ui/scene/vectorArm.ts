@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { vec3 } from 'gl-matrix';
 import { DeviceStore } from '../../core/DeviceStore';
 import { HUM_LEN, RAD_LEN, HAND_LEN } from '../../core/constants';
+import { DeviceRole } from '../../types/device';
 
 export class VectorArm {
   private segs: THREE.Line[] = [];
@@ -26,18 +27,22 @@ export class VectorArm {
     this.tubeGeometry = new THREE.CylinderGeometry(0.005, 0.005, 1, 8);
     this.arrowGeometry = new THREE.ConeGeometry(0.01, 0.04, 8);
     
-    // Create placeholder lines and tubes
-    ['#ff6', '#6ff', '#f6f'].forEach(col => {
-      this.segs.push(this.build(col));
-      this.tubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], col));
-      this.arrowTips.push(this.buildArrowTip(col));
-    });
+    // Create initial lines and tubes
+    // Forward vectors use pink color
+    const forwardColor = '#ff69b4'; // Pink
+    for (let i = 0; i < 3; i++) {
+      this.segs.push(this.build(forwardColor));
+      this.tubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], forwardColor));
+      this.arrowTips.push(this.buildArrowTip(forwardColor));
+    }
     
-    ['#ff9', '#9ff', '#f9f'].forEach(col => {
-      this.upSegs.push(this.build(col));
-      this.upTubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], col));
-      this.upArrowTips.push(this.buildArrowTip(col));
-    });
+    // Up vectors use green color
+    const upColor = '#00ff00'; // Green
+    for (let i = 0; i < 3; i++) {
+      this.upSegs.push(this.build(upColor));
+      this.upTubeSegs.push(this.buildTube([0,0,0], [0,0.1,0], upColor));
+      this.upArrowTips.push(this.buildArrowTip(upColor));
+    }
     
     this.group = new THREE.Group();
     this.tubeSegs.forEach(tube => this.group.add(tube));
@@ -57,7 +62,7 @@ export class VectorArm {
   }
 
   private build(color: string) {
-    // Create a simple line geometry as placeholder - will be replaced with tube in refresh
+    // Create a simple line geometry - will be replaced with tube in refresh
     const geo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(), new THREE.Vector3(0, 0.1, 0)
     ]);
@@ -106,10 +111,18 @@ export class VectorArm {
   }
 
   private refresh() {
-    /* ---- gather devices ---- */
-    const up    = this.store.getBy(this.side, 'upper');
-    const low   = this.store.getBy(this.side, 'lower');
-    const glove = this.store.getBy(this.side, 'hand');      // may be undefined
+    /* ---- gather devices by exact position ---- */
+    const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
+    const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+    const leftForearm = this.store.getByPosition(DeviceRole.ROLE_LEFT_FOREARM);
+    const rightForearm = this.store.getByPosition(DeviceRole.ROLE_RIGHT_FOREARM);
+    const leftHand = this.store.getByPosition(DeviceRole.ROLE_LEFT_HAND);
+    const rightHand = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HAND);
+
+    // Map to arm-specific devices based on side
+    const hub = this.side === 'left' ? leftHub : rightHub;
+    const forearm = this.side === 'left' ? leftForearm : rightForearm;
+    const hand = this.side === 'left' ? leftHand : rightHand;
 
     /* ---- shoulder anchor ---- */
     const shoulder: vec3 = this.side === 'left'
@@ -141,16 +154,16 @@ export class VectorArm {
         : vec3.transformMat3(vec3.create(), v, leftYaw90Array);
 
     /* ---- compute chain step-by-step ---- */
-    const upperEnd = up
-      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(up.fwd), HUM_LEN())
+    const upperEnd = hub
+      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(hub.fwd), HUM_LEN())
       : vec3.clone(shoulder);
 
-    const lowerEnd = low
-      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(low.fwd), RAD_LEN())
+    const lowerEnd = forearm
+      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(forearm.fwd), RAD_LEN())
       : vec3.clone(upperEnd);
 
-    const handEnd  = glove
-      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(glove.fwd), HAND_LEN())
+    const handEnd  = hand
+      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(hand.fwd), HAND_LEN())
       : vec3.clone(lowerEnd);
 
     /* ---- update three line segments (forward vectors) ---- */
@@ -159,7 +172,7 @@ export class VectorArm {
     pts.forEach((p, idx) => {
       if (idx === 3) return;                       // no segment after hand
       
-      const dev = idx === 0 ? up : idx === 1 ? low : glove;
+      const dev = idx === 0 ? hub : idx === 1 ? forearm : hand;
       const tube = this.tubeSegs[idx];
       const tip = this.arrowTips[idx];
       
@@ -174,15 +187,19 @@ export class VectorArm {
       tube.visible = true;
       tip.visible = true;
       
-      // Update tube position and scale instead of recreating
-      const direction = vec3.subtract(vec3.create(), pts[idx+1], pts[idx]);
+      // Forward vector visualization - fixed 0.35 unit length in fwd direction
+      const fwdVector = rotFwd(dev.fwd);
+      const forwardLength = 0.35; // Fixed 0.35 unit length
+      const fwdEnd = vec3.scaleAndAdd(vec3.create(), pts[idx], fwdVector, forwardLength);
+      
+      const direction = vec3.subtract(vec3.create(), fwdEnd, pts[idx]);
       const length = vec3.length(direction);
       
       if (length > 0.001) {
         tube.scale.set(1, length, 1);
         
         // Position the tube at the midpoint
-        const midpoint = vec3.lerp(vec3.create(), pts[idx], pts[idx+1], 0.5);
+        const midpoint = vec3.lerp(vec3.create(), pts[idx], fwdEnd, 0.5);
         tube.position.set(midpoint[0], midpoint[1], midpoint[2]);
 
         // Orient the tube to point from start to end
@@ -198,31 +215,30 @@ export class VectorArm {
       }
 
       /* position and orient arrow tip */
-      tip.position.set(pts[idx+1][0], pts[idx+1][1], pts[idx+1][2]);
+      tip.position.set(fwdEnd[0], fwdEnd[1], fwdEnd[2]);
       
       // Calculate direction vector for orientation
-      if (vec3.length(direction) > 0) {
-        vec3.normalize(direction, direction);
+      if (vec3.length(fwdVector) > 0) {
+        const normalizedFwd = vec3.normalize(vec3.create(), fwdVector);
         tip.lookAt(
-          tip.position.x + direction[0],
-          tip.position.y + direction[1], 
-          tip.position.z + direction[2]
+          tip.position.x + normalizedFwd[0],
+          tip.position.y + normalizedFwd[1], 
+          tip.position.z + normalizedFwd[2]
         );
         // Rotate 90 degrees to point the cone tip in the right direction
         tip.rotateX(Math.PI / 2);
       }
       
-      // Update material color using shared material
-      const colorHex = dev?.color ?? '#888';
-      const material = this.getMaterial(colorHex);
+      // Use fixed pink color for forward vectors
+      const forwardColor = '#ff69b4'; // Pink
+      const material = this.getMaterial(forwardColor);
       tube.material = material;
       tip.material = material;
     });
 
     /* ---- update up vector segments ---- */
-    const devices = [up, low, glove];
+    const devices = [hub, forearm, hand];
     const startPoints = [shoulder, upperEnd, lowerEnd];
-    const segmentLengths = [HUM_LEN(), RAD_LEN(), HAND_LEN()];
     
     startPoints.forEach((startPt, idx) => {
       const dev = devices[idx];
@@ -237,8 +253,8 @@ export class VectorArm {
       }
       
       const upVector = rotUp(dev.up);
-      // Make up vector length proportional to forward vector segment length (20% of segment length)
-      const upVectorLength = segmentLengths[idx] * 0.2;
+      // Fixed 0.2 unit length for up vector
+      const upVectorLength = 0.2;
       const upEnd = vec3.scaleAndAdd(vec3.create(), startPt, upVector, upVectorLength);
       
       // Show and update up tube - reuse existing tube object
@@ -283,9 +299,9 @@ export class VectorArm {
         upTip.rotateX(Math.PI / 2);
       }
       
-      // Update material color using shared material
-      const colorHex = dev?.color ?? '#888';
-      const material = this.getMaterial(colorHex);
+      // Use fixed green color for up vectors
+      const upColor = '#00ff00'; // Green
+      const material = this.getMaterial(upColor);
       upTube.material = material;
       upTip.material = material;
     });

@@ -1,4 +1,4 @@
-# Eidon Sim · Project Specification
+# Eidon Sym · Project Specification
 
 This document gathers **all technical specs** in one place: USB/HID protocol, data model, software architecture, UI layout, and deployment assumptions. It is the canonical reference for contributors and for automated agents (Cursor, CI, etc.).
 

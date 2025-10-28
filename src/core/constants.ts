@@ -3,20 +3,51 @@
 import { prefs } from "./preferences";
 
 /* ------------------------------------------------------------------
- * USB Vendor & Product IDs for Eidon devices
+ * Eidon Device Identifiers
  * ---------------------------------------------------------------- */
 export const EIDON_VENDOR_ID   = 0xE1D0;
-
-export const EIDON_GLOVE_PID   = 0x0001;   // glove (IMU + 16 fingers)
-export const EIDON_TRACKER_PID = 0x0002;   // tracker (IMU only)
+export const EIDON_PRODUCT_ID  = 0x0002;
 
 /* ------------------------------------------------------------------
- * HID report constants
+ * Bluetooth LE Service and Characteristic UUIDs
  * ---------------------------------------------------------------- */
-export const CALIBRATE_OUT_REPORT_ID = 0x01;
-export const CALIBRATE_PAYLOAD       = 0x01;
+export const EIDON_SERVICE_UUID = 'e1d00001-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const QUATERNION_CHAR_UUID = 'e1d00002-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const CALIBRATION_CHAR_UUID = 'e1d00003-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const DEVICE_INFO_CHAR_UUID = 'e1d00005-8b5a-3e5b-9e23-4f9b5c91bbde';
 
-export const COLOR_FEATURE_REPORT_ID = 0x01;   // 3-byte RGB
+// Hub-specific characteristics
+export const HAND_QUATERNION_CHAR_UUID = 'e1d00008-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const FOREARM_QUATERNION_CHAR_UUID = 'e1d00009-8b5a-3e5b-9e23-4f9b5c91bbde';
+
+// Role configuration service
+export const ROLE_CONFIG_SERVICE_UUID = 'e1d00006-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const ROLE_CONFIG_CHAR_UUID = 'e1d00007-8b5a-3e5b-9e23-4f9b5c91bbde';
+
+/* ------------------------------------------------------------------
+ * Device Roles (0-6)
+ * ---------------------------------------------------------------- */
+export enum DeviceRole {
+  LEFT_HAND = 0,
+  RIGHT_HAND = 1,
+  LEFT_FOREARM = 2,
+  RIGHT_FOREARM = 3,
+  LEFT_HUB = 4,
+  RIGHT_HUB = 5,
+  CHEST = 6,
+  UNKNOWN = 7
+}
+
+export const DEVICE_ROLE_NAMES = {
+  [DeviceRole.LEFT_HAND]: 'Left Hand',
+  [DeviceRole.RIGHT_HAND]: 'Right Hand',
+  [DeviceRole.LEFT_FOREARM]: 'Left Forearm',
+  [DeviceRole.RIGHT_FOREARM]: 'Right Forearm',
+  [DeviceRole.LEFT_HUB]: 'Left Hub',
+  [DeviceRole.RIGHT_HUB]: 'Right Hub',
+  [DeviceRole.CHEST]: 'Chest',
+  [DeviceRole.UNKNOWN]: 'Unknown'
+};
 
 // segment lengths (metres) – user-editable later
 export const HUM_LEN  = () => prefs.humLen;

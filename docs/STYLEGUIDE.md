@@ -1,4 +1,4 @@
-# Eidon Sim · Code & Style Guide
+# Eidon Sym · Code & Style Guide
 
 A shared reference to keep the codebase readable, consistent, and easy to review. Follow these conventions for all new PRs. (When in doubt, match adjacent code.)
 
