@@ -358,6 +358,13 @@ export function initScene(
     }
   });
 
+  // Handle model reset events (from playback exit)
+  document.addEventListener('resetModel', () => {
+    // Trigger a device update to refresh all visuals
+    // This will cause the rigs to return to default positions
+    store.dispatchEvent(new CustomEvent('update'));
+  });
+
   // Apply initial view state after event listeners are set up
   viewControls.applyInitialState();
 

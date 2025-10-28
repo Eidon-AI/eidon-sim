@@ -4,7 +4,6 @@ import { EidonTrackerManager } from '../core/EidonTrackerManager';
 import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
 import { PlaybackManager } from '../core/PlaybackManager';
-import { mountAnglePanel } from './components/AnglePanel';
 import { mountDeviceList } from './components/DeviceList';
 import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
@@ -15,6 +14,7 @@ import { renderCard } from './components/DeviceCard';
 import { AuthModal } from './components/AuthModal';
 import { AuthManager } from '../core/AuthManager';
 import { LoginStateManager } from '../core/LoginStateManager';
+import { Sidebar } from './components/Sidebar';
 import styles from './App.module.css';
 
 let selectedId: string | null = null;
@@ -28,6 +28,7 @@ let deviceStore: DeviceStore | null = null;
 let authModal: AuthModal | null = null;
 let authManager: AuthManager | null = null;
 let loginStateManager: LoginStateManager | null = null;
+let sidebar: Sidebar | null = null;
 let isAuthenticated = false;
 
 /* export so DeviceCard can import it */
@@ -135,21 +136,16 @@ function showAuthModal(root: HTMLElement) {
 
 function initializeApp(root: HTMLElement) {
   /* ------------------------------------------------------------
-   * 1. Inject sidebar + canvas markup
+   * 1. Inject canvas markup
    * ---------------------------------------------------------- */
   root.innerHTML = `
-    <div class="${styles.sidebar}">
-      <pre id="log" class="${styles.log}"></pre>
-    </div>
     <canvas id="gl" class="${styles.canvas}"></canvas>
   `;
 
   /* ------------------------------------------------------------
-   * 2. Grab the freshly-injected elements
+   * 2. Grab the canvas element
    * ---------------------------------------------------------- */
-  const canvas        = document.getElementById('gl')            as HTMLCanvasElement;
-  const sidebar       = document.querySelector(`.${styles.sidebar}`)       as HTMLDivElement;
-  logRef = document.getElementById('log') as HTMLPreElement;
+  const canvas = document.getElementById('gl') as HTMLCanvasElement;
 
   /* ------------------------------------------------------------
    * 3. Core singletons
@@ -216,8 +212,10 @@ function initializeApp(root: HTMLElement) {
   // TODO: Update DeviceList to work with EidonTrackerManager
   // mountDeviceList(sidebar, tracker, store);
 
-  /* ------------ Angle table ------------ */
-  mountAnglePanel(sidebar, solver);
+  /* ------------ Sidebar ------------ */
+  sidebar = new Sidebar();
+  sidebar.mount(root, solver);
+  logRef = sidebar.getLogElement();
 
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();
@@ -231,6 +229,10 @@ export function unmount() {
     authModal = null;
   }
   
+  if (sidebar) {
+    sidebar.unmount();
+    sidebar = null;
+  }
   
   if (controls) {
     controls.unmount();

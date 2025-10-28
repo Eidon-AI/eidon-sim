@@ -28,6 +28,7 @@ export class Controls {
   private playbackView: PlaybackView | null = null;
   private videoModal: VideoModal | null = null;
   private unsubscribe: (() => void) | null = null;
+  private previousModal: string | null = null;
   
   constructor(playbackManager: PlaybackManager, trackerManager: EidonTrackerManager) {
     this.playbackManager = playbackManager;
@@ -42,6 +43,15 @@ export class Controls {
   }
 
   private setupEventListeners(): void {
+    // Listen for returnToModal event
+    document.addEventListener('returnToModal', ((e: CustomEvent) => {
+      const { modal } = e.detail;
+      if (modal === 'recordings') {
+        this.showRecordingsModal();
+      } else if (modal === 'adminRecordings') {
+        this.showAdminRecordingsModal();
+      }
+    }) as EventListener);
     // Subscribe to login state changes
     this.unsubscribe = this.loginStateManager.addListener((state: LoginState) => {
       this.updateLoginButton(state);
@@ -320,12 +330,13 @@ export class Controls {
         throw new Error('Invalid sensor data format: missing devices or snapshots');
       }
 
-      // 4. Close the recordings modals
+      // 4. Store which modal was open before closing
       if (this.recordingsModal) {
+        this.previousModal = 'recordings';
         this.recordingsModal.unmount();
         this.recordingsModal = null;
-      }
-      if (this.adminRecordingsModal) {
+      } else if (this.adminRecordingsModal) {
+        this.previousModal = 'adminRecordings';
         this.adminRecordingsModal.unmount();
         this.adminRecordingsModal = null;
       }
@@ -338,7 +349,8 @@ export class Controls {
         this.playbackManager,
         sensorData,
         apiRecording,
-        () => this.handlePlaybackExit()
+        () => this.handlePlaybackExit(),
+        this.previousModal
       );
       this.playbackView.mount(document.body);
       

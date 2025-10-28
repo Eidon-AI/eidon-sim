@@ -74,6 +74,7 @@ export class SkeletalRig {
       
       this.applySide('left');  
       this.applySide('right');
+      this.updateChestYaw();
     };
     
     // Add event listeners
@@ -221,6 +222,32 @@ export class SkeletalRig {
     //     }
     //   });
     // }
+  }
+
+  /* ------------ Update model yaw based on chest UP vector ----- */
+  private updateChestYaw(): void {
+    if (!this.root) return;
+    
+    const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+    if (!chest || !chest.up) return;
+    
+    // Project chest UP vector onto yaw plane (XZ plane, horizontal plane)
+    // chest.up is [x, y, z] in sensor space
+    // For yaw calculation, we need the projection onto the horizontal plane
+    const upX = chest.up[0];  // Left/Right component
+    const upZ = chest.up[2];  // Forward/Back component (Y/Z swap from sensor)
+    
+    // Calculate yaw angle from UP vector projection onto XZ plane
+    // atan2(z, x) gives us the angle in the horizontal plane
+    const yawRad = Math.atan2(upZ, upX);
+    
+    // Convert to degrees
+    const yawDeg = yawRad / d2r;
+    
+    // Apply rotation to model root
+    // The model currently has 180° offset at initialization, so we add that
+    // to maintain the same orientation as before, but now aligned with chest UP
+    this.root.rotation.y = (yawDeg + 180) * d2r;
   }
 
   /* ------------ Quaternion-based rotation (smooth) ---- */

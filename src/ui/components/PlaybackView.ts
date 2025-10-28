@@ -15,17 +15,20 @@ export class PlaybackView {
   private animationFrameId: number | null = null;
   private onExit: () => void;
   private isAdmin: boolean = false;
+  private returnToModal: string | null = null;
 
   constructor(
     playbackManager: PlaybackManager,
     sensorData: SensorRecording,
     apiRecording: RecordingWithUrls | AdminRecording,
-    onExit: () => void
+    onExit: () => void,
+    returnToModal?: string | null
   ) {
     this.playbackManager = playbackManager;
     this.sensorData = sensorData;
     this.apiRecording = apiRecording;
     this.onExit = onExit;
+    this.returnToModal = returnToModal || null;
     
     // Check if current user is admin
     const loginStateManager = LoginStateManager.getInstance();
@@ -40,26 +43,29 @@ export class PlaybackView {
     container.className = styles.overlay;
     container.innerHTML = `
       <div class="${styles.videoContainer}">
+        <button class="${styles.videoCloseButton}" data-video-exit title="Exit playback">
+          <i class="fas fa-times"></i>
+        </button>
         <video 
           class="${styles.video}" 
           src="${this.apiRecording.videoReadUrl}"
           playsinline
         ></video>
-      </div>
-      ${this.isAdmin && 'userFullName' in this.apiRecording ? `
-      <div class="${styles.adminInfoContainer}">
-        <div class="${styles.adminInfo}">
-          <div class="${styles.adminInfoLabel}">Recorded by:</div>
-          <div class="${styles.adminInfoValue}">
-            ${this.apiRecording.userFullName}${this.apiRecording.userEmail ? ` (${this.apiRecording.userEmail})` : ''}
+        ${this.isAdmin && 'userFullName' in this.apiRecording ? `
+        <div class="${styles.adminInfoContainer}">
+          <div class="${styles.adminInfo}">
+            <div class="${styles.adminInfoLabel}">Recorded by:</div>
+            <div class="${styles.adminInfoValue}">
+              ${this.apiRecording.userFullName}${this.apiRecording.userEmail ? ` (${this.apiRecording.userEmail})` : ''}
+            </div>
           </div>
+          <button class="${styles.copyButton}" data-copy-link title="Copy recording link">
+            <i class="fas fa-link"></i>
+            <span>Copy Link</span>
+          </button>
         </div>
-        <button class="${styles.copyButton}" data-copy-link title="Copy recording link">
-          <i class="fas fa-link"></i>
-          <span>Copy Link</span>
-        </button>
+        ` : ''}
       </div>
-      ` : ''}
       <div class="${styles.controlsContainer}">
         <div class="${styles.timelineContainer}">
           <div class="${styles.timeline}" data-timeline>
@@ -115,6 +121,10 @@ export class PlaybackView {
 
   private attachEventListeners(): void {
     if (!this.videoElement) return;
+
+    // Video close button
+    const videoCloseBtn = this.container.querySelector('[data-video-exit]') as HTMLButtonElement;
+    videoCloseBtn.addEventListener('click', () => this.exit());
 
     // Play/Pause button
     const playPauseBtn = this.container.querySelector('[data-play-pause]') as HTMLButtonElement;
@@ -374,11 +384,24 @@ export class PlaybackView {
     // Return camera to default position
     this.returnCameraToDefault();
 
+    // Remove vector colors and reset model
+    this.resetModel();
+
     // Remove from DOM
     this.container.remove();
 
+    // Return to previous modal if it exists
+    if (this.returnToModal) {
+      document.dispatchEvent(new CustomEvent('returnToModal', { detail: { modal: this.returnToModal } }));
+    }
+
     // Call exit callback
     this.onExit();
+  }
+
+  private resetModel(): void {
+    // Dispatch event to reset model and remove vector colors
+    document.dispatchEvent(new CustomEvent('resetModel', { detail: {} }));
   }
 
   private returnCameraToDefault(): void {

@@ -20,11 +20,37 @@
   background: rgba(23, 23, 23, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(64, 64, 64, 0.6);
-  border-radius: 12px 12px 0 0;
-  overflow: hidden;
+  border-radius: 12px;
+  overflow: visible;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   pointer-events: auto;
   animation: slideInFromTop 0.4s ease-out;
+}
+
+.videoCloseButton {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 102;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+}
+
+.videoCloseButton:hover {
+  background: rgba(255, 0, 0, 0.8);
+  border-color: rgba(255, 0, 0, 0.6);
+  transform: scale(1.1);
 }
 
 .video {
@@ -251,34 +277,53 @@
   }
 }
 
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
 /* Admin info styles */
 .adminInfoContainer {
   position: absolute;
-  top: calc(2rem + 360px + 16px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 640px;
-  max-width: 90vw;
+  top: 50%;
+  right: -280px;
+  transform: translateY(-50%);
+  width: 200px;
   background: rgba(23, 23, 23, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(64, 64, 64, 0.6);
-  border-top: none;
-  border-radius: 0 0 12px 12px;
-  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   pointer-events: auto;
-  animation: slideInFromTop 0.4s ease-out;
+  animation: slideInFromRight 0.4s ease-out;
   z-index: 101;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+  .adminInfoContainer {
+    position: static;
+    transform: none;
+    top: auto;
+    right: auto;
+    width: 100%;
+    margin-top: 1rem;
+  }
 }
 
 .adminInfo {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  flex: 1;
 }
 
 .adminInfoLabel {
@@ -312,7 +357,6 @@
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
-  margin-left: 1rem;
   justify-content: center;
 }
 
