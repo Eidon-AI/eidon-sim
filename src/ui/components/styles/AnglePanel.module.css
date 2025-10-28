@@ -3,32 +3,35 @@
 .wrapper {
   display: flex;
   flex-direction: column;
-  padding-bottom: 0.25rem;
 }
 
-.header {
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.angleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(23, 23, 23, 0.3);
+  border: 1px solid rgba(64, 64, 64, 0.4);
+  border-radius: 4px;
+}
+
+.groupTitle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.25rem;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.title {
-  font-weight: 500;
-}
-
-.toggleButton {
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  width: 40px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1rem;
-}
-
-.toggleButton:hover {
-  opacity: 0.8;
+.groupTitle i {
+  color: rgba(var(--brand-rgb), 1);
 }
 
 .anglesTable {

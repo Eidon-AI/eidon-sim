@@ -11,18 +11,18 @@ export const EIDON_PRODUCT_ID  = 0x0002;
 /* ------------------------------------------------------------------
  * Bluetooth LE Service and Characteristic UUIDs
  * ---------------------------------------------------------------- */
-export const EIDON_SERVICE_UUID = 'E1D00001-8B5A-3E5B-9E23-4F9B5C91BBDE';
-export const QUATERNION_CHAR_UUID = 'E1D00002-8B5A-3E5B-9E23-4F9B5C91BBDE';
-export const CALIBRATION_CHAR_UUID = 'E1D00003-8B5A-3E5B-9E23-4F9B5C91BBDE';
-export const DEVICE_INFO_CHAR_UUID = 'E1D00005-8B5A-3E5B-9E23-4F9B5C91BBDE';
+export const EIDON_SERVICE_UUID = 'e1d00001-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const QUATERNION_CHAR_UUID = 'e1d00002-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const CALIBRATION_CHAR_UUID = 'e1d00003-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const DEVICE_INFO_CHAR_UUID = 'e1d00005-8b5a-3e5b-9e23-4f9b5c91bbde';
 
 // Hub-specific characteristics
-export const HAND_QUATERNION_CHAR_UUID = 'E1D00008-8B5A-3E5B-9E23-4F9B5C91BBDE';
-export const FOREARM_QUATERNION_CHAR_UUID = 'E1D00009-8B5A-3E5B-9E23-4F9B5C91BBDE';
+export const HAND_QUATERNION_CHAR_UUID = 'e1d00008-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const FOREARM_QUATERNION_CHAR_UUID = 'e1d00009-8b5a-3e5b-9e23-4f9b5c91bbde';
 
 // Role configuration service
-export const ROLE_CONFIG_SERVICE_UUID = 'E1D00006-8B5A-3E5B-9E23-4F9B5C91BBDE';
-export const ROLE_CONFIG_CHAR_UUID = 'E1D00007-8B5A-3E5B-9E23-4F9B5C91BBDE';
+export const ROLE_CONFIG_SERVICE_UUID = 'e1d00006-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const ROLE_CONFIG_CHAR_UUID = 'e1d00007-8b5a-3e5b-9e23-4f9b5c91bbde';
 
 /* ------------------------------------------------------------------
  * Device Roles (0-6)

@@ -1,41 +1,24 @@
 import { HidManager } from '../../core/HidManager';
 import { DeviceStore } from '../../core/DeviceStore';
 import { renderCard }  from './DeviceCard';
-import { ConnectedDevice } from '../../types/device';
+import { Device, DeviceRole } from '../../types/device';
 import styles from './styles/DeviceList.module.css';
 
 // Define sorting order for consistent device display
-const ARM_SIDE_ORDER = { 'left': 0, 'right': 1 };
-const ARM_LEVEL_ORDER = { 'upper': 0, 'lower': 1, 'hand': 2 };
-const KIND_ORDER = { 'tracker': 0, 'glove': 1 };
+const POSITION_ORDER: Record<DeviceRole, number> = {
+  [DeviceRole.ROLE_LEFT_HUB]: 0,
+  [DeviceRole.ROLE_LEFT_FOREARM]: 1,
+  [DeviceRole.ROLE_LEFT_HAND]: 2,
+  [DeviceRole.ROLE_RIGHT_HUB]: 3,
+  [DeviceRole.ROLE_RIGHT_FOREARM]: 4,
+  [DeviceRole.ROLE_RIGHT_HAND]: 5,
+  [DeviceRole.ROLE_CHEST]: 6,
+};
 
-function sortDevices(devices: ConnectedDevice[]): ConnectedDevice[] {
+function sortDevices(devices: Device[]): Device[] {
   return devices.sort((a, b) => {
-    // 1. Sort by arm side (left first, then right)
-    const aSide = a.arm?.side;
-    const bSide = b.arm?.side;
-    if (aSide && bSide && aSide !== bSide) {
-      return ARM_SIDE_ORDER[aSide] - ARM_SIDE_ORDER[bSide];
-    }
-    if (aSide && !bSide) return -1; // devices with arm info first
-    if (!aSide && bSide) return 1;
-    
-    // 2. Sort by arm level (upper, lower, hand)
-    const aLevel = a.arm?.level;
-    const bLevel = b.arm?.level;
-    if (aLevel && bLevel && aLevel !== bLevel) {
-      return ARM_LEVEL_ORDER[aLevel] - ARM_LEVEL_ORDER[bLevel];
-    }
-    if (aLevel && !bLevel) return -1;
-    if (!aLevel && bLevel) return 1;
-    
-    // 3. Sort by device kind (tracker first, then glove)
-    if (a.kind !== b.kind) {
-      return KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
-    }
-    
-    // 4. Sort by ID as fallback for consistent ordering
-    return a.id.localeCompare(b.id);
+    // Sort by position order
+    return POSITION_ORDER[a.position] - POSITION_ORDER[b.position];
   });
 }
 

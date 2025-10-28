@@ -1,6 +1,6 @@
 import { quat, vec3, vec3 as v3 } from 'gl-matrix';
-import { parseTracker, parseGlove } from './reportParsers';
-import { DeviceState } from '../types/device';
+import { parseTracker } from './reportParsers';
+import { Device, DeviceRole, DeviceColor } from '../types/device';
 
 export class DeviceStore extends EventTarget {
   private playbackMode = false;
@@ -18,11 +18,11 @@ export class DeviceStore extends EventTarget {
     const { id, hex } = (e as CustomEvent<{ id: string; hex: string }>).detail;
     const s = this.map.get(id);
     if (!s) return;
-    s.color = hex;
+    s.color = hex as DeviceColor;
     this.dispatchEvent(new CustomEvent('update', { detail: s }));
   }
 
-  private map = new Map<string, DeviceState>();
+  private map = new Map<string, Device>();
 
   /** Subscribe to HidManager.report */
   handleRaw(id: string, view: DataView) {
@@ -42,7 +42,7 @@ export class DeviceStore extends EventTarget {
   }
 
   /** Update device state during playback (bypasses live input blocking) */
-  updateDeviceForPlayback(deviceId: string, updates: Partial<DeviceState>) {
+  updateDeviceForPlayback(deviceId: string, updates: Partial<Device>) {
     const device = this.map.get(deviceId);
     if (!device) return;
 
@@ -57,14 +57,12 @@ export class DeviceStore extends EventTarget {
   }
 
   /* ---------- internal helpers ------------------------------- */
-  private newState(id: string, view: DataView): DeviceState {
-    // glove reports are > 20 bytes (tracker = 10 bytes)
-    const isGlove = view.byteLength > 20;
-  
+  private newState(id: string, view: DataView): Device {
     return {
       id,
-      kind: isGlove ? 'glove' : 'tracker',
-      color: '#ff8800',
+      name: `Device ${id}`,
+      position: DeviceRole.ROLE_LEFT_HAND, // Default position, will be set by system
+      color: DeviceColor.ORANGE,
       quat: quat.create(),
       up:   vec3.create(),
       fwd:  vec3.create(),
@@ -74,16 +72,15 @@ export class DeviceStore extends EventTarget {
     };
   }
 
-  private parseInto(state: DeviceState, view: DataView) {
-    if (state.kind === 'tracker')  parseTracker(state, view);
-    if (state.kind === 'glove')    parseGlove(state,   view);
+  private parseInto(state: Device, view: DataView) {
+    parseTracker(state, view);
     state.lastSeen = performance.now();
   }
 
-  /** Convenience: fetch latest tracker/glove by arm side & level */
-  getBy(side: 'left' | 'right', level: 'upper' | 'lower' | 'hand'): DeviceState | undefined {
+  /** Convenience: fetch device by specific position */
+  getByPosition(position: DeviceRole): Device | undefined {
     return [...this.map.values()].find(
-      s => s.arm?.side === side && s.arm?.level === level
+      s => s.position === position
     );
   }
 

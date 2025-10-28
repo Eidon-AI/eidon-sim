@@ -1,37 +1,27 @@
 import { quat, vec3 } from 'gl-matrix';
 
-export type DeviceKind = 'tracker' | 'glove';
+export interface DeviceData {
+  quat: quat;                 // gl-matrix order [x,y,z,w]
+  up: vec3;   fwd: vec3;      // derived directions
+  chainStart: vec3; chainEnd: vec3;
+  lastSeen: number;           // ms since page load
+}
 
-export interface Device {
-    id: string;  // UUID from BaseEntity
-    createdAt: Date;
-    updatedAt: Date;
-    name: string;  // User-friendly name for the device
-    type: DeviceType;  // Enum value
-    position: DeviceRole;  // Enum value (int)
-    color: DeviceColor;  // Enum value
-    connectionId: string;  // Connection identifier for the device
-    userId: string;  // Foreign key to users table
-  }
-
-export interface ConnectedDevice {
-  deviceId: string;
+export interface Device extends DeviceData {
+  id: string;
   name: string;
-  role: DeviceRole;
-  lastDataUpdate: number; // timestamp
-  color?: string; // RGB string from database
-
-  // Data
-  quat: quat;
-  up: vec3;
-  fwd: vec3;
-  chainStart: vec3;
-  chainEnd: vec3;
-  firmwareVersion?: string;
+  position: DeviceRole;
+  color: DeviceColor;
+  connectionId?: string;  // Optional for live devices
+  userId?: string;       // Optional for live devices
+  createdAt?: Date;      // Optional for live devices
+  updatedAt?: Date;      // Optional for live devices
+  lastDataUpdate?: number; // Optional for playback devices
+  firmwareVersion?: string; // Optional
 }
 
 export interface DeviceConnectionState {
-  connectedDevices: ConnectedDevice[];
+  connectedDevices: Device[];
   
   // Methods for checking connection status
   isConnected(role: DeviceRole): boolean;
@@ -40,11 +30,6 @@ export interface DeviceConnectionState {
 }
   
   // Enum types for Eidon devices
-  
-  export enum DeviceType {
-    TRACKER = 'tracker',
-    GLOVE = 'glove',
-  }
   
   export enum DeviceRole {
     ROLE_LEFT_HAND = 0,      // Left hand/arm

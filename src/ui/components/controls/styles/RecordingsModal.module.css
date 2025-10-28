@@ -1,0 +1,285 @@
+/* RecordingsModal.module.css */
+
+.modal {
+  position: absolute;
+  z-index: 1000;
+  animation: slideInFromTop 0.3s ease-out forwards;
+}
+
+.modalContent {
+  background: rgba(23, 23, 23, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(233, 51, 112, 0.4);
+  border-radius: 12px;
+  padding: 24px;
+  width: 1000px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.modalClose {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 20px;
+  font-weight: 300;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.modalClose:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.modalBody {
+  color: white;
+  font-size: 14px;
+  line-height: 1.5;
+  padding-right: 20px;
+}
+
+/* Recordings Modal Styles */
+.recordingsContainer {
+  width: 100%;
+}
+
+.recordingsHeader {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.recordingsHeader h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+  font-family: var(--font-heading);
+}
+
+.recordingsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.recordingCard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.recordingCard:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(233, 51, 112, 0.4);
+  transform: translateY(-2px);
+}
+
+.recordingThumbnail {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  overflow: hidden;
+}
+
+.recordingThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnailPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+
+.videoPlayButton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.videoPlayButton:hover {
+  background: rgba(233, 51, 112, 0.8);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.recordingInfo {
+  padding: 16px;
+}
+
+.recordingTask {
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 8px 0;
+  font-family: var(--font-heading);
+}
+
+.recordingDate {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 16px 0;
+}
+
+.playbackButton {
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, rgb(var(--brand-rgb)) 0%, rgb(var(--brand-sub-rgb)) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.playbackButton:hover {
+  background: linear-gradient(135deg, rgb(var(--brand-sub-rgb)) 0%, rgb(var(--brand-rgb)) 100%);
+  box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.3);
+  transform: translateY(-1px);
+}
+
+.playbackButton i {
+  font-size: 16px;
+}
+
+/* Pagination Styles */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pageButton {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pageButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(233, 51, 112, 0.4);
+}
+
+.pageButtonCurrentPage {
+  background: rgba(233, 51, 112, 0.3);
+  border-color: rgba(233, 51, 112, 0.6);
+  color: white;
+}
+
+.pageButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pageEllipsis {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  padding: 8px 4px;
+  user-select: none;
+}
+
+/* Error and Empty States */
+.errorMessage, .noRecordings {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  padding: 40px 20px;
+}
+
+.errorMessage {
+  color: #f44336;
+}
+
+/* Admin Recordings Styles */
+.adminRecordingCard {
+  background: rgba(255, 193, 7, 0.05);
+  border: 1px solid rgba(255, 193, 7, 0.2);
+}
+
+.adminRecordingCard:hover {
+  background: rgba(255, 193, 7, 0.08);
+  border-color: rgba(255, 193, 7, 0.4);
+}
+
+.adminRecordingUser {
+  font-size: 12px;
+  color: rgba(255, 193, 7, 0.8);
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.recordingsHeader.adminHeader h3 {
+  color: rgba(255, 193, 7, 1);
+}
+
+.recordingsSubtext {
+  font-size: 14px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 8px 0 0 0;
+}
+
+@keyframes slideInFromTop {
+  0% {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+

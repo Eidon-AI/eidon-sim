@@ -4,17 +4,17 @@ import { EidonTrackerManager } from '../core/EidonTrackerManager';
 import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
 import { PlaybackManager } from '../core/PlaybackManager';
-import { mountAnglePanel } from './components/AnglePanel';
 import { mountDeviceList } from './components/DeviceList';
 import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
 import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
-import { Controls } from './components/Controls';
+import { Controls } from './components/controls/Controls';
 import { renderCard } from './components/DeviceCard';
 import { AuthModal } from './components/AuthModal';
 import { AuthManager } from '../core/AuthManager';
 import { LoginStateManager } from '../core/LoginStateManager';
+import { Sidebar } from './components/Sidebar';
 import styles from './App.module.css';
 
 let selectedId: string | null = null;
@@ -28,6 +28,7 @@ let deviceStore: DeviceStore | null = null;
 let authModal: AuthModal | null = null;
 let authManager: AuthManager | null = null;
 let loginStateManager: LoginStateManager | null = null;
+let sidebar: Sidebar | null = null;
 let isAuthenticated = false;
 
 /* export so DeviceCard can import it */
@@ -53,17 +54,60 @@ export function log(msg: string) {
 // For debugging
 (window as any).setSelected = setSelected;
 
+let pendingRecordingId: string | null = null;
+
 export function mount(root: HTMLElement) {
   // Initialize login state manager
   loginStateManager = LoginStateManager.getInstance();
   isAuthenticated = loginStateManager.isLoggedIn();
 
+  // Listen for login state changes to retry loading recording
+  loginStateManager.addListener(async (state) => {
+    if (state.isLoggedIn && pendingRecordingId && controls) {
+      console.log('User logged in, retrying to load recording:', pendingRecordingId);
+      await tryLoadRecording(pendingRecordingId);
+    }
+  });
+
   // Always initialize the app first, then show auth modal if needed
   initializeApp(root);
+
+  // Check for recordingId URL parameter
+  checkUrlForRecordingId();
 
   if (!isAuthenticated) {
     // Show auth modal as overlay
     showAuthModal(root);
+  }
+}
+
+async function checkUrlForRecordingId() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const recordingId = urlParams.get('recordingId');
+  
+  if (!recordingId) return;
+  
+  console.log('Found recordingId in URL:', recordingId);
+  pendingRecordingId = recordingId;
+  
+  // Wait for controls to be initialized
+  if (!controls) {
+    setTimeout(() => checkUrlForRecordingId(), 100);
+    return;
+  }
+  
+  // Try to load the recording
+  await tryLoadRecording(recordingId);
+}
+
+async function tryLoadRecording(recordingId: string) {
+  try {
+    await controls.fetchAndPlayRecording(recordingId);
+    pendingRecordingId = null; // Clear on success
+  } catch (error) {
+    console.error('Failed to load recording from URL:', error);
+    // If 401, user will be prompted to login
+    // We'll retry when they log in
   }
 }
 
@@ -92,21 +136,16 @@ function showAuthModal(root: HTMLElement) {
 
 function initializeApp(root: HTMLElement) {
   /* ------------------------------------------------------------
-   * 1. Inject sidebar + canvas markup
+   * 1. Inject canvas markup
    * ---------------------------------------------------------- */
   root.innerHTML = `
-    <div class="${styles.sidebar}">
-      <pre id="log" class="${styles.log}"></pre>
-    </div>
     <canvas id="gl" class="${styles.canvas}"></canvas>
   `;
 
   /* ------------------------------------------------------------
-   * 2. Grab the freshly-injected elements
+   * 2. Grab the canvas element
    * ---------------------------------------------------------- */
-  const canvas        = document.getElementById('gl')            as HTMLCanvasElement;
-  const sidebar       = document.querySelector(`.${styles.sidebar}`)       as HTMLDivElement;
-  logRef = document.getElementById('log') as HTMLPreElement;
+  const canvas = document.getElementById('gl') as HTMLCanvasElement;
 
   /* ------------------------------------------------------------
    * 3. Core singletons
@@ -173,8 +212,10 @@ function initializeApp(root: HTMLElement) {
   // TODO: Update DeviceList to work with EidonTrackerManager
   // mountDeviceList(sidebar, tracker, store);
 
-  /* ------------ Angle table ------------ */
-  mountAnglePanel(sidebar, solver);
+  /* ------------ Sidebar ------------ */
+  sidebar = new Sidebar();
+  sidebar.mount(root, solver);
+  logRef = sidebar.getLogElement();
 
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();
@@ -188,6 +229,10 @@ export function unmount() {
     authModal = null;
   }
   
+  if (sidebar) {
+    sidebar.unmount();
+    sidebar = null;
+  }
   
   if (controls) {
     controls.unmount();

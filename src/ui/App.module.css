@@ -1,32 +1,5 @@
 /* App.module.css */
 
-.sidebar {
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  width: 20rem; /* w-80 */
-  display: flex;
-  flex-direction: column;
-  background-color: rgba(23, 23, 23, 0.5); /* bg-neutral-900/50 */
-  backdrop-filter: blur(4px); /* backdrop-blur-sm */
-  border: 1px solid #404040; /* border-neutral-700 */
-  padding: 1rem; /* p-4 */
-  gap: 0.5rem; /* gap-2 */
-  overflow-y: auto; /* overflow-y-auto */
-  z-index: 10; /* z-10 */
-}
-
-.log {
-  flex: 1; /* flex-1 */
-  overflow: auto; /* overflow-auto */
-  font-size: 0.75rem; /* text-xs */
-  background-color: rgba(23, 23, 23, 0.5); /* bg-neutral-900/50 */
-  padding-left: 0.5rem; /* ph-2 */
-  padding-right: 0.5rem; /* ph-2 */
-  border: 1px solid #404040; /* border-neutral-700 */
-}
-
-
 .canvas {
   position: fixed;
   inset: 0;

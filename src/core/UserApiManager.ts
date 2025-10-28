@@ -47,6 +47,12 @@ export class UserApiManager {
       });
 
       if (!response.ok) {
+        // If unauthorized (401), we should let the caller handle logout
+        if (response.status === 401) {
+          console.log('Unauthorized response received in UserApiManager');
+          throw new Error('Session expired. Please log in again.');
+        }
+        
         throw new Error(`Failed to fetch profile: ${response.status} ${response.statusText}`);
       }
 
@@ -83,11 +89,14 @@ export class UserApiManager {
       });
 
       if (!response.ok) {
+        // If unauthorized (401), log it but don't throw since this is a silent operation
+        if (response.status === 401) {
+          console.log('Unauthorized response received in updateSymColor - session may have expired');
+        }
         console.error('Failed to update symColor on server:', response.status, response.statusText);
         return;
       }
 
-      console.log('SymColor successfully synced to server:', symColor);
     } catch (error) {
       console.error('Failed to sync symColor to server:', error);
       // Silent failure - user experience isn't affected
@@ -116,6 +125,10 @@ export class UserApiManager {
       });
 
       if (!response.ok) {
+        // If unauthorized (401), log it but don't throw since this is a silent operation
+        if (response.status === 401) {
+          console.log('Unauthorized response received in updateProfile - session may have expired');
+        }
         console.error('Failed to update profile on server:', response.status, response.statusText);
         return;
       }
