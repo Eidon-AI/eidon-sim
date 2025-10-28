@@ -54,3 +54,11 @@
   text-align: left;
   font-weight: 500;
 }
+
+.anglesTable tr:nth-child(1) td:first-child {
+  color: #00d4ff; /* Cyan for Left side */
+}
+
+.anglesTable tr:nth-child(2) td:first-child {
+  color: #ff9500; /* Orange for Right side */
+}

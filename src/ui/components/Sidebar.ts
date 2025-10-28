@@ -6,13 +6,13 @@ import styles from './styles/Sidebar.module.css';
 export class Sidebar {
   private container: HTMLElement;
   private sidebar: HTMLElement;
-  private isExpanded: boolean = true;
+  private isExpanded: boolean = false;
   private logElement: HTMLPreElement | null = null;
 
   constructor() {
     this.container = document.createElement('div');
     this.container.innerHTML = `
-      <div class="${styles.sidebar} ${styles.expanded}">
+      <div class="${styles.sidebar}">
         <div class="${styles.sidebarHeader}">
           <div class="${styles.headerLeft}">
             <h3 class="${styles.title}">
@@ -20,13 +20,13 @@ export class Sidebar {
             </h3>
             <div class="${styles.colorIndicator}">
               <span class="${styles.colorDot}" style="background-color: #ff69b4;"></span>
-              <span class="${styles.colorLabel}">Forward</span>
+              <span class="${styles.colorLabel}">Forward Vector</span>
               <span class="${styles.colorDot}" style="background-color: #00ff00;"></span>
-              <span class="${styles.colorLabel}">Up</span>
+              <span class="${styles.colorLabel}">Up Vector</span>
             </div>
           </div>
           <button class="${styles.sidebarToggle}" data-sidebar-toggle>
-            <i class="fas fa-chevron-down"></i>
+            <i class="fas fa-chevron-up"></i>
           </button>
         </div>
         <div class="${styles.sidebarContent}">

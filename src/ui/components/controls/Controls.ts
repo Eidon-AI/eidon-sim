@@ -235,7 +235,9 @@ export class Controls {
   }
 
   private showProfileModal(profile?: any): void {
-    this.hideRecordingsModal(); // Hide recordings modal if open
+    // Hide recordings modals if open
+    this.hideRecordingsModal();
+    this.hideAdminRecordingsModal();
     
     let profileData: any;
     if (profile) {

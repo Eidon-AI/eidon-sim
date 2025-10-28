@@ -249,10 +249,12 @@ export class AdminRecordingsModal {
     return `
       <div class="${styles.recordingsContainer}">
         <div class="${styles.recordingsHeader} ${styles.adminHeader}">
-          <h3>System Recordings (${totalRecordings})</h3>
-          ${totalSecondsFormatted ? `<p class="${styles.recordingsSubtext}">Total recording time: ${totalSecondsFormatted}</p>` : ''}
+          <div class="${styles.headerLeft}">
+            <h3>System Recordings (${totalRecordings})</h3>
+            ${totalSecondsFormatted ? `<p class="${styles.recordingsSubtext}">Total recording time: ${totalSecondsFormatted}</p>` : ''}
+          </div>
+          ${paginationHTML ? `<div class="${styles.headerRight}">${paginationHTML}</div>` : ''}
         </div>
-        ${paginationHTML}
         <div class="${styles.recordingsGrid}">
           ${recordingsGrid}
         </div>
@@ -266,12 +268,8 @@ export class AdminRecordingsModal {
     const totalPages = pagination.totalPages;
 
     if (totalPages <= 1) {
-      pages.push(`<button class="${styles.pageButton} ${styles.pageButtonCurrentPage}">1</button>`);
-      return `
-        <div class="${styles.pagination}">
-          ${pages.join('')}
-        </div>
-      `;
+      // Don't show pagination if there's only one page
+      return '';
     }
 
     if (pagination.hasPrev) {
