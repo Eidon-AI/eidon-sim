@@ -1,0 +1,57 @@
+/* DeviceListSection.module.css */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  gap: 0.5rem;
+}
+
+.sectionHeader:hover {
+  background-color: rgba(64, 64, 64, 0.3);
+}
+
+.sectionTitle {
+  font-weight: 500;
+  margin: 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.chevron {
+  font-size: 0.75rem;
+  transition: transform 0.3s ease;
+}
+
+.section.expanded .chevron {
+  transform: rotate(0deg);
+}
+
+.section:not(.expanded) .chevron {
+  transform: rotate(-90deg);
+}
+
+.sectionContent {
+  display: block;
+  padding: 0 1rem;
+  padding-bottom: 0.75rem;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.section:not(.expanded) .sectionContent {
+  display: none;
+}
+

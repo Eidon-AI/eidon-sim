@@ -1,6 +1,8 @@
-import { EidonTrackerManager, EidonDevice } from '../../core/EidonTrackerManager';
-import { DeviceRole, DEVICE_ROLE_NAMES } from '../../core/constants';
-import { LoginStateManager } from '../../core/LoginStateManager';
+import { EidonTrackerManager, EidonDevice } from '../../../core/EidonTrackerManager';
+import { DeviceRole } from '../../../core/constants';
+import { LoginStateManager } from '../../../core/LoginStateManager';
+import { createDeviceConnectionCard as createNewDeviceCard, setDeviceCardStyles as setNewDeviceCardStyles, cardStyles as newCardStyles } from './NewDeviceConnectionCard';
+import { createDeviceConnectionCard as createSavedDeviceCard, setDeviceCardStyles as setSavedDeviceCardStyles, cardStyles as savedCardStyles } from './SavedDeviceConnectionCard';
 import styles from './styles/DeviceModal.module.css';
 
 export class DeviceModal {
@@ -11,6 +13,8 @@ export class DeviceModal {
   private isVisible = false;
   private savedDevices: EidonDevice[] = [];
   private discoveredDevices: EidonDevice[] = [];
+  private deviceConfigs = new Map<string, { selectedColor?: string; selectedRole?: DeviceRole }>();
+  private deviceQuaternionData = new Map<string, { quaternion: number[]; timestamp: number }>();
 
   constructor(trackerManager: EidonTrackerManager) {
     this.trackerManager = trackerManager;
@@ -122,6 +126,40 @@ export class DeviceModal {
     this.trackerManager.addEventListener('deviceDisconnected', (e: any) => {
       this.updateDeviceConnectionStatus(e.detail.deviceId, false);
     });
+
+    // Listen for device info updates (e.g., role changes)
+    this.trackerManager.addEventListener('deviceInfoUpdated', (e: any) => {
+      const { deviceId, device } = e.detail;
+      // Update the device in our lists and re-render
+      const savedDevice = this.savedDevices.find(d => d.id === deviceId);
+      if (savedDevice) {
+        Object.assign(savedDevice, device);
+        this.renderSavedDevices();
+      }
+      const discoveredDevice = this.discoveredDevices.find(d => d.id === deviceId);
+      if (discoveredDevice) {
+        Object.assign(discoveredDevice, device);
+        this.renderDiscoveredDevices();
+      }
+    });
+
+    // Listen for quaternion data updates
+    this.trackerManager.addEventListener('quaternionData', ((e: Event) => {
+      const event = e as CustomEvent<{ deviceId: string; quaternion: number[]; timestamp: number }>;
+      const { deviceId, quaternion, timestamp } = event.detail;
+      this.deviceQuaternionData.set(deviceId, { quaternion, timestamp });
+      // Update data view if it's currently visible
+      this.updateDeviceDataView(deviceId);
+      // Update dials
+      const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+      if (device) {
+        // Determine which card type based on device location
+        const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+        import(isSaved ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
+          updateDeviceDials(deviceId, { quaternion, timestamp });
+        });
+      }
+    }) as EventListener);
 
     // Listen for discovered devices event
     this.trackerManager.addEventListener('devicesDiscovered', ((e: Event) => {
@@ -300,189 +338,300 @@ export class DeviceModal {
 
   private renderSavedDevices(): void {
     const container = this.modal.querySelector('.saved-devices-container') as HTMLElement;
-    const title = this.modal.querySelector('.saved-devices-title') as HTMLElement;
-    if (!container || !title) return;
-
-    // Reset title to "Saved Devices" and show it
-    title.textContent = 'Saved Devices';
-    title.classList.remove('display-hidden');
-    
-    // Show the connect button
-    const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLElement;
-    if (connectAllBtn) {
-      connectAllBtn.classList.remove('display-hidden');
-    }
-
-    // Group devices by side
-    const leftDevices = this.savedDevices.filter(d => 
-      d.role === DeviceRole.LEFT_HUB || d.role === DeviceRole.LEFT_HAND || d.role === DeviceRole.LEFT_FOREARM
-    );
-    const rightDevices = this.savedDevices.filter(d => 
-      d.role === DeviceRole.RIGHT_HUB || d.role === DeviceRole.RIGHT_HAND || d.role === DeviceRole.RIGHT_FOREARM
-    );
-    const chestDevices = this.savedDevices.filter(d => d.role === DeviceRole.CHEST);
-
-    let html = '';
-
-    // Left side devices
-    if (leftDevices.length > 0) {
-      html += `<div class="${styles.deviceGroup}">`;
-      html += `<div class="${styles.groupTitle}">Left Side</div>`;
-      leftDevices.forEach(device => {
-        html += this.createDeviceCard(device);
-      });
-      html += '</div>';
-    }
-
-    // Right side devices
-    if (rightDevices.length > 0) {
-      html += `<div class="${styles.deviceGroup}">`;
-      html += `<div class="${styles.groupTitle}">Right Side</div>`;
-      rightDevices.forEach(device => {
-        html += this.createDeviceCard(device);
-      });
-      html += '</div>';
-    }
-
-    // Chest devices
-    if (chestDevices.length > 0) {
-      html += `<div class="${styles.deviceGroup}">`;
-      html += `<div class="${styles.groupTitle}">Chest</div>`;
-      chestDevices.forEach(device => {
-        html += this.createDeviceCard(device);
-      });
-      html += '</div>';
-    }
-
-    container.innerHTML = html;
-    this.setDeviceCardStyles();
-    this.attachDeviceEventListeners();
-  }
-
-  private setDeviceCardStyles(): void {
-    const container = this.modal.querySelector('.saved-devices-container') as HTMLElement;
     if (!container) return;
 
-    const colorIndicators = container.querySelectorAll(`.${styles.colorIndicator}[data-color]`);
-    colorIndicators.forEach(indicator => {
-      const color = indicator.getAttribute('data-color');
-      if (color) {
-        (indicator as HTMLElement).style.setProperty('--device-color', color);
-      }
-    });
+    if (this.savedDevices.length === 0) {
+      container.innerHTML = `<div class="${styles.noDevices}">
+        <p>No saved devices. Connect and save devices to see them here.</p>
+      </div>`;
+      return;
+    }
 
-    const statusBadges = container.querySelectorAll(`.${styles.statusBadge}[data-status-color]`);
-    statusBadges.forEach(badge => {
-      const statusColor = badge.getAttribute('data-status-color');
-      if (statusColor) {
-        (badge as HTMLElement).style.setProperty('--status-color', statusColor);
-        (badge as HTMLElement).style.setProperty('--status-bg-color', `${statusColor}20`);
-      }
-    });
-  }
+    // Simple list - no grouping needed
+    const html = this.savedDevices.map(device => {
+      const config = this.deviceConfigs.get(device.id);
+      const hasChanges = this.hasDeviceChanges(device, config);
+      const quatData = this.deviceQuaternionData.get(device.id);
+      return createSavedDeviceCard(device, this.savedDevices, config?.selectedColor, config?.selectedRole, hasChanges, quatData);
+    }).join('');
 
-  private createDeviceCard(device: EidonDevice): string {
-    const status = this.getDeviceStatus(device);
-    const statusColor = this.getStatusColor(status);
-    const roleName = DEVICE_ROLE_NAMES[device.role];
-
-    return `
-      <div class="${styles.deviceCard}" data-device-id="${device.id}">
-        <div class="${styles.cardTop}">
-          <div class="${styles.cardLeft}">
-            <div class="${styles.colorIndicator}" data-color="${device.color || '#666'}"></div>
-            <div class="${styles.deviceInfo}">
-              <div class="${styles.deviceName}">${device.name}</div>
-              <div class="${styles.deviceRole}">${roleName}</div>
-            </div>
-          </div>
-          <div class="${styles.cardRight}">
-            <div class="${styles.statusBadge}" data-status-color="${statusColor}">
-              ${status}
-            </div>
-            <button class="${styles.connectBtn}" data-device-id="${device.id}">
-              ${device.isConnected ? 'Disconnect' : 'Connect'}
-            </button>
-          </div>
-        </div>
-        <div class="${styles.cardBottom}">
-          <div class="${styles.macAddress}">${device.macAddress}</div>
-          <div class="${styles.actionButtons}">
-            <button class="${styles.editBtn}" data-device-id="${device.id}">
-              <i class="fas fa-edit"></i>
-            </button>
-            <button class="${styles.deleteBtn}" data-device-id="${device.id}">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  private getDeviceStatus(device: EidonDevice): string {
-    if (device.isHub || device.role === DeviceRole.CHEST) {
-      return device.isConnected ? 'Connected' : 'Disconnected';
-    } else {
-      // Child device status
-      if (device.isConnected) {
-        return 'Connected via Hub';
-      } else if (device.parentHub) {
-        const parentDevice = this.savedDevices.find(d => d.id === device.parentHub);
-        if (parentDevice?.isConnected) {
-          return 'Available';
+    container.innerHTML = html;
+    setSavedDeviceCardStyles(container);
+    this.attachDeviceEventListeners();
+    
+    // Initialize dials for devices with quaternion data
+    import('./SavedDeviceConnectionCard').then(({ updateDeviceDials }) => {
+      this.savedDevices.forEach(device => {
+        const quatData = this.deviceQuaternionData.get(device.id);
+        if (quatData) {
+          updateDeviceDials(device.id, quatData);
         }
-      }
-      return 'Disconnected';
-    }
+      });
+    });
   }
 
-  private getStatusColor(status: string): string {
-    switch (status) {
-      case 'Connected':
-      case 'Connected via Hub':
-        return '#10b981';
-      case 'Available':
-        return '#f59e0b';
-      case 'Disconnected':
-      default:
-        return '#ef4444';
-    }
-  }
 
   private attachDeviceEventListeners(): void {
-    // Connect/Disconnect buttons
-    const connectBtns = this.modal.querySelectorAll(`.${styles.connectBtn}`);
-    connectBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
+    // Connect/Disconnect buttons (both lists)
+    this.modal.querySelectorAll(`.${newCardStyles.connectBtn}, .${savedCardStyles.connectBtn}`).forEach(btn => {
+      const deviceId = btn.getAttribute('data-device-id');
+      if (deviceId) {
+        btn.addEventListener('click', () => this.handleDeviceConnect(deviceId));
+      }
+    });
+
+    // Edit buttons (saved devices only)
+    this.modal.querySelectorAll(`.${savedCardStyles.editBtn}`).forEach(btn => {
+      const deviceId = btn.getAttribute('data-device-id');
+      if (deviceId) {
+        btn.addEventListener('click', () => this.handleDeviceEdit(deviceId));
+      }
+    });
+
+    // Delete buttons (saved devices only)
+    this.modal.querySelectorAll(`.${savedCardStyles.deleteBtn}`).forEach(btn => {
+      const deviceId = btn.getAttribute('data-device-id');
+      if (deviceId) {
+        btn.addEventListener('click', () => this.handleDeviceDelete(deviceId));
+      }
+    });
+
+    // Color selectors (both lists)
+    this.modal.querySelectorAll(`.${newCardStyles.colorSelector}, .${savedCardStyles.colorSelector}`).forEach(select => {
+      select.addEventListener('change', (e) => {
+        const deviceId = (e.target as HTMLSelectElement).getAttribute('data-device-id');
+        const color = (e.target as HTMLSelectElement).value;
         if (deviceId) {
-          this.handleDeviceConnect(deviceId);
+          this.handleColorChange(deviceId, color);
         }
       });
     });
 
-    // Edit buttons
-    const editBtns = this.modal.querySelectorAll(`.${styles.editBtn}`);
-    editBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
+    // Role selectors (both lists)
+    this.modal.querySelectorAll(`.${newCardStyles.roleSelector}, .${savedCardStyles.roleSelector}`).forEach(select => {
+      select.addEventListener('change', (e) => {
+        const deviceId = (e.target as HTMLSelectElement).getAttribute('data-device-id');
+        const roleValue = parseInt((e.target as HTMLSelectElement).value);
         if (deviceId) {
-          this.handleDeviceEdit(deviceId);
+          this.handleRoleChange(deviceId, roleValue);
         }
       });
     });
 
-    // Delete buttons
-    const deleteBtns = this.modal.querySelectorAll(`.${styles.deleteBtn}`);
-    deleteBtns.forEach(btn => {
+    // Save buttons (both lists)
+    this.modal.querySelectorAll(`.${newCardStyles.saveBtn}, .${savedCardStyles.saveBtn}`).forEach(btn => {
+      const deviceId = btn.getAttribute('data-device-id');
+      if (deviceId) {
+        btn.addEventListener('click', () => this.handleDeviceSave(deviceId));
+      }
+    });
+
+    // Data view toggle buttons (both lists)
+    this.modal.querySelectorAll(`.${newCardStyles.dataToggle}, .${savedCardStyles.dataToggle}`).forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const deviceId = (e.target as HTMLElement).getAttribute('data-device-id');
+        const button = (e.target as HTMLElement).closest(`.${newCardStyles.dataToggle}, .${savedCardStyles.dataToggle}`) as HTMLElement;
+        const deviceId = button?.getAttribute('data-device-id');
         if (deviceId) {
-          this.handleDeviceDelete(deviceId);
+          this.toggleDataView(deviceId);
         }
       });
     });
+  }
+
+  private toggleDataView(deviceId: string): void {
+    // Try saved devices first, then new devices
+    let toggleBtn = this.modal.querySelector(`.${savedCardStyles.dataToggle}[data-device-id="${deviceId}"]`) as HTMLElement;
+    let dataContent = this.modal.querySelector(`.${savedCardStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+    let icon = toggleBtn?.querySelector(`.${savedCardStyles.dataToggleIcon}`) as HTMLElement;
+    
+    if (!toggleBtn || !dataContent) {
+      toggleBtn = this.modal.querySelector(`.${newCardStyles.dataToggle}[data-device-id="${deviceId}"]`) as HTMLElement;
+      dataContent = this.modal.querySelector(`.${newCardStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+      icon = toggleBtn?.querySelector(`.${newCardStyles.dataToggleIcon}`) as HTMLElement;
+    }
+    
+    if (!dataContent || !toggleBtn || !icon) return;
+
+    const isHidden = dataContent.style.display === 'none';
+    dataContent.style.display = isHidden ? 'block' : 'none';
+    icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+  }
+
+  private async updateDeviceDataView(deviceId: string): Promise<void> {
+    // Determine if it's a saved or new device
+    const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+    const cardStyles = isSaved ? savedCardStyles : newCardStyles;
+    
+    const dataContent = this.modal.querySelector(`.${cardStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+    if (!dataContent || dataContent.style.display === 'none') {
+      return;
+    }
+
+    const quatData = this.deviceQuaternionData.get(deviceId);
+    const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+    
+    if (!device || !quatData) return;
+
+    const { updateDeviceDials } = await import(isSaved ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard');
+    const dialCanvas = dataContent.querySelector(`.${cardStyles.dialCanvas}`);
+    if (!dialCanvas) {
+      // Re-render the specific device card to update data view
+      if (this.savedDevices.find(d => d.id === deviceId)) {
+        this.renderSavedDevices();
+      } else {
+        this.renderDiscoveredDevices();
+      }
+      // Re-attach event listeners since we re-rendered
+      this.attachDeviceEventListeners();
+      // Wait for DOM update then initialize dials
+      setTimeout(() => {
+        const newQuatData = this.deviceQuaternionData.get(deviceId);
+        if (newQuatData) {
+          updateDeviceDials(deviceId, newQuatData);
+        }
+      }, 0);
+    } else {
+      // Update existing dials directly
+      updateDeviceDials(deviceId, quatData);
+    }
+    
+    // Re-expand the data view if it was open
+    const contentStyles = isSaved ? savedCardStyles : newCardStyles;
+    const newDataContent = this.modal.querySelector(`.${contentStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+    if (newDataContent) {
+      newDataContent.style.display = 'block';
+      const toggleBtn = this.modal.querySelector(`.${contentStyles.dataToggle}[data-device-id="${deviceId}"]`) as HTMLElement;
+      const icon = toggleBtn?.querySelector(`.${contentStyles.dataToggleIcon}`) as HTMLElement;
+      if (icon) {
+        icon.style.transform = 'rotate(180deg)';
+      }
+    }
+  }
+
+  private hasDeviceChanges(device: EidonDevice, config?: { selectedColor?: string; selectedRole?: DeviceRole }): boolean {
+    if (!config) return false;
+    const colorChanged = config.selectedColor !== undefined && config.selectedColor !== device.color;
+    const roleChanged = config.selectedRole !== undefined && config.selectedRole !== device.role;
+    return colorChanged || roleChanged;
+  }
+
+  private handleColorChange(deviceId: string, color: string): void {
+    const config = this.deviceConfigs.get(deviceId) || {};
+    config.selectedColor = color;
+    this.deviceConfigs.set(deviceId, config);
+    
+    // Re-render to show/hide save button
+    const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+    if (device) {
+      if (this.savedDevices.find(d => d.id === deviceId)) {
+        this.renderSavedDevices();
+      } else {
+        this.renderDiscoveredDevices();
+      }
+    }
+  }
+
+  private handleRoleChange(deviceId: string, role: DeviceRole): void {
+    const config = this.deviceConfigs.get(deviceId) || {};
+    config.selectedRole = role;
+    this.deviceConfigs.set(deviceId, config);
+    
+    // Re-render to show/hide save button
+    const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+    if (device) {
+      if (this.savedDevices.find(d => d.id === deviceId)) {
+        this.renderSavedDevices();
+      } else {
+        this.renderDiscoveredDevices();
+      }
+    }
+  }
+
+  private async handleDeviceSave(deviceId: string): Promise<void> {
+    const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+    if (!device || !device.isConnected) return;
+
+    const config = this.deviceConfigs.get(deviceId);
+    if (!config || !this.hasDeviceChanges(device, config)) return;
+
+    // Determine which card type
+    const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+    const cardStyles = isSaved ? savedCardStyles : newCardStyles;
+    const saveBtn = this.modal.querySelector(`[data-device-id="${deviceId}"].${cardStyles.saveBtn}`) as HTMLButtonElement;
+    if (!saveBtn) return;
+
+    try {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+      const state = this.loginStateManager.getState();
+      if (!state.isLoggedIn || !state.tokens?.token) {
+        throw new Error('Must be logged in to save device');
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+      if (!apiUrl) {
+        throw new Error('VITE_API_URL environment variable is not set');
+      }
+
+      // Determine if this is an update or new device
+      const isUpdate = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+      
+      // Use device ID if update, connectionId for new device
+      const deviceIdToUse = isUpdate ? deviceId : device.connectionId || deviceId;
+      
+      // Get color and role to save
+      const colorToSave = config.selectedColor || device.color || 'rgb(0, 0, 0)';
+      const roleToSave = config.selectedRole !== undefined ? config.selectedRole : device.role;
+
+      const response = await fetch(`${apiUrl}/devices`, {
+        method: isUpdate ? 'PUT' : 'POST',
+        headers: {
+          'Authorization': `Bearer ${state.tokens.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          deviceId: deviceIdToUse,
+          type: 'tracker',
+          role: roleToSave,
+          color: colorToSave,
+          name: device.name,
+          connectionId: device.connectionId || device.macAddress,
+          isUpdate: isUpdate
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to save device: ${response.status} ${errorText}`);
+      }
+
+      // Update device with saved values
+      device.color = colorToSave;
+      device.role = roleToSave;
+      
+      // Clear config changes
+      this.deviceConfigs.delete(deviceId);
+
+      // Reload saved devices to refresh from API
+      await this.loadSavedDevices();
+      
+      // Also update discovered devices if needed
+      const discoveredDevice = this.discoveredDevices.find(d => d.id === deviceId);
+      if (discoveredDevice) {
+        Object.assign(discoveredDevice, device);
+        this.renderDiscoveredDevices();
+      }
+
+      console.log(`Successfully saved device: ${device.name}`);
+    } catch (error) {
+      console.error(`Failed to save device ${deviceId}:`, error);
+      // Show error to user
+      alert(`Failed to save device: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+    }
   }
 
   private async handleConnectAll(): Promise<void> {
@@ -539,10 +688,17 @@ export class DeviceModal {
 
 
   private async handleDeviceConnect(deviceId: string): Promise<void> {
-    const device = this.savedDevices.find(d => d.id === deviceId);
+    // Check both saved and discovered devices
+    let device = this.savedDevices.find(d => d.id === deviceId);
+    if (!device) {
+      device = this.discoveredDevices.find(d => d.id === deviceId);
+    }
     if (!device) return;
 
-    const connectBtn = this.modal.querySelector(`[data-device-id="${deviceId}"] .device-connect-btn`) as HTMLButtonElement;
+    // Determine which card type
+    const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+    const cardStyles = isSaved ? savedCardStyles : newCardStyles;
+    const connectBtn = this.modal.querySelector(`[data-device-id="${deviceId}"] .${cardStyles.connectBtn}`) as HTMLButtonElement;
     if (!connectBtn) return;
 
     try {
@@ -587,10 +743,18 @@ export class DeviceModal {
   }
 
   private updateDeviceConnectionStatus(deviceId: string, isConnected: boolean): void {
-    const device = this.savedDevices.find(d => d.id === deviceId);
-    if (device) {
-      device.isConnected = isConnected;
+    // Update device in savedDevices
+    const savedDevice = this.savedDevices.find(d => d.id === deviceId);
+    if (savedDevice) {
+      savedDevice.isConnected = isConnected;
       this.renderSavedDevices();
+    }
+    
+    // Update device in discoveredDevices
+    const discoveredDevice = this.discoveredDevices.find(d => d.id === deviceId);
+    if (discoveredDevice) {
+      discoveredDevice.isConnected = isConnected;
+      this.renderDiscoveredDevices();
     }
   }
 
@@ -605,18 +769,32 @@ export class DeviceModal {
 
     if (this.discoveredDevices.length === 0) {
       container.innerHTML = `<div class="${styles.noDevices}">
-        <p>No previously paired devices found.</p>
-        <p style="font-size: 0.875rem; margin-top: 0.5rem; color: rgba(255,255,255,0.7);">
-          To add a new device, you'll need to connect to it first through your device's Bluetooth settings or connect directly from the device.
-        </p>
+        <p>No devices found. Click "Scan" to discover nearby devices.</p>
       </div>`;
       return;
     }
 
-    const html = this.discoveredDevices.map(device => this.createDeviceCard(device)).join('');
+    // Simple list of discovered devices
+    const html = this.discoveredDevices.map(device => {
+      const config = this.deviceConfigs.get(device.id);
+      const hasChanges = this.hasDeviceChanges(device, config);
+      const quatData = this.deviceQuaternionData.get(device.id);
+      return createNewDeviceCard(device, this.discoveredDevices, config?.selectedColor, config?.selectedRole, hasChanges, quatData);
+    }).join('');
+
     container.innerHTML = html;
-    this.setDeviceCardStyles();
+    setNewDeviceCardStyles(container);
     this.attachDeviceEventListeners();
+    
+    // Initialize dials for devices with quaternion data
+    import('./NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
+      this.discoveredDevices.forEach(device => {
+        const quatData = this.deviceQuaternionData.get(device.id);
+        if (quatData) {
+          updateDeviceDials(device.id, quatData);
+        }
+      });
+    });
   }
 
   public show(): void {
@@ -649,6 +827,7 @@ export class DeviceModal {
     } else {
       arrow.style.display = 'none';
       arrow.style.opacity = '0';
+      console.log('Hiding arrow');
     }
   }
 

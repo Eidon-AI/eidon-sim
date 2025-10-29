@@ -1,25 +1,24 @@
 
 // src/ui/App.ts
-import { EidonTrackerManager } from '../core/EidonTrackerManager';
+import { EidonTrackerManager, EidonDevice } from '../core/EidonTrackerManager';
 import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
 import { PlaybackManager } from '../core/PlaybackManager';
-import { mountDeviceList } from './components/DeviceList';
 import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
 import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
 import { Controls } from './components/controls/Controls';
-import { renderCard } from './components/DeviceCard';
 import { AuthModal } from './components/AuthModal';
 import { AuthManager } from '../core/AuthManager';
 import { LoginStateManager } from '../core/LoginStateManager';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar } from './components/sidebar/Sidebar';
+import { Device, DeviceRole, DeviceColor } from '../types/device';
+import { quat, vec3 } from 'gl-matrix';
 import styles from './App.module.css';
 
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
-let logRef:    HTMLPreElement | null = null;
 let playbackManager: PlaybackManager;
 let controls: Controls;
 let sceneDestroy: (() => void) | null = null;
@@ -34,21 +33,12 @@ let isAuthenticated = false;
 /* export so DeviceCard can import it */
 export function setSelected(id: string | null) {
   selectedId = id;
-  if (!storeRef || !logRef) return;
-
-  if (id) {
-    const s = storeRef['map'].get(id);
-    logRef.textContent = s ? JSON.stringify(s, null, 2) : '';
-  } else {
-    logRef.textContent = '';
-  }
+  // Log functionality removed - sidebar no longer has log element
 }
 
 export function log(msg: string) {
-  if (!logRef) return;
-  const ts = new Date().toLocaleTimeString();
-  logRef.textContent += `[${ts}] ${msg}\n`;
-  logRef.scrollTop = logRef.scrollHeight;
+  // Log functionality removed - sidebar no longer has log element
+  console.log(msg);
 }
 
 // For debugging
@@ -134,6 +124,94 @@ function showAuthModal(root: HTMLElement) {
   authModal.mount(root);
 }
 
+/**
+ * Bridge function: Convert EidonDevice (Bluetooth) to Device (DeviceStore)
+ */
+function bridgeEidonDeviceToDeviceStore(eidonDevice: EidonDevice, store: DeviceStore): void {
+  // Check if device already exists
+  if (store['map'].has(eidonDevice.id)) {
+    // Update existing device
+    const existingDevice = store['map'].get(eidonDevice.id)!;
+    existingDevice.name = eidonDevice.name;
+    // Map from constants.DeviceRole to types/device.DeviceRole
+    existingDevice.position = mapDeviceRole(eidonDevice.role);
+    existingDevice.connectionId = eidonDevice.connectionId;
+    existingDevice.lastSeen = performance.now();
+    store.dispatchEvent(new CustomEvent('update', { detail: existingDevice }));
+    return;
+  }
+
+  // Create new Device from EidonDevice
+  const device: Device = {
+    id: eidonDevice.id,
+    name: eidonDevice.name,
+    position: mapDeviceRole(eidonDevice.role),
+    color: DeviceColor.ORANGE, // Default color
+    connectionId: eidonDevice.connectionId,
+    quat: quat.create(),
+    up: vec3.create(),
+    fwd: vec3.create(),
+    chainStart: vec3.create(),
+    chainEnd: vec3.create(),
+    lastSeen: performance.now()
+  };
+
+  store['map'].set(device.id, device);
+  store.dispatchEvent(new CustomEvent('update', { detail: device }));
+}
+
+/**
+ * Map DeviceRole from constants.ts to DeviceRole from types/device.ts
+ * Both enums have the same numeric values but different names
+ */
+function mapDeviceRole(role: import('../core/constants').DeviceRole): DeviceRole {
+  // Map by numeric value since they have the same values
+  const roleMap: Record<number, DeviceRole> = {
+    [0]: DeviceRole.ROLE_LEFT_HAND,
+    [1]: DeviceRole.ROLE_RIGHT_HAND,
+    [2]: DeviceRole.ROLE_LEFT_FOREARM,
+    [3]: DeviceRole.ROLE_RIGHT_FOREARM,
+    [4]: DeviceRole.ROLE_LEFT_HUB,
+    [5]: DeviceRole.ROLE_RIGHT_HUB,
+    [6]: DeviceRole.ROLE_CHEST,
+  };
+  return roleMap[role] ?? DeviceRole.ROLE_LEFT_HAND; // Default fallback
+}
+
+/**
+ * Update Device in DeviceStore with quaternion data from Bluetooth
+ */
+function updateDeviceWithQuaternion(deviceId: string, quaternion: number[], store: DeviceStore): void {
+  // Device must exist in store
+  const device = store['map'].get(deviceId);
+  if (!device) {
+    // Device not in store yet - might be connecting
+    return;
+  }
+
+  // Note: DeviceStore.handleRaw() checks playbackMode, but we're bypassing that
+  // We should respect playback mode here too. However, since we're updating directly,
+  // we'll let DeviceStore's internal logic handle it if needed.
+
+  // Normalize quaternion array to quat format [x, y, z, w]
+  const q: quat = [quaternion[0], quaternion[1], quaternion[2], quaternion[3]];
+
+  // Update quaternion
+  device.quat = q;
+
+  // Calculate derived vectors (same logic as parseTracker)
+  const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
+  device.up = [upZ[0], upZ[2], -upZ[1]] as vec3;
+  const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
+  device.fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;
+
+  // Update timestamp
+  device.lastSeen = performance.now();
+
+  // Dispatch update event
+  store.dispatchEvent(new CustomEvent('update', { detail: device }));
+}
+
 function initializeApp(root: HTMLElement) {
   /* ------------------------------------------------------------
    * 1. Inject canvas markup
@@ -166,11 +244,28 @@ function initializeApp(root: HTMLElement) {
   storeRef = store;
 
   /* ---------- Tracker → store pipeline ---------- */
-  tracker.addEventListener('quaternionData', e => {
-    const { deviceId, quaternion, timestamp } = (e as CustomEvent<{ deviceId: string; quaternion: number[]; timestamp: number }>).detail;
-    // TODO: Update DeviceStore to handle quaternion data from Bluetooth
-    console.log('Quaternion data received:', { deviceId, quaternion, timestamp });
-  });
+  // Handle device connections - create Device in DeviceStore
+  tracker.addEventListener('deviceConnected', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string; device: any }>;
+    const { deviceId, device: eidonDevice } = event.detail;
+    bridgeEidonDeviceToDeviceStore(eidonDevice, store);
+  }) as EventListener);
+
+  // Handle quaternion data updates
+  tracker.addEventListener('quaternionData', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string; quaternion: number[]; timestamp: number }>;
+    const { deviceId, quaternion } = event.detail;
+    updateDeviceWithQuaternion(deviceId, quaternion, store);
+  }) as EventListener);
+
+  // Handle device disconnections
+  tracker.addEventListener('deviceDisconnected', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string }>;
+    const { deviceId } = event.detail;
+    // Remove from store and dispatch event
+    store['map'].delete(deviceId);
+    document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id: deviceId } }));
+  }) as EventListener);
 
   /* ------------------------------------------------------------
    * 4. Controls (navigation)
@@ -190,8 +285,8 @@ function initializeApp(root: HTMLElement) {
   /* ---- log update only for selected device ---- */
   store.addEventListener('update', e => {
     const s = (e as CustomEvent<any>).detail;
-    if (s.id === selectedId && logRef) {
-      logRef.textContent = JSON.stringify(s, null, 2);
+    if (s.id === selectedId) {
+      // Device selection logging removed - sidebar no longer has log element
     }
   });
 
@@ -208,14 +303,9 @@ function initializeApp(root: HTMLElement) {
   /* ------------ prefs ------------ */
   mountPrefs(root);
 
-  /* ------------ Device list ------------ */
-  // TODO: Update DeviceList to work with EidonTrackerManager
-  // mountDeviceList(sidebar, tracker, store);
-
   /* ------------ Sidebar ------------ */
   sidebar = new Sidebar();
-  sidebar.mount(root, solver);
-  logRef = sidebar.getLogElement();
+  sidebar.mount(root, solver, store, tracker);
 
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();

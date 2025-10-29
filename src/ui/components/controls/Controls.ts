@@ -4,7 +4,7 @@ import { AuthModal } from '../AuthModal';
 import { PaginatedRecordingsResponse, RecordingWithUrls, AdminRecording } from '../../../types/recording';
 import { SensorRecording } from '../../../types/sensorData';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
-import { DeviceModal } from '../DeviceModal';
+import { DeviceModal } from '../device-modal/DeviceModal';
 import { AuthManager } from '../../../core/AuthManager';
 import { UserApiManager } from '../../../core/UserApiManager';
 import { PlaybackView } from '../PlaybackView';

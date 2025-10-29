@@ -1,0 +1,79 @@
+/* ActuatorAnglesSection.module.css */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  gap: 0.5rem;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+}
+
+.sectionHeader:hover {
+  background-color: rgba(64, 64, 64, 0.3);
+}
+
+.sectionTitle {
+  font-weight: 500;
+  margin: 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.chevron {
+  font-size: 0.75rem;
+  transition: transform 0.3s ease;
+}
+
+.section.expanded .chevron {
+  transform: rotate(0deg);
+}
+
+.section:not(.expanded) .chevron {
+  transform: rotate(-90deg);
+}
+
+.colorIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.65rem;
+}
+
+.colorDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.colorLabel {
+  color: rgba(255, 255, 255, 0.7);
+  margin-right: 0.25rem;
+}
+
+.sectionContent {
+  display: block;
+  padding: 0 1rem;
+  padding-bottom: 0.75rem;
+}
+
+.section:not(.expanded) .sectionContent {
+  display: none;
+}
+

@@ -1,0 +1,78 @@
+/* Sidebar.module.css */
+
+.container {
+  position: fixed;
+  bottom: 0;
+  right: 1rem;
+  z-index: 10;
+}
+
+.sidebar {
+  position: relative;
+  width: 20rem; /* w-80 */
+  display: flex;
+  flex-direction: column;
+  background-color: rgba(23, 23, 23, 0.95); /* bg-neutral-900/95 */
+  backdrop-filter: blur(4px); /* backdrop-blur-sm */
+  border: 1px solid #404040; /* border-neutral-700 */
+  border-radius: 0.5rem;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+  overflow: hidden;
+  transition: max-height 0.3s ease, width 0.3s ease;
+  max-height: 80vh;
+}
+
+.sidebar:not(.expanded) {
+  max-height: 2.5rem;
+}
+
+.sidebarHeader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+  min-height: 2rem;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.5);
+}
+
+.sidebarHeader:hover {
+  background-color: rgba(64, 64, 64, 0.3);
+}
+
+.mainChevron {
+  font-size: 0.875rem;
+  transition: transform 0.3s ease;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sidebar.expanded .mainChevron {
+  transform: rotate(180deg); /* Points down when expanded (click to collapse) */
+}
+
+.sidebar:not(.expanded) .mainChevron {
+  transform: rotate(0deg); /* Points up when collapsed (click to expand) */
+}
+
+.titleTextCollapsed {
+  display: inline;
+}
+
+.sidebar.expanded .titleTextCollapsed {
+  display: none;
+}
+
+
+.sidebarContent {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  max-height: calc(80vh - 3rem);
+}
+
+.sidebar:not(.expanded) .sidebarContent {
+  display: none;
+}

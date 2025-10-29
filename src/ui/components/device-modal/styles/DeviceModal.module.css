@@ -134,6 +134,18 @@
   padding-top: 1rem;
 }
 
+.subsection {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.subsectionTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 0.75rem;
+}
+
 .scanBtn {
   color: rgb(96, 165, 250);
   font-size: 0.875rem;

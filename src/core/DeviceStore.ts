@@ -24,7 +24,7 @@ export class DeviceStore extends EventTarget {
 
   private map = new Map<string, Device>();
 
-  /** Subscribe to HidManager.report */
+  /** Handle raw device data reports */
   handleRaw(id: string, view: DataView) {
     // Ignore live input during playback
     if (this.playbackMode) return;
