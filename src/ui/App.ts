@@ -15,6 +15,7 @@ import { LoginStateManager } from '../core/LoginStateManager';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { Device, DeviceRole, DeviceColor } from '../types/device';
 import { quat, vec3 } from 'gl-matrix';
+import { quaternionToVectors } from '../core/mathUtils';
 import styles from './App.module.css';
 
 let selectedId: string | null = null;
@@ -199,11 +200,10 @@ function updateDeviceWithQuaternion(deviceId: string, quaternion: number[], stor
   // Update quaternion
   device.quat = q;
 
-  // Calculate derived vectors (same logic as parseTracker)
-  const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
-  device.up = [upZ[0], upZ[2], -upZ[1]] as vec3;
-  const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
-  device.fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;
+  // Calculate derived vectors using centralized function
+  const { up, fwd } = quaternionToVectors(q);
+  device.up = up;
+  device.fwd = fwd;
 
   // Update timestamp
   device.lastSeen = performance.now();

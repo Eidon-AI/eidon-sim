@@ -37,29 +37,37 @@ export function eulerYZX(q: quat): [number, number, number] {
   return [flex, twist, roll];
 }
 
-// Update quaternion to Euler conversion to match firmware implementation
+// Update quaternion to Euler conversion to match Flutter app implementation
+// This matches the _quaternionToEuler function in the Flutter app
 export function eulerXYZ(q: quat): [number, number, number] {
-  // const [x, y, z, w] = q;
   const x = q[0];
   const y = q[1];
   const z = q[2];
   const w = q[3];
 
-  // Different quaternion to euler conversion that might reduce axis coupling
-  const yaw = Math.atan2(2.0 * (w * z + x * y),
-                        1.0 - 2.0 * (y * y + z * z));
-  
-  const pitch = Math.asin(2.0 * (w * y - z * x));
-  
-  const roll = Math.atan2(2.0 * (w * x + y * z),
-                         1.0 - 2.0 * (x * x + y * y));
+  // Pitch (x-axis rotation) - Flutter note: "was roll"
+  const sinr_cosp = 2 * (w * x + y * z);
+  const cosr_cosp = 1 - 2 * (x * x + y * y);
+  const pitch = Math.atan2(sinr_cosp, cosr_cosp);
 
-  // Convert to degrees and swap pitch and roll
-  return [
-    yaw,
-    roll,   // Use roll value for pitch
-    pitch,  // Use pitch value for roll
-  ];
+  // Roll (y-axis rotation) - Flutter note: "was pitch"
+  const sinp = 2 * (w * y - z * x);
+  let roll: number;
+  if (Math.abs(sinp) >= 1) {
+    roll = (Math.PI / 2) * Math.sign(sinp); // use 90 degrees if out of range
+  } else {
+    roll = Math.asin(sinp);
+  }
+
+  // Yaw (z-axis rotation)
+  const siny_cosp = 2 * (w * z + x * y);
+  const cosy_cosp = 1 - 2 * (y * y + z * z);
+  let yaw = Math.atan2(siny_cosp, cosy_cosp) + Math.PI; // Add 180° so calibrated = 0° instead of -180°
+  
+  // Normalize to [-π, π] range (atan2 gives [-π, π], after adding π we have [0, 2π], normalize to [-π, π])
+  if (yaw > Math.PI) yaw -= 2 * Math.PI;
+
+  return [yaw, pitch, roll];
 }
 
 /* Twist around +X ---------------------------------------------------- */
@@ -95,4 +103,57 @@ export function rollAroundForward(
   const axis = [qRel[0] / s, qRel[1] / s, qRel[2] / s] as vec3;
   const sign = vec3.dot(axis, fwdParent) >= 0 ? 1 : -1;
   return sign * angle * 180 / Math.PI;
+}
+
+/* ========== Centralized Quaternion Processing ========== */
+
+/**
+ * Convert quaternion to correctly mapped Euler angles in degrees.
+ * Matches the Flutter app implementation (_quaternionToEuler).
+ * Applies correction: maps pitch to yaw and yaw to pitch.
+ * @param q - Quaternion in format [x, y, z, w]
+ * @returns Object with yaw, pitch, roll in degrees
+ */
+export function quaternionToEuler(q: quat): { yaw: number; pitch: number; roll: number } {
+  const [yawRaw, pitchRaw, roll] = eulerXYZ(q);
+
+  // Convert to degrees and swap yaw and pitch
+  return {
+    yaw: pitchRaw * 180 / Math.PI,    // pitch → yaw
+    pitch: yawRaw * 180 / Math.PI,    // yaw → pitch
+    roll: roll * 180 / Math.PI
+  };
+}
+
+/**
+ * Convert quaternion to forward and up vectors in scene space.
+ * This is the standard transformation used throughout the codebase.
+ * @param q - Quaternion in format [x, y, z, w]
+ * @returns Object with forward (fwd) and up vectors in scene space
+ */
+export function quaternionToVectors(q: quat): { up: vec3; fwd: vec3 } {
+  // Legacy implementation matching parseTracker:
+  // - Transform sensor unit vectors through quaternion
+  // - Apply [x, z, -y] coordinate space conversion
+  // - Up from sensor Z [0, 0, 1], Forward from sensor Y [0, 1, 0]
+  
+  const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);   // sensor Z
+  const up = [upZ[0], -upZ[1], upZ[2]] as vec3;                  // [x, z, -y] conversion
+  
+  const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y
+  const fwd = [fwdZ[0], -fwdZ[1], fwdZ[2]] as vec3;             // [x, z, -y] conversion
+
+  return { up, fwd };
+}
+
+/**
+ * Format quaternion as a readable string.
+ * @param q - Quaternion in format [x, y, z, w] or number array
+ * @returns Formatted string like "(0.123, 0.456, 0.789, 0.987)"
+ */
+export function formatQuaternion(q: quat | number[]): string {
+  if (q.length !== 4) {
+    throw new Error('Quaternion must have 4 components');
+  }
+  return `(${q[0].toFixed(3)}, ${q[1].toFixed(3)}, ${q[2].toFixed(3)}, ${q[3].toFixed(3)})`;
 }

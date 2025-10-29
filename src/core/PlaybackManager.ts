@@ -3,6 +3,7 @@ import { ArmSolver } from './ArmSolver';
 import { Device, DeviceRole, DeviceColor, stringToDeviceRole } from '../types/device';
 import { vec3, quat } from 'gl-matrix';
 import { SensorRecording, DeviceSimple, SensorSnapshot } from '../types/sensorData';
+import { quaternionToVectors } from './mathUtils';
 
 
 export class PlaybackManager extends EventTarget {
@@ -189,11 +190,10 @@ export class PlaybackManager extends EventTarget {
       const deviceState = this.store['map'].get(deviceId);
       
       if (deviceState) {
-        // From parseTracker logic - transform quaternion to up/fwd vectors
-        const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
-        updates.up = [upZ[0], upZ[2], -upZ[1]] as vec3;
-        const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
-        updates.fwd = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;
+        // Transform quaternion to up/fwd vectors using centralized function
+        const { up, fwd } = quaternionToVectors(q);
+        updates.up = up;
+        updates.fwd = fwd;
 
         // Apply updates using the playback method
         this.store.updateDeviceForPlayback(deviceId, updates);

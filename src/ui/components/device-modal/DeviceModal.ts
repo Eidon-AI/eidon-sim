@@ -3,6 +3,8 @@ import { DeviceRole } from '../../../core/constants';
 import { LoginStateManager } from '../../../core/LoginStateManager';
 import { createDeviceConnectionCard as createNewDeviceCard, setDeviceCardStyles as setNewDeviceCardStyles, cardStyles as newCardStyles } from './NewDeviceConnectionCard';
 import { createDeviceConnectionCard as createSavedDeviceCard, setDeviceCardStyles as setSavedDeviceCardStyles, cardStyles as savedCardStyles } from './SavedDeviceConnectionCard';
+import colorDropdownStyles from './styles/ColorDropdown.module.css';
+import roleSelectorStyles from './styles/RoleSelector.module.css';
 import styles from './styles/DeviceModal.module.css';
 
 export class DeviceModal {
@@ -15,6 +17,7 @@ export class DeviceModal {
   private discoveredDevices: EidonDevice[] = [];
   private deviceConfigs = new Map<string, { selectedColor?: string; selectedRole?: DeviceRole }>();
   private deviceQuaternionData = new Map<string, { quaternion: number[]; timestamp: number }>();
+  private deviceEditStates = new Map<string, boolean>(); // Track which devices have config section visible
 
   constructor(trackerManager: EidonTrackerManager) {
     this.trackerManager = trackerManager;
@@ -120,11 +123,51 @@ export class DeviceModal {
 
     // Tracker manager events
     this.trackerManager.addEventListener('deviceConnected', (e: any) => {
-      this.updateDeviceConnectionStatus(e.detail.deviceId, true);
+      const { deviceId, device } = e.detail;
+      // Update by trackerManager deviceId
+      this.updateDeviceConnectionStatus(deviceId, true);
+      // Also update saved/discovered devices by connectionId if they match
+      if (device && device.connectionId) {
+        const savedDevice = this.savedDevices.find(d => 
+          d.connectionId === device.connectionId || 
+          d.macAddress === device.connectionId ||
+          d.connectionId === device.macAddress ||
+          d.macAddress === device.macAddress
+        );
+        if (savedDevice && savedDevice.id !== deviceId) {
+          savedDevice.isConnected = true;
+          // Update connection info to match trackerManager device
+          savedDevice.connectionId = device.connectionId;
+          savedDevice.macAddress = device.macAddress || device.connectionId;
+          this.updateDeviceConnectionStatus(savedDevice.id, true);
+          
+          // Sync any existing quaternion data from trackerManager deviceId to saved device ID
+          const quatData = this.deviceQuaternionData.get(deviceId);
+          if (quatData) {
+            this.deviceQuaternionData.set(savedDevice.id, quatData);
+          }
+        }
+      }
     });
 
     this.trackerManager.addEventListener('deviceDisconnected', (e: any) => {
-      this.updateDeviceConnectionStatus(e.detail.deviceId, false);
+      const { deviceId } = e.detail;
+      // Update by trackerManager deviceId
+      this.updateDeviceConnectionStatus(deviceId, false);
+      // Also find and update by connectionId
+      const trackerDevice = this.trackerManager.getDevice(deviceId);
+      if (trackerDevice && trackerDevice.connectionId) {
+        const savedDevice = this.savedDevices.find(d => 
+          d.connectionId === trackerDevice.connectionId ||
+          d.macAddress === trackerDevice.connectionId ||
+          d.connectionId === trackerDevice.macAddress ||
+          d.macAddress === trackerDevice.macAddress
+        );
+        if (savedDevice && savedDevice.id !== deviceId) {
+          savedDevice.isConnected = false;
+          this.updateDeviceConnectionStatus(savedDevice.id, false);
+        }
+      }
     });
 
     // Listen for device info updates (e.g., role changes)
@@ -147,17 +190,51 @@ export class DeviceModal {
     this.trackerManager.addEventListener('quaternionData', ((e: Event) => {
       const event = e as CustomEvent<{ deviceId: string; quaternion: number[]; timestamp: number }>;
       const { deviceId, quaternion, timestamp } = event.detail;
-      this.deviceQuaternionData.set(deviceId, { quaternion, timestamp });
-      // Update data view if it's currently visible
-      this.updateDeviceDataView(deviceId);
-      // Update dials
-      const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+      
+      // Get the trackerManager device to find its connectionId
+      const trackerDevice = this.trackerManager.getDevice(deviceId);
+      const connectionId = trackerDevice?.connectionId || trackerDevice?.macAddress;
+      
+      // Find matching saved/discovered device by trackerManager deviceId, connectionId, or macAddress
+      let device = this.savedDevices.find(d => d.id === deviceId) || 
+                   this.discoveredDevices.find(d => d.id === deviceId);
+      
+      // If not found by deviceId, try matching by connectionId/macAddress
+      if (!device && connectionId) {
+        device = this.savedDevices.find(d => 
+          d.connectionId === connectionId || 
+          d.macAddress === connectionId ||
+          d.connectionId === trackerDevice?.macAddress ||
+          d.macAddress === trackerDevice?.macAddress ||
+          (trackerDevice && d.connectionId === trackerDevice.connectionId) ||
+          (trackerDevice && d.macAddress === trackerDevice.connectionId)
+        ) || this.discoveredDevices.find(d =>
+          d.connectionId === connectionId || 
+          d.macAddress === connectionId ||
+          (trackerDevice && d.connectionId === trackerDevice.connectionId) ||
+          (trackerDevice && d.macAddress === trackerDevice.connectionId)
+        );
+      }
+      
       if (device) {
+        // Store quaternion data using the saved/discovered device's ID (not trackerManager's deviceId)
+        // This ensures dials update correctly
+        const deviceIdForData = device.id;
+        this.deviceQuaternionData.set(deviceIdForData, { quaternion, timestamp });
+        
+        // Update data view if it's currently visible
+        this.updateDeviceDataView(deviceIdForData);
+        
         // Determine which card type based on device location
-        const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+        const isSaved = this.savedDevices.find(d => d.id === deviceIdForData) !== undefined;
         import(isSaved ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
-          updateDeviceDials(deviceId, { quaternion, timestamp });
+          updateDeviceDials(deviceIdForData, { quaternion, timestamp });
         });
+      } else {
+        // Device not found in saved/discovered lists - still store by trackerManager deviceId
+        // This handles edge cases where device might be connected but not in our lists
+        this.deviceQuaternionData.set(deviceId, { quaternion, timestamp });
+        this.updateDeviceDataView(deviceId);
       }
     }) as EventListener);
 
@@ -225,6 +302,33 @@ export class DeviceModal {
 
       // Convert API devices to EidonDevice format
       this.savedDevices = this.convertApiDevicesToEidonDevices(devicesData);
+      
+      // Match saved devices with trackerManager devices by connectionId/macAddress
+      // and preserve connection status (for devices already in trackerManager)
+      const trackerDevices = this.trackerManager.getAllDevices();
+      this.savedDevices.forEach(savedDevice => {
+        const connectionId = savedDevice.connectionId || savedDevice.macAddress;
+        if (connectionId) {
+          // Find matching device in trackerManager
+          const matchedTrackerDevice = trackerDevices.find(trackerDevice =>
+            trackerDevice.connectionId === connectionId ||
+            trackerDevice.macAddress === connectionId ||
+            trackerDevice.connectionId === savedDevice.macAddress ||
+            trackerDevice.macAddress === savedDevice.macAddress
+          );
+          
+          if (matchedTrackerDevice) {
+            // Update connection status to match trackerManager
+            savedDevice.isConnected = matchedTrackerDevice.isConnected;
+            // Also update the device ID to match trackerManager's ID for consistent connections
+            // We keep the API ID for saving, but use trackerManager ID for connections
+            if (matchedTrackerDevice.isConnected) {
+              console.log(`Found connected device: ${savedDevice.name}, matched to trackerManager device: ${matchedTrackerDevice.id}`);
+            }
+          }
+        }
+      });
+      
       this.renderSavedDevices();
 
     } catch (error) {
@@ -359,6 +463,16 @@ export class DeviceModal {
     setSavedDeviceCardStyles(container);
     this.attachDeviceEventListeners();
     
+    // Restore edit state (show config section if it was previously visible)
+    this.deviceEditStates.forEach((isVisible, deviceId) => {
+      if (isVisible) {
+        const configSection = this.modal.querySelector(`.${savedCardStyles.configSection}[data-device-id="${deviceId}"]`) as HTMLElement;
+        if (configSection) {
+          configSection.style.display = 'block';
+        }
+      }
+    });
+    
     // Initialize dials for devices with quaternion data
     import('./SavedDeviceConnectionCard').then(({ updateDeviceDials }) => {
       this.savedDevices.forEach(device => {
@@ -396,19 +510,105 @@ export class DeviceModal {
       }
     });
 
-    // Color selectors (both lists)
-    this.modal.querySelectorAll(`.${newCardStyles.colorSelector}, .${savedCardStyles.colorSelector}`).forEach(select => {
-      select.addEventListener('change', (e) => {
-        const deviceId = (e.target as HTMLSelectElement).getAttribute('data-device-id');
-        const color = (e.target as HTMLSelectElement).value;
-        if (deviceId) {
-          this.handleColorChange(deviceId, color);
+    // Color dropdown triggers (both lists) - using shared styles
+    this.modal.querySelectorAll(`.${colorDropdownStyles.colorDropdownTrigger}`).forEach(trigger => {
+      const deviceId = trigger.getAttribute('data-device-id');
+      if (!deviceId) return;
+
+      // Toggle dropdown on click
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wrapper = trigger.closest(`.${colorDropdownStyles.colorDropdownWrapper}`) as HTMLElement;
+        const menu = wrapper?.querySelector(`.${colorDropdownStyles.colorDropdownMenu}`) as HTMLElement;
+        const isOpen = menu?.style.display !== 'none';
+        
+        // Close all other dropdowns
+        this.modal.querySelectorAll(`.${colorDropdownStyles.colorDropdownMenu}`).forEach(otherMenu => {
+          if (otherMenu !== menu) {
+            (otherMenu as HTMLElement).style.display = 'none';
+            const otherWrapper = otherMenu.closest(`.${colorDropdownStyles.colorDropdownWrapper}`) as HTMLElement;
+            if (otherWrapper) otherWrapper.removeAttribute('data-open');
+          }
+        });
+
+        if (menu && wrapper) {
+          menu.style.display = isOpen ? 'none' : 'block';
+          if (isOpen) {
+            wrapper.removeAttribute('data-open');
+          } else {
+            wrapper.setAttribute('data-open', 'true');
+          }
         }
       });
     });
 
-    // Role selectors (both lists)
-    this.modal.querySelectorAll(`.${newCardStyles.roleSelector}, .${savedCardStyles.roleSelector}`).forEach(select => {
+    // Color option clicks (both lists) - using shared styles
+    this.modal.querySelectorAll(`.${colorDropdownStyles.colorOption}`).forEach(option => {
+      option.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const deviceId = option.getAttribute('data-device-id');
+        const colorValue = option.getAttribute('data-value');
+        
+        if (deviceId && colorValue) {
+          const wrapper = option.closest(`.${colorDropdownStyles.colorDropdownWrapper}`) as HTMLElement;
+          const menu = wrapper?.querySelector(`.${colorDropdownStyles.colorDropdownMenu}`) as HTMLElement;
+          const trigger = wrapper?.querySelector(`.${colorDropdownStyles.colorDropdownTrigger}`) as HTMLElement;
+          const hiddenInput = wrapper?.querySelector(`.${colorDropdownStyles.colorSelector}`) as HTMLInputElement;
+
+          // Update hidden input value
+          if (hiddenInput) {
+            hiddenInput.value = colorValue;
+          }
+
+          // Update trigger display
+          if (trigger) {
+            const colorCircle = trigger.querySelector(`.${colorDropdownStyles.colorCircle}`) as HTMLElement;
+            const colorText = trigger.querySelector(`.${colorDropdownStyles.colorDropdownText}`) as HTMLElement;
+            
+            const optionText = option.querySelector(`.${colorDropdownStyles.colorLabel}`)?.textContent || '';
+            
+            if (colorCircle && colorValue) {
+              colorCircle.style.backgroundColor = colorValue;
+            }
+            if (colorText) {
+              colorText.textContent = optionText;
+            }
+          }
+
+          // Update selected state
+          wrapper?.querySelectorAll(`.${colorDropdownStyles.colorOption}`).forEach(opt => {
+            opt.classList.remove(colorDropdownStyles.colorOptionSelected);
+          });
+          option.classList.add(colorDropdownStyles.colorOptionSelected);
+
+          // Close menu
+          if (menu) {
+            menu.style.display = 'none';
+          }
+          if (wrapper) {
+            wrapper.removeAttribute('data-open');
+          }
+
+          // Trigger color change handler
+          this.handleColorChange(deviceId, colorValue);
+        }
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(`.${colorDropdownStyles.colorDropdownWrapper}`)) {
+        this.modal.querySelectorAll(`.${colorDropdownStyles.colorDropdownMenu}`).forEach(menu => {
+          (menu as HTMLElement).style.display = 'none';
+          const wrapper = menu.closest(`.${colorDropdownStyles.colorDropdownWrapper}`) as HTMLElement;
+          if (wrapper) wrapper.removeAttribute('data-open');
+        });
+      }
+    }, true);
+
+    // Role selectors (both lists) - using shared styles
+    this.modal.querySelectorAll(`.${roleSelectorStyles.roleSelector}`).forEach(select => {
       select.addEventListener('change', (e) => {
         const deviceId = (e.target as HTMLSelectElement).getAttribute('data-device-id');
         const roleValue = parseInt((e.target as HTMLSelectElement).value);
@@ -416,6 +616,14 @@ export class DeviceModal {
           this.handleRoleChange(deviceId, roleValue);
         }
       });
+    });
+
+    // Calibrate buttons (both lists)
+    this.modal.querySelectorAll(`.${newCardStyles.calibrateBtn}, .${savedCardStyles.calibrateBtn}`).forEach(btn => {
+      const deviceId = btn.getAttribute('data-device-id');
+      if (deviceId) {
+        btn.addEventListener('click', () => this.handleDeviceCalibrate(deviceId));
+      }
     });
 
     // Save buttons (both lists)
@@ -547,6 +755,46 @@ export class DeviceModal {
     }
   }
 
+  private async handleDeviceCalibrate(deviceId: string): Promise<void> {
+    const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+    if (!device || !device.isConnected) {
+      console.error('Device not connected for calibration:', deviceId);
+      return;
+    }
+
+    // Get connectionId from the button's data attribute or device
+    const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+    const cardStyles = isSaved ? savedCardStyles : newCardStyles;
+    const calibrateBtn = this.modal.querySelector(`[data-device-id="${deviceId}"].${cardStyles.calibrateBtn}`) as HTMLButtonElement;
+    if (!calibrateBtn) return;
+
+    const connectionId = calibrateBtn.getAttribute('data-connection-id') || device.connectionId || device.macAddress;
+    if (!connectionId) {
+      console.error('No connectionId found for calibration:', deviceId);
+      return;
+    }
+
+    try {
+      calibrateBtn.disabled = true;
+      calibrateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      await this.trackerManager.calibrateDevice(connectionId);
+      
+      calibrateBtn.innerHTML = '<i class="fas fa-check"></i> Calibrated';
+      setTimeout(() => {
+        calibrateBtn.innerHTML = '<i class="fas fa-compass"></i> Calibrate';
+        calibrateBtn.disabled = false;
+      }, 2000);
+    } catch (error) {
+      console.error('Calibration failed:', error);
+      calibrateBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Failed';
+      setTimeout(() => {
+        calibrateBtn.innerHTML = '<i class="fas fa-compass"></i> Calibrate';
+        calibrateBtn.disabled = false;
+      }, 2000);
+    }
+  }
+
   private async handleDeviceSave(deviceId: string): Promise<void> {
     const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
     if (!device || !device.isConnected) return;
@@ -575,30 +823,36 @@ export class DeviceModal {
       }
 
       // Determine if this is an update or new device
-      const isUpdate = this.savedDevices.find(d => d.id === deviceId) !== undefined;
-      
-      // Use device ID if update, connectionId for new device
-      const deviceIdToUse = isUpdate ? deviceId : device.connectionId || deviceId;
+      // For devices from NewDeviceConnectionCard, isSaved will be false, so isUpdate = false
+      const isUpdate = isSaved;
       
       // Get color and role to save
-      const colorToSave = config.selectedColor || device.color || 'rgb(0, 0, 0)';
-      const roleToSave = config.selectedRole !== undefined ? config.selectedRole : device.role;
+      const colorToSave = config.selectedColor || device.color || 'rgb(40, 40, 40)'; // Default to black
+      const positionToSave = config.selectedRole !== undefined ? config.selectedRole : device.role;
 
-      const response = await fetch(`${apiUrl}/devices`, {
+      // Build request body according to CreateDeviceDto (POST) or UpdateDeviceDto (PUT)
+      const requestBody: any = {
+        name: device.name,
+        type: 'tracker', // TODO: Check if this should be an enum value
+        position: positionToSave,
+        color: colorToSave
+      };
+
+      // Only include connectionId for new devices (POST), not for updates (PUT)
+      if (!isUpdate && (device.connectionId || device.macAddress)) {
+        requestBody.connectionId = device.connectionId || device.macAddress;
+      }
+
+      // For PUT requests, deviceId should be in the URL path
+      const url = isUpdate ? `${apiUrl}/devices/${deviceId}` : `${apiUrl}/devices`;
+      
+      const response = await fetch(url, {
         method: isUpdate ? 'PUT' : 'POST',
         headers: {
           'Authorization': `Bearer ${state.tokens.token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          deviceId: deviceIdToUse,
-          type: 'tracker',
-          role: roleToSave,
-          color: colorToSave,
-          name: device.name,
-          connectionId: device.connectionId || device.macAddress,
-          isUpdate: isUpdate
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -608,22 +862,53 @@ export class DeviceModal {
 
       // Update device with saved values
       device.color = colorToSave;
-      device.role = roleToSave;
+      device.role = positionToSave;
       
+      // Preserve connection state before reloading
+      const wasConnected = device.isConnected;
+      const trackerDeviceId = device.id; // This is the trackerManager's device ID
+      const connectionId = device.connectionId || device.macAddress; // This is the API's connectionId
+
       // Clear config changes
       this.deviceConfigs.delete(deviceId);
 
-      // Reload saved devices to refresh from API
+      // For new devices, remove from discovered devices list
+      if (!isUpdate) {
+        const discoveredIndex = this.discoveredDevices.findIndex(d => d.id === deviceId);
+        if (discoveredIndex !== -1) {
+          this.discoveredDevices.splice(discoveredIndex, 1);
+          this.renderDiscoveredDevices();
+        }
+      }
+
+      // Reload saved devices to refresh from API (device will now appear in saved devices)
       await this.loadSavedDevices();
-      
-      // Also update discovered devices if needed
-      const discoveredDevice = this.discoveredDevices.find(d => d.id === deviceId);
-      if (discoveredDevice) {
-        Object.assign(discoveredDevice, device);
-        this.renderDiscoveredDevices();
+
+      // If device was connected, reconnect it using the trackerManager device ID
+      if (wasConnected && connectionId) {
+        // Find the device in trackerManager by connectionId
+        const trackerDevices = this.trackerManager.getAllDevices();
+        const matchedDevice = trackerDevices.find(d => 
+          d.connectionId === connectionId || d.macAddress === connectionId
+        );
+
+        if (matchedDevice) {
+          console.log(`Reconnecting to device after save: ${matchedDevice.name} (${matchedDevice.id})`);
+          // Try to reconnect with retry logic
+          await this.reconnectDeviceWithRetry(matchedDevice.id);
+        } else {
+          console.warn(`Could not find device with connectionId ${connectionId} in trackerManager`);
+        }
       }
 
       console.log(`Successfully saved device: ${device.name}`);
+      
+      // Close config section after successful save
+      this.deviceEditStates.set(deviceId, false);
+      const configSection = this.modal.querySelector(`.${savedCardStyles.configSection}[data-device-id="${deviceId}"]`) as HTMLElement;
+      if (configSection) {
+        configSection.style.display = 'none';
+      }
     } catch (error) {
       console.error(`Failed to save device ${deviceId}:`, error);
       // Show error to user
@@ -687,6 +972,120 @@ export class DeviceModal {
   }
 
 
+  /**
+   * Try to connect to a device using previously paired Bluetooth devices (no popup)
+   * Returns true if connection successful, false otherwise
+   */
+  private async tryConnectUsingPairedDevices(savedDevice: EidonDevice): Promise<boolean> {
+    const bluetooth = (navigator as any).bluetooth;
+    if (!bluetooth || typeof bluetooth.getDevices !== 'function') {
+      console.log('[DeviceModal] Bluetooth getDevices() not available');
+      return false;
+    }
+
+    try {
+      // Get previously paired devices (no popup)
+      const pairedDevices = await bluetooth.getDevices();
+      console.log(`[DeviceModal] Found ${pairedDevices.length} paired devices`);
+
+      // Find matching device by name or connectionId
+      const matchingPairedDevice = pairedDevices.find((paired: any) => {
+        // Match by connectionId or macAddress
+        if (savedDevice.connectionId && 
+            (paired.id === savedDevice.connectionId || paired.id === savedDevice.macAddress)) {
+          return true;
+        }
+        // Match by device name (case-insensitive, must contain "eidon")
+        const pairedName = (paired.name || '').trim().toLowerCase();
+        const savedName = (savedDevice.name || '').trim().toLowerCase();
+        return pairedName === savedName && pairedName.includes('eidon');
+      });
+
+      if (!matchingPairedDevice) {
+        console.log(`[DeviceModal] No matching paired device found for ${savedDevice.name}`);
+        return false;
+      }
+
+      console.log(`[DeviceModal] Found matching paired device: ${matchingPairedDevice.name} (${matchingPairedDevice.id})`);
+
+      // Check if device is already in trackerManager
+      let trackerDevice = this.trackerManager.getAllDevices().find(d => 
+        d.connectionId === matchingPairedDevice.id ||
+        d.macAddress === matchingPairedDevice.id ||
+        (d.name && matchingPairedDevice.name && d.name.toLowerCase() === matchingPairedDevice.name.toLowerCase())
+      );
+
+      // If not in trackerManager, try to add it by processing the paired device
+      // We need to wait a bit for autoReconnect to potentially add it, or trigger a refresh
+      if (!trackerDevice) {
+        console.log(`[DeviceModal] Device not in trackerManager yet, attempting to add via connection`);
+        
+        // The device connection logic in trackerManager's performConnection should handle
+        // adding the device when we connect using a BluetoothDevice directly
+        // But we need the device to be in trackerManager first to call connectToDevice
+        // 
+        // Actually, looking at the code flow: performConnection requires device to be in trackerManager
+        // So we need a different approach. Let's create a minimal device entry based on saved device
+        // info, add it to trackerManager, then connect
+        
+        // For now, let's wait a moment and check again (autoReconnect might add it)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        trackerDevice = this.trackerManager.getAllDevices().find(d => 
+          d.connectionId === matchingPairedDevice.id ||
+          d.macAddress === matchingPairedDevice.id ||
+          (d.name && matchingPairedDevice.name && d.name.toLowerCase() === matchingPairedDevice.name.toLowerCase())
+        );
+        
+        if (!trackerDevice) {
+          console.log(`[DeviceModal] Device still not in trackerManager after wait`);
+          return false;
+        }
+      }
+
+      // Device is in trackerManager, connect to it
+      console.log(`[DeviceModal] Connecting to device in trackerManager: ${trackerDevice.id}`);
+      const success = await this.reconnectDeviceWithRetry(trackerDevice.id, 3);
+      
+      if (success) {
+        savedDevice.isConnected = true;
+        this.updateDeviceConnectionStatus(savedDevice.id, true);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('[DeviceModal] Error connecting via paired devices:', error);
+      return false;
+    }
+  }
+
+  private async reconnectDeviceWithRetry(deviceId: string, maxRetries: number = 3): Promise<boolean> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const success = await this.trackerManager.connectToDevice(deviceId);
+        if (success) {
+          return true;
+        }
+        
+        if (attempt < maxRetries) {
+          // Wait before retrying (exponential backoff)
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 3000);
+          console.log(`Reconnection failed, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      } catch (error) {
+        console.error(`Reconnection attempt ${attempt} failed:`, error);
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 3000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    console.error(`Failed to reconnect to device after ${maxRetries} attempts: ${deviceId}`);
+    return false;
+  }
+
   private async handleDeviceConnect(deviceId: string): Promise<void> {
     // Check both saved and discovered devices
     let device = this.savedDevices.find(d => d.id === deviceId);
@@ -708,19 +1107,113 @@ export class DeviceModal {
         connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Disconnecting...';
         console.log(`Disconnecting device: ${deviceId}`);
 
-        await this.trackerManager.disconnectDevice(deviceId);
-        console.log(`Successfully disconnected device: ${deviceId}`);
+        // Find the trackerManager device to get the correct device ID for disconnection
+        let trackerDevice = this.trackerManager.getDevice(deviceId);
+        if (!trackerDevice && device.connectionId) {
+          const allTrackerDevices = this.trackerManager.getAllDevices();
+          trackerDevice = allTrackerDevices.find(d => 
+            d.connectionId === device.connectionId || 
+            d.macAddress === device.connectionId ||
+            d.connectionId === device.macAddress ||
+            d.macAddress === device.macAddress
+          );
+        }
+
+        if (trackerDevice) {
+          await this.trackerManager.disconnectDevice(trackerDevice.id);
+          console.log(`Successfully disconnected device: ${trackerDevice.name} (${trackerDevice.id})`);
+        } else {
+          // Fallback to original deviceId
+          await this.trackerManager.disconnectDevice(deviceId);
+          console.log(`Successfully disconnected device: ${deviceId}`);
+        }
       } else {
         // Set loading state for connect
         connectBtn.disabled = true;
-        connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Connecting...';
-        console.log(`Connecting to device: ${deviceId}`);
-
-        const success = await this.trackerManager.connectToDevice(deviceId);
+        connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        // Use connectionId only - API id is only for backend/database, not BLE
+        const connectionId = device.connectionId || device.macAddress;
+        if (!connectionId) {
+          console.error(`Cannot connect: device missing connectionId`);
+          connectBtn.disabled = false;
+          return;
+        }
+        
+        // Step 1: Lookup device in trackerManager by connectionId
+        let trackerDevice = this.trackerManager.getDeviceByConnectionId(connectionId);
+        
+        // Step 2: If not present, register it first
+        if (!trackerDevice) {
+          try {
+            const registeredDevice = await this.trackerManager.registerDeviceByName(device.name, connectionId);
+            if (!registeredDevice) {
+              console.warn(`Device registration failed or cancelled`);
+              connectBtn.disabled = false;
+              return;
+            }
+            trackerDevice = registeredDevice;
+          } catch (error) {
+            console.error(`Failed to register device:`, error);
+            // User may have cancelled the device selection popup
+            connectBtn.disabled = false;
+            return;
+          }
+        }
+        
+        // Step 3: Connect to the device
+        const success = await this.reconnectDeviceWithRetry(trackerDevice.id, 3);
+        
         if (success) {
-          console.log(`Successfully connected to device: ${deviceId}`);
+          // Update the saved/discovered device's connection status
+          device.isConnected = true;
+          device.connectionId = trackerDevice.connectionId;
+          device.macAddress = trackerDevice.macAddress || trackerDevice.connectionId;
+          this.updateDeviceConnectionStatus(deviceId, true);
+          
+          // Sync quaternion data from trackerManager deviceId to saved device ID
+          const quatData = this.deviceQuaternionData.get(trackerDevice.id);
+          if (quatData) {
+            this.deviceQuaternionData.set(deviceId, quatData);
+            // Update the data view and dials immediately
+            this.updateDeviceDataView(deviceId);
+            const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+            import(isSaved ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
+              updateDeviceDials(deviceId, quatData);
+            });
+          }
         } else {
-          console.error(`Failed to connect to device: ${deviceId}`);
+          // Step 4: If connection failed, try connectByName as fallback
+          console.log(`Direct connection failed. Attempting connection by name: ${device.name}`);
+          try {
+            const connectedDevice = await this.trackerManager.connectToDeviceByName(
+              device.name,
+              connectionId
+            );
+            
+            if (connectedDevice && connectedDevice.isConnected) {
+              console.log(`Successfully connected via name: ${connectedDevice.name} (${connectedDevice.id})`);
+              device.connectionId = connectedDevice.connectionId;
+              device.macAddress = connectedDevice.macAddress || connectedDevice.connectionId;
+              device.isConnected = true;
+              this.updateDeviceConnectionStatus(deviceId, true);
+              
+              // Sync quaternion data
+              const quatData = this.deviceQuaternionData.get(connectedDevice.id);
+              if (quatData) {
+                this.deviceQuaternionData.set(deviceId, quatData);
+                this.updateDeviceDataView(deviceId);
+                const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+                import(isSaved ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
+                  updateDeviceDials(deviceId, quatData);
+                });
+              }
+            } else {
+              console.warn(`Connection by name failed or user cancelled: ${device.name}`);
+            }
+          } catch (error) {
+            console.error(`Connection by name failed:`, error);
+          }
         }
       }
     } catch (error) {
@@ -733,8 +1226,31 @@ export class DeviceModal {
   }
 
   private handleDeviceEdit(deviceId: string): void {
-    // TODO: Implement device editing
-    console.log('Edit device:', deviceId);
+    // Toggle visibility of config section (color dropdown, role selector, save button)
+    const configSection = this.modal.querySelector(`.${savedCardStyles.configSection}[data-device-id="${deviceId}"]`) as HTMLElement;
+    const editBtn = this.modal.querySelector(`.${savedCardStyles.editBtn}[data-device-id="${deviceId}"]`) as HTMLElement;
+    
+    if (!configSection || !editBtn) {
+      // Config section might not exist if device is not connected - that's okay
+      return;
+    }
+    
+    const isHidden = configSection.style.display === 'none' || configSection.style.display === '';
+    configSection.style.display = isHidden ? 'block' : 'none';
+    
+    // Update edit state map to preserve state across re-renders
+    this.deviceEditStates.set(deviceId, isHidden);
+    
+    // Update edit button icon to indicate state (optional visual feedback)
+    const icon = editBtn.querySelector('i');
+    if (icon) {
+      if (isHidden) {
+        // Config is now visible - could change icon to indicate "done" or "editing"
+        // Keep edit icon for now, but could change to fa-check or similar
+      } else {
+        // Config is now hidden - keep edit icon
+      }
+    }
   }
 
   private handleDeviceDelete(deviceId: string): void {
@@ -759,7 +1275,24 @@ export class DeviceModal {
   }
 
   private updateDiscoveredDevices(devices: EidonDevice[]): void {
-    this.discoveredDevices = devices;
+    // Filter out devices that are already in savedDevices
+    // Match by name (exact) or connectionId/macAddress
+    this.discoveredDevices = devices.filter(discoveredDevice => {
+      return !this.savedDevices.some(savedDevice => {
+        // Match by exact name (case-insensitive)
+        if (savedDevice.name && discoveredDevice.name && 
+            savedDevice.name.toLowerCase() === discoveredDevice.name.toLowerCase()) {
+          return true;
+        }
+        // Match by connectionId or macAddress
+        return (
+          savedDevice.connectionId === discoveredDevice.connectionId ||
+          savedDevice.macAddress === discoveredDevice.connectionId ||
+          savedDevice.connectionId === discoveredDevice.macAddress ||
+          savedDevice.macAddress === discoveredDevice.macAddress
+        );
+      });
+    });
     this.renderDiscoveredDevices();
   }
 
@@ -827,7 +1360,6 @@ export class DeviceModal {
     } else {
       arrow.style.display = 'none';
       arrow.style.opacity = '0';
-      console.log('Hiding arrow');
     }
   }
 
@@ -864,3 +1396,4 @@ export class DeviceModal {
     }
   }
 }
+

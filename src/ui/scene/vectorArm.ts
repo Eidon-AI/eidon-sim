@@ -129,29 +129,9 @@ export class VectorArm {
       ? [-0.3, 0,  0]
       : [0.3, 0, 0];
 
-    // rotation that spins 90° about +Y
-    const rightYaw90Array = new Float32Array([
-      0, 0, 1,
-      0, 1, 0,
-      -1, 0, 0
-    ]);
-    const leftYaw90Array = new Float32Array([
-      0, 0, -1,
-      0, 1, 0,
-      1, 0, 0
-    ]);
-
-    /* helper to maybe rotate fwd for right arm */
-    const rotFwd = (v: vec3) =>
-      this.side === 'right'
-        ? vec3.transformMat3(vec3.create(), v, rightYaw90Array)
-        : vec3.transformMat3(vec3.create(), v, leftYaw90Array);
-
-    /* helper to maybe rotate up for right arm */
-    const rotUp = (v: vec3) =>
-      this.side === 'right'
-        ? vec3.transformMat3(vec3.create(), v, rightYaw90Array)
-        : vec3.transformMat3(vec3.create(), v, leftYaw90Array);
+    /* helper functions - no rotation applied (matches legacy RoArmController) */
+    const rotFwd = (v: vec3) => v;  // Passthrough - no rotation
+    const rotUp = (v: vec3) => v;  // Passthrough - no rotation
 
     /* ---- compute chain step-by-step ---- */
     const upperEnd = hub

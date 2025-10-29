@@ -1,7 +1,7 @@
 import { Device, DeviceColor } from '../../../types/device';
 import { DeviceStore } from '../../../core/DeviceStore';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
-import { eulerXYZ } from '../../../core/mathUtils';
+import { quaternionToEuler } from '../../../core/mathUtils';
 import { setSelected } from '../../App';
 import { vec3, quat } from 'gl-matrix';
 import { DEVICE_ROLE_NAMES } from '../../../core/constants';
@@ -510,16 +510,14 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
     }
     lastCanvasUpdate = now;
 
-    const [yaw,pit,rol] = eulerXYZ(s.quat);
+    const { yaw: yawDeg, pitch: pitDeg, roll: rolDeg } = quaternionToEuler(s.quat);
     draw3DPrismIndicator(
       prism.canvas.getContext('2d')!,
       s.quat,       // pass the **quaternion**
       s.color
     );
-    const [yawDeg,pitDeg,rolDeg] = [yaw,pit,rol].map(rad=>rad*180/Math.PI);
-    // Adjust yaw so that facing north = 0° instead of 180°
-    const adjustedYaw = -yawDeg + (yawDeg < 0 ? -180 : 180);
-    drawDial(dYaw.canvas.getContext('2d')!, adjustedYaw, s.color);
+    // Yaw is now correctly offset in quaternionToEuler, no adjustment needed
+    drawDial(dYaw.canvas.getContext('2d')!, yawDeg, s.color);
     drawDial(dPit.canvas.getContext('2d')!, pitDeg, s.color);
     drawDial(dRol.canvas.getContext('2d')!, rolDeg, s.color);
     drawForwardVector(fVec.canvas.getContext('2d')!, Array.from(s.fwd), s.color);

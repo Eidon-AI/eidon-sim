@@ -101,8 +101,6 @@ export class DeviceListSection {
         this.content.appendChild(card);
         this.renderedDeviceIds.add(device.id);
       });
-      
-      console.log(`DeviceListSection: Rendered ${sortedDevices.length} devices in sorted order`);
     }
   }
 

@@ -1,6 +1,7 @@
 import { quat, vec3 } from 'gl-matrix';
 import { Device } from '../types/device';
 import { HUM_LEN, RAD_LEN, HAND_LEN } from './constants';
+import { quaternionToVectors } from './mathUtils';
 
 /* helper to read little-endian u16 and map to −1…+1 float */
 function u16ToFloat(dv: DataView, byte: number) {
@@ -19,12 +20,8 @@ export function parseTracker(state: Device, view: DataView) {
   state.quat = q;
 
   // === Derived unit vectors ===
-  const upZ   = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
-  const up   = [upZ[0], upZ[2], -upZ[1]] as vec3;
-  const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y-fwd
-  const fwd  = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;            // swap Y/Z
-
-  state.up  = up;
+  const { up, fwd } = quaternionToVectors(q);
+  state.up = up;
   state.fwd = fwd;
 
   // === Chain positions ===

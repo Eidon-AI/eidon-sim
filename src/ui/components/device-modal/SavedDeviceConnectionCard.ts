@@ -1,8 +1,10 @@
 import { EidonDevice } from '../../../core/EidonTrackerManager';
 import { DeviceRole, DEVICE_ROLE_NAMES } from '../../../core/constants';
-import { eulerXYZ } from '../../../core/mathUtils';
+import { quaternionToEuler, formatQuaternion } from '../../../core/mathUtils';
 import { quat } from 'gl-matrix';
 import styles from './styles/SavedDeviceConnectionCard.module.css';
+import { renderColorDropdown } from './ColorDropdown';
+import { renderRoleSelector } from './RoleSelector';
 
 // Re-export styles for use in DeviceModal
 export { styles as cardStyles };
@@ -135,22 +137,11 @@ function formatQuaternionData(quaternion?: number[]): { euler: { yaw: number; pi
   }
   
   const q: quat = [quaternion[0], quaternion[1], quaternion[2], quaternion[3]];
-  const [yaw, pitch, roll] = eulerXYZ(q);
-  
-  // Convert to degrees
-  const yawDeg = yaw * 180 / Math.PI;
-  const pitchDeg = pitch * 180 / Math.PI;
-  const rollDeg = roll * 180 / Math.PI;
-  
-  // Format quaternion values
-  const quatStr = `(${quaternion[0].toFixed(3)}, ${quaternion[1].toFixed(3)}, ${quaternion[2].toFixed(3)}, ${quaternion[3].toFixed(3)})`;
+  const euler = quaternionToEuler(q);
+  const quatStr = formatQuaternion(q);
   
   return {
-    euler: {
-      yaw: yawDeg,
-      pitch: pitchDeg,
-      roll: rollDeg
-    },
+    euler,
     quat: quatStr
   };
 }
@@ -237,7 +228,14 @@ export function updateDeviceDials(deviceId: string, quaternionData?: { quaternio
       valueElement.textContent = `${value.toFixed(1)}°`;
     }
   });
+
+  // Update the raw quaternion value text
+  const quatValueElement = card.querySelector(`.${styles.quatValue}`);
+  if (quatValueElement && formatted.quat) {
+    quatValueElement.textContent = formatted.quat;
+  }
 }
+
 
 /**
  * Create HTML string for a saved device connection card (includes edit/delete buttons)
@@ -278,43 +276,23 @@ export function createDeviceConnectionCard(
       </div>
   `;
 
-  // If connected, show role/color selectors and save button
+  // If connected, show role/color selectors (hidden by default, shown via edit button)
   if (device.isConnected) {
+    // Config section - hidden by default, shown via edit button
     cardHtml += `
-      <div class="${styles.configSection}">
+      <div class="${styles.configSection}" data-device-id="${device.id}" style="display: none;">
         <div class="${styles.configRow}">
           <div class="${styles.selectorGroup}">
             <label class="${styles.selectorLabel}">
               <i class="fas fa-palette"></i> Color
             </label>
-            <select class="${styles.colorSelector}" data-device-id="${device.id}" data-selector-type="color">
-              <option value="">Select Color</option>
-              <option value="rgb(255, 0, 0)" ${selectedColor === 'rgb(255, 0, 0)' || device.color === 'rgb(255, 0, 0)' ? 'selected' : ''}>Red</option>
-              <option value="rgb(0, 128, 0)" ${selectedColor === 'rgb(0, 128, 0)' || device.color === 'rgb(0, 128, 0)' ? 'selected' : ''}>Green</option>
-              <option value="rgb(0, 0, 255)" ${selectedColor === 'rgb(0, 0, 255)' || device.color === 'rgb(0, 0, 255)' ? 'selected' : ''}>Blue</option>
-              <option value="rgb(255, 255, 0)" ${selectedColor === 'rgb(255, 255, 0)' || device.color === 'rgb(255, 255, 0)' ? 'selected' : ''}>Yellow</option>
-              <option value="rgb(128, 0, 128)" ${selectedColor === 'rgb(128, 0, 128)' || device.color === 'rgb(128, 0, 128)' ? 'selected' : ''}>Purple</option>
-              <option value="rgb(255, 165, 0)" ${selectedColor === 'rgb(255, 165, 0)' || device.color === 'rgb(255, 165, 0)' ? 'selected' : ''}>Orange</option>
-              <option value="rgb(255, 192, 203)" ${selectedColor === 'rgb(255, 192, 203)' || device.color === 'rgb(255, 192, 203)' ? 'selected' : ''}>Pink</option>
-              <option value="rgb(0, 255, 255)" ${selectedColor === 'rgb(0, 255, 255)' || device.color === 'rgb(0, 255, 255)' ? 'selected' : ''}>Cyan</option>
-              <option value="rgb(255, 255, 255)" ${selectedColor === 'rgb(255, 255, 255)' || device.color === 'rgb(255, 255, 255)' ? 'selected' : ''}>White</option>
-              <option value="rgb(40, 40, 40)" ${selectedColor === 'rgb(40, 40, 40)' || device.color === 'rgb(40, 40, 40)' ? 'selected' : ''}>Black</option>
-            </select>
+            ${renderColorDropdown(device.id, selectedColor, device.color)}
           </div>
           <div class="${styles.selectorGroup}">
             <label class="${styles.selectorLabel}">
               <i class="fas fa-tag"></i> Role
             </label>
-            <select class="${styles.roleSelector}" data-device-id="${device.id}" data-selector-type="role">
-              <option value="0" ${(selectedRole ?? device.role) === DeviceRole.LEFT_HAND ? 'selected' : ''}>Left Hand</option>
-              <option value="1" ${(selectedRole ?? device.role) === DeviceRole.RIGHT_HAND ? 'selected' : ''}>Right Hand</option>
-              <option value="2" ${(selectedRole ?? device.role) === DeviceRole.LEFT_FOREARM ? 'selected' : ''}>Left Forearm</option>
-              <option value="3" ${(selectedRole ?? device.role) === DeviceRole.RIGHT_FOREARM ? 'selected' : ''}>Right Forearm</option>
-              <option value="4" ${(selectedRole ?? device.role) === DeviceRole.LEFT_HUB ? 'selected' : ''}>Left Hub</option>
-              <option value="5" ${(selectedRole ?? device.role) === DeviceRole.RIGHT_HUB ? 'selected' : ''}>Right Hub</option>
-              <option value="6" ${(selectedRole ?? device.role) === DeviceRole.CHEST ? 'selected' : ''}>Chest</option>
-              <option value="7" ${(selectedRole ?? device.role) === DeviceRole.UNKNOWN ? 'selected' : ''}>Unknown</option>
-            </select>
+            ${renderRoleSelector(device.id, selectedRole, device.role)}
           </div>
         </div>
         <button class="${styles.saveBtn}" data-device-id="${device.id}" ${hasChanges ? '' : 'disabled'}>
@@ -335,19 +313,42 @@ export function createDeviceConnectionCard(
     `;
   }
 
-  // Show edit/delete buttons for saved devices
-  cardHtml += `
-    <div class="${styles.cardBottom}">
-      <div class="${styles.actionButtons}">
-        <button class="${styles.editBtn}" data-device-id="${device.id}">
-          <i class="fas fa-edit"></i>
-        </button>
-        <button class="${styles.deleteBtn}" data-device-id="${device.id}">
-          <i class="fas fa-trash"></i>
-        </button>
+  // Show calibrate button (if connected) and edit/delete buttons for saved devices
+  if (device.isConnected) {
+    cardHtml += `
+      <div class="${styles.cardBottom}">
+        <div class="${styles.actionButtons}">
+          <button class="${styles.calibrateBtn}" data-device-id="${device.id}" data-connection-id="${device.connectionId || ''}">
+            <i class="fas fa-compass"></i> Calibrate
+          </button>
+          <div class="${styles.rightActions}">
+            <button class="${styles.editBtn}" data-device-id="${device.id}">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="${styles.deleteBtn}" data-device-id="${device.id}">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
-  `;
+    `;
+  } else {
+    // Show only edit/delete buttons when disconnected
+    cardHtml += `
+      <div class="${styles.cardBottom}">
+        <div class="${styles.actionButtons} ${styles.actionsRightOnly}">
+          <div class="${styles.rightActions}">
+            <button class="${styles.editBtn}" data-device-id="${device.id}">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="${styles.deleteBtn}" data-device-id="${device.id}">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   cardHtml += `</div>`;
 
