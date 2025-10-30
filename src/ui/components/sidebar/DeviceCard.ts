@@ -516,7 +516,6 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
       s.quat,       // pass the **quaternion**
       s.color
     );
-    // Yaw is now correctly offset in quaternionToEuler, no adjustment needed
     drawDial(dYaw.canvas.getContext('2d')!, yawDeg, s.color);
     drawDial(dPit.canvas.getContext('2d')!, pitDeg, s.color);
     drawDial(dRol.canvas.getContext('2d')!, rolDeg, s.color);

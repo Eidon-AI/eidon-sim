@@ -62,10 +62,7 @@ export function eulerXYZ(q: quat): [number, number, number] {
   // Yaw (z-axis rotation)
   const siny_cosp = 2 * (w * z + x * y);
   const cosy_cosp = 1 - 2 * (y * y + z * z);
-  let yaw = Math.atan2(siny_cosp, cosy_cosp) + Math.PI; // Add 180° so calibrated = 0° instead of -180°
-  
-  // Normalize to [-π, π] range (atan2 gives [-π, π], after adding π we have [0, 2π], normalize to [-π, π])
-  if (yaw > Math.PI) yaw -= 2 * Math.PI;
+  const yaw = Math.atan2(siny_cosp, cosy_cosp);
 
   return [yaw, pitch, roll];
 }

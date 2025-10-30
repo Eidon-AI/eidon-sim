@@ -294,14 +294,9 @@ export function createDeviceConnectionCard(
             ${renderRoleSelector(device.id, selectedRole, device.role)}
           </div>
         </div>
-        <div class="${styles.actionButtons}">
-          <button class="${styles.calibrateBtn}" data-device-id="${device.id}" data-connection-id="${device.connectionId || ''}">
-            <i class="fas fa-compass"></i> Calibrate
-          </button>
-          <button class="${styles.saveBtn}" data-device-id="${device.id}" ${hasChanges ? '' : 'disabled'}>
-            <i class="fas fa-save"></i> Save
-          </button>
-        </div>
+        <button class="${styles.saveBtn}" data-device-id="${device.id}" ${hasChanges ? '' : 'disabled'}>
+          <i class="fas fa-save"></i> Save
+        </button>
       </div>
       
       <!-- Data View Section -->
