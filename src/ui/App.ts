@@ -126,6 +126,39 @@ function showAuthModal(root: HTMLElement) {
 }
 
 /**
+ * Convert hex color to RGB format (for DeviceColor enum compatibility)
+ */
+function hexToRgb(hex: string): string {
+  // Remove # if present
+  hex = hex.replace('#', '');
+  // Parse r, g, b
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/**
+ * Get device color prioritizing saved database color, then device color, then default
+ */
+function getDeviceColor(eidonDevice: EidonDevice): DeviceColor {
+  // Priority 1: Use saved color from database if available
+  if (eidonDevice.color) {
+    // Convert hex to RGB if needed (saved colors from database are hex)
+    const colorStr = eidonDevice.color.startsWith('#') 
+      ? hexToRgb(eidonDevice.color)
+      : eidonDevice.color;
+    // Cast to DeviceColor (enum allows any color string in practice)
+    return colorStr as DeviceColor;
+  }
+  
+  // Priority 2: Default color (device's own color would be read from hardware via DEVICE_INFO characteristic,
+  // but that's handled separately in EidonTrackerManager.fetchDeviceInfo)
+  // For now, use default orange
+  return DeviceColor.ORANGE;
+}
+
+/**
  * Bridge function: Convert EidonDevice (Bluetooth) to Device (DeviceStore)
  */
 function bridgeEidonDeviceToDeviceStore(eidonDevice: EidonDevice, store: DeviceStore): void {
@@ -137,6 +170,13 @@ function bridgeEidonDeviceToDeviceStore(eidonDevice: EidonDevice, store: DeviceS
     // Map from constants.DeviceRole to types/device.DeviceRole
     existingDevice.position = mapDeviceRole(eidonDevice.role);
     existingDevice.connectionId = eidonDevice.connectionId;
+    
+    // Update color if saved color is available (prioritize saved database color)
+    const deviceColor = getDeviceColor(eidonDevice);
+    if (deviceColor !== existingDevice.color) {
+      existingDevice.color = deviceColor;
+    }
+    
     existingDevice.lastSeen = performance.now();
     store.dispatchEvent(new CustomEvent('update', { detail: existingDevice }));
     return;
@@ -147,7 +187,7 @@ function bridgeEidonDeviceToDeviceStore(eidonDevice: EidonDevice, store: DeviceS
     id: eidonDevice.id,
     name: eidonDevice.name,
     position: mapDeviceRole(eidonDevice.role),
-    color: DeviceColor.ORANGE, // Default color
+    color: getDeviceColor(eidonDevice), // Use saved color from database if available, otherwise default
     connectionId: eidonDevice.connectionId,
     quat: quat.create(),
     up: vec3.create(),
@@ -194,8 +234,9 @@ function updateDeviceWithQuaternion(deviceId: string, quaternion: number[], stor
   // We should respect playback mode here too. However, since we're updating directly,
   // we'll let DeviceStore's internal logic handle it if needed.
 
-  // Normalize quaternion array to quat format [x, y, z, w]
-  const q: quat = [quaternion[0], quaternion[1], quaternion[2], quaternion[3]];
+  // Parse quaternion: bytes are [w, x, y, z], but gl-matrix quat format is [x, y, z, w]
+  // Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
+  const q: quat = [quaternion[1], quaternion[2], quaternion[3], quaternion[0]]; // [x, y, z, w]
 
   // Update quaternion
   device.quat = q;
@@ -265,6 +306,21 @@ function initializeApp(root: HTMLElement) {
     // Remove from store and dispatch event
     store['map'].delete(deviceId);
     document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id: deviceId } }));
+  }) as EventListener);
+
+  // Handle device info updates (including color updates from saved devices)
+  tracker.addEventListener('deviceInfoUpdated', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string; device: EidonDevice }>;
+    const { deviceId, device: eidonDevice } = event.detail;
+    // Update device color in DeviceStore if device exists
+    const storeDevice = store['map'].get(deviceId);
+    if (storeDevice && eidonDevice.color) {
+      const deviceColor = getDeviceColor(eidonDevice);
+      if (storeDevice.color !== deviceColor) {
+        storeDevice.color = deviceColor;
+        store.dispatchEvent(new CustomEvent('update', { detail: storeDevice }));
+      }
+    }
   }) as EventListener);
 
   /* ------------------------------------------------------------

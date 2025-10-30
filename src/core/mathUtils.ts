@@ -37,34 +37,31 @@ export function eulerYZX(q: quat): [number, number, number] {
   return [flex, twist, roll];
 }
 
-// Update quaternion to Euler conversion to match Flutter app implementation
-// This matches the _quaternionToEuler function in the Flutter app
+/**
+ * Update quaternion to Euler conversion to match firmware implementation
+ */
 export function eulerXYZ(q: quat): [number, number, number] {
+  // const [x, y, z, w] = q;
   const x = q[0];
   const y = q[1];
   const z = q[2];
   const w = q[3];
 
-  // Pitch (x-axis rotation) - Flutter note: "was roll"
-  const sinr_cosp = 2 * (w * x + y * z);
-  const cosr_cosp = 1 - 2 * (x * x + y * y);
-  const pitch = Math.atan2(sinr_cosp, cosr_cosp);
+  // Different quaternion to euler conversion that might reduce axis coupling
+  const yaw = Math.atan2(2.0 * (w * z + x * y),
+                        1.0 - 2.0 * (y * y + z * z));
+  
+  const pitch = Math.asin(2.0 * (w * y - z * x));
+  
+  const roll = Math.atan2(2.0 * (w * x + y * z),
+                         1.0 - 2.0 * (x * x + y * y));
 
-  // Roll (y-axis rotation) - Flutter note: "was pitch"
-  const sinp = 2 * (w * y - z * x);
-  let roll: number;
-  if (Math.abs(sinp) >= 1) {
-    roll = (Math.PI / 2) * Math.sign(sinp); // use 90 degrees if out of range
-  } else {
-    roll = Math.asin(sinp);
-  }
-
-  // Yaw (z-axis rotation)
-  const siny_cosp = 2 * (w * z + x * y);
-  const cosy_cosp = 1 - 2 * (y * y + z * z);
-  const yaw = Math.atan2(siny_cosp, cosy_cosp);
-
-  return [yaw, pitch, roll];
+  // Convert to degrees and swap pitch and roll
+  return [
+    yaw,
+    roll,   // Use roll value for pitch
+    pitch,  // Use pitch value for roll
+  ];
 }
 
 /* Twist around +X ---------------------------------------------------- */
@@ -102,25 +99,6 @@ export function rollAroundForward(
   return sign * angle * 180 / Math.PI;
 }
 
-/* ========== Centralized Quaternion Processing ========== */
-
-/**
- * Convert quaternion to correctly mapped Euler angles in degrees.
- * Matches the Flutter app implementation (_quaternionToEuler).
- * Applies correction: maps pitch to yaw and yaw to pitch.
- * @param q - Quaternion in format [x, y, z, w]
- * @returns Object with yaw, pitch, roll in degrees
- */
-export function quaternionToEuler(q: quat): { yaw: number; pitch: number; roll: number } {
-  const [yawRaw, pitchRaw, roll] = eulerXYZ(q);
-
-  // Convert to degrees and swap yaw and pitch
-  return {
-    yaw: pitchRaw * 180 / Math.PI,    // pitch → yaw
-    pitch: yawRaw * 180 / Math.PI,    // yaw → pitch
-    roll: roll * 180 / Math.PI
-  };
-}
 
 /**
  * Convert quaternion to forward and up vectors in scene space.
@@ -129,18 +107,28 @@ export function quaternionToEuler(q: quat): { yaw: number; pitch: number; roll: 
  * @returns Object with forward (fwd) and up vectors in scene space
  */
 export function quaternionToVectors(q: quat): { up: vec3; fwd: vec3 } {
-  // Legacy implementation matching parseTracker:
-  // - Transform sensor unit vectors through quaternion
-  // - Apply [x, z, -y] coordinate space conversion
-  // - Up from sensor Z [0, 0, 1], Forward from sensor Y [0, 1, 0]
+  // Transform sensor unit vectors through quaternion
+  // Coordinate space conversion: Device [X, Y, Z] → Scene [X, Y, Z]
+  // - Device X [1, 0, 0] → Left/Right (Scene X)
+  // - Device Y [0, 1, 0] → Forward (Scene Z)
+  // - Device Z [0, 0, 1] → Up (Scene Y)
   
   const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);   // sensor Z
-  const up = [upZ[0], -upZ[1], upZ[2]] as vec3;                  // [x, z, -y] conversion
+  const up = [upZ[0], upZ[2], upZ[1]] as vec3;                  // [x, z, y] conversion: Device X→Scene X, Device Z→Scene Y (up), Device Y→Scene Z
   
-  const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y
-  const fwd = [fwdZ[0], -fwdZ[1], fwdZ[2]] as vec3;             // [x, z, -y] conversion
+  const fwdY = vec3.transformQuat(vec3.create(), [0, 1, 0], q);  // sensor Y (forward)
+  const fwd = [fwdY[0], fwdY[2], -fwdY[1]] as vec3;             // [x, z, -y] conversion: Device Y→Scene Z (forward)
 
   return { up, fwd };
+
+  //  // === Derived unit vectors ===
+  //  const upZ   = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
+  //  const up   = [upZ[0], upZ[2], -upZ[1]] as vec3;
+  //  const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y-fwd
+  //  const fwd  = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;            // swap Y/Z
+ 
+  //  state.up  = up;
+  //  state.fwd = fwd;
 }
 
 /**

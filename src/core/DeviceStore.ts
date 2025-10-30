@@ -1,5 +1,4 @@
 import { quat, vec3, vec3 as v3 } from 'gl-matrix';
-import { parseTracker } from './reportParsers';
 import { Device, DeviceRole, DeviceColor } from '../types/device';
 
 export class DeviceStore extends EventTarget {
@@ -24,17 +23,6 @@ export class DeviceStore extends EventTarget {
 
   private map = new Map<string, Device>();
 
-  /** Handle raw device data reports */
-  handleRaw(id: string, view: DataView) {
-    // Ignore live input during playback
-    if (this.playbackMode) return;
-    
-    const state = this.map.get(id) ?? this.newState(id, view);
-    this.parseInto(state, view);
-    this.map.set(id, state);
-    this.dispatchEvent(new CustomEvent('update', { detail: state }));
-  }
-
   /** Enable/disable playback mode */
   setPlaybackMode(enabled: boolean) {
     this.playbackMode = enabled;
@@ -57,7 +45,7 @@ export class DeviceStore extends EventTarget {
   }
 
   /* ---------- internal helpers ------------------------------- */
-  private newState(id: string, view: DataView): Device {
+  private newState(id: string): Device {
     return {
       id,
       name: `Device ${id}`,
@@ -70,11 +58,6 @@ export class DeviceStore extends EventTarget {
       chainEnd:   vec3.create(),
       lastSeen: performance.now()
     };
-  }
-
-  private parseInto(state: Device, view: DataView) {
-    parseTracker(state, view);
-    state.lastSeen = performance.now();
   }
 
   /** Convenience: fetch device by specific position */

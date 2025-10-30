@@ -992,7 +992,9 @@ export class EidonTrackerManager extends EventTarget {
       return;
     }
 
-    // Parse quaternion data (assuming 16 bytes: 4 floats for quaternion)
+    // Parse quaternion data (16 bytes: 4 floats)
+    // Byte order: Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
+    // Float32Array will read as [w, x, y, z] - will be reordered to [x, y, z, w] in App.ts
     const quaternion = new Float32Array(data.buffer, data.byteOffset, 4);
     
     this.dispatchEvent(new CustomEvent('quaternionData', {

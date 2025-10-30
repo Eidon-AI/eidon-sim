@@ -1,6 +1,6 @@
 import { EidonDevice } from '../../../core/EidonTrackerManager';
 import { DeviceRole, DEVICE_ROLE_NAMES } from '../../../core/constants';
-import { quaternionToEuler, formatQuaternion } from '../../../core/mathUtils';
+import { eulerXYZ, formatQuaternion } from '../../../core/mathUtils';
 import { quat } from 'gl-matrix';
 import styles from './styles/NewDeviceConnectionCard.module.css';
 import { renderColorDropdown } from './ColorDropdown';
@@ -136,12 +136,16 @@ function formatQuaternionData(quaternion?: number[]): { euler: { yaw: number; pi
     return null;
   }
   
-  const q: quat = [quaternion[0], quaternion[1], quaternion[2], quaternion[3]];
-  const euler = quaternionToEuler(q);
+  // Parse quaternion: raw Bluetooth data is [w, x, y, z], but gl-matrix quat format is [x, y, z, w]
+  // Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
+  const q: quat = [quaternion[1], quaternion[2], quaternion[3], quaternion[0]]; // [x, y, z, w]
+  // eulerXYZ returns [yaw, pitch, roll] in radians with all swaps corrected
+  const [yaw, pitch, roll] = eulerXYZ(q);
+  const [yawDeg, pitchDeg, rollDeg] = [yaw, pitch, roll].map(rad => rad * 180 / Math.PI);
   const quatStr = formatQuaternion(q);
   
   return {
-    euler,
+    euler: { yaw: yawDeg, pitch: pitchDeg, roll: rollDeg },
     quat: quatStr
   };
 }

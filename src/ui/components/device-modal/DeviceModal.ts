@@ -18,6 +18,7 @@ export class DeviceModal {
   private deviceConfigs = new Map<string, { selectedColor?: string; selectedRole?: DeviceRole }>();
   private deviceQuaternionData = new Map<string, { quaternion: number[]; timestamp: number }>();
   private deviceEditStates = new Map<string, boolean>(); // Track which devices have config section visible
+  private deviceDisconnecting = new Set<string>(); // Track devices currently disconnecting to prevent reconnection attempts
 
   constructor(trackerManager: EidonTrackerManager) {
     this.trackerManager = trackerManager;
@@ -139,6 +140,23 @@ export class DeviceModal {
           // Update connection info to match trackerManager device
           savedDevice.connectionId = device.connectionId;
           savedDevice.macAddress = device.macAddress || device.connectionId;
+          
+          // IMPORTANT: Update EidonDevice.color with saved database color
+          // This ensures the color is available when bridging to DeviceStore
+          // Prioritize saved database color over any existing color
+          if (savedDevice.color) {
+            device.color = savedDevice.color;
+            // Update the device in trackerManager to persist the color
+            const trackerDevice = this.trackerManager.getDevice(deviceId);
+            if (trackerDevice) {
+              trackerDevice.color = savedDevice.color;
+              // Dispatch deviceInfoUpdated event so App.ts can sync to DeviceStore
+              this.trackerManager.dispatchEvent(new CustomEvent('deviceInfoUpdated', { 
+                detail: { deviceId, device: trackerDevice } 
+              }));
+            }
+          }
+          
           this.updateDeviceConnectionStatus(savedDevice.id, true);
           
           // Sync any existing quaternion data from trackerManager deviceId to saved device ID
@@ -324,6 +342,16 @@ export class DeviceModal {
             // We keep the API ID for saving, but use trackerManager ID for connections
             if (matchedTrackerDevice.isConnected) {
               console.log(`Found connected device: ${savedDevice.name}, matched to trackerManager device: ${matchedTrackerDevice.id}`);
+              
+              // IMPORTANT: Update EidonDevice.color with saved database color for already-connected devices
+              // This ensures colors are synced when saved devices are loaded
+              if (savedDevice.color && matchedTrackerDevice.color !== savedDevice.color) {
+                matchedTrackerDevice.color = savedDevice.color;
+                // Dispatch deviceInfoUpdated event so App.ts can sync to DeviceStore
+                this.trackerManager.dispatchEvent(new CustomEvent('deviceInfoUpdated', { 
+                  detail: { deviceId: matchedTrackerDevice.id, device: matchedTrackerDevice } 
+                }));
+              }
             }
           }
         }
@@ -1094,6 +1122,12 @@ export class DeviceModal {
     }
     if (!device) return;
 
+    // Prevent connection attempts if device is currently disconnecting
+    if (this.deviceDisconnecting.has(deviceId)) {
+      console.log(`Device ${deviceId} is currently disconnecting, ignoring connect request`);
+      return;
+    }
+
     // Determine which card type
     const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
     const cardStyles = isSaved ? savedCardStyles : newCardStyles;
@@ -1102,6 +1136,9 @@ export class DeviceModal {
 
     try {
       if (device.isConnected) {
+        // Mark device as disconnecting to prevent reconnection attempts
+        this.deviceDisconnecting.add(deviceId);
+        
         // Set loading state for disconnect
         connectBtn.disabled = true;
         connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Disconnecting...';
@@ -1127,6 +1164,18 @@ export class DeviceModal {
           await this.trackerManager.disconnectDevice(deviceId);
           console.log(`Successfully disconnected device: ${deviceId}`);
         }
+
+        // Immediately update device status to prevent accidental reconnection
+        device.isConnected = false;
+        
+        // Update UI - this will re-render the card with "Connect" button
+        this.updateDeviceConnectionStatus(deviceId, false);
+        
+        // Remove from disconnecting set - disconnect is complete
+        this.deviceDisconnecting.delete(deviceId);
+        
+        // Early return to prevent any further execution
+        return;
       } else {
         // Set loading state for connect
         connectBtn.disabled = true;
@@ -1218,9 +1267,16 @@ export class DeviceModal {
       }
     } catch (error) {
       console.error(`Device connection failed for ${deviceId}:`, error);
+      // If we were disconnecting, make sure to clean up the state
+      if (this.deviceDisconnecting.has(deviceId)) {
+        this.deviceDisconnecting.delete(deviceId);
+      }
     } finally {
-      // Reset button state - the UI will be updated by the event listeners
-      connectBtn.disabled = false;
+      // Reset button state only if not disconnected (disconnect path already returns early)
+      // For connect path, the button will be updated by updateDeviceConnectionStatus
+      if (!this.deviceDisconnecting.has(deviceId)) {
+        connectBtn.disabled = false;
+      }
       // The button text will be updated by updateDeviceConnectionStatus
     }
   }

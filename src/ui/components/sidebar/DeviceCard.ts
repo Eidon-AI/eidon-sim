@@ -1,7 +1,7 @@
 import { Device, DeviceColor } from '../../../types/device';
 import { DeviceStore } from '../../../core/DeviceStore';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
-import { quaternionToEuler } from '../../../core/mathUtils';
+import { eulerXYZ } from '../../../core/mathUtils';
 import { setSelected } from '../../App';
 import { vec3, quat } from 'gl-matrix';
 import { DEVICE_ROLE_NAMES } from '../../../core/constants';
@@ -63,10 +63,37 @@ function createPrismIndicatorCanvas() {
   return { wrap, canvas };
 }
 
+// Helper to convert RGB string to hex (for color input compatibility)
+function rgbToHex(rgb: string): string {
+  // Check if already hex format
+  if (rgb.startsWith('#')) {
+    return rgb;
+  }
+  
+  // Parse rgb(r, g, b) format
+  const matches = rgb.match(/\d+/g);
+  if (matches && matches.length >= 3) {
+    const r = parseInt(matches[0]).toString(16).padStart(2, '0');
+    const g = parseInt(matches[1]).toString(16).padStart(2, '0');
+    const b = parseInt(matches[2]).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
+  }
+  
+  // Fallback
+  return '#ffa500'; // Orange
+}
+
 // Helper to lighten dark colors for visibility
-function getVisibleColor(hex: string): string {
-  // Remove # if present
-  hex = hex.replace('#', '');
+function getVisibleColor(color: string): string {
+  // Handle both hex and RGB formats
+  let hex: string;
+  if (color.startsWith('#')) {
+    hex = color.replace('#', '');
+  } else {
+    // Convert RGB to hex first
+    hex = rgbToHex(color).replace('#', '');
+  }
+  
   // Parse r, g, b
   const r = parseInt(hex.substring(0, 2), 16) / 255;
   const g = parseInt(hex.substring(2, 4), 16) / 255;
@@ -415,7 +442,8 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
 
   const colorBox = document.createElement('input');
   colorBox.type  = 'color';
-  colorBox.value = state.color;
+  // Convert RGB to hex for color input (HTML color inputs only accept hex format)
+  colorBox.value = state.color.startsWith('#') ? state.color : rgbToHex(state.color);
   colorBox.className = styles.colorBox;
   topRow.appendChild(colorBox);
 
@@ -510,15 +538,17 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
     }
     lastCanvasUpdate = now;
 
-    const { yaw: yawDeg, pitch: pitDeg, roll: rolDeg } = quaternionToEuler(s.quat);
+    // eulerXYZ returns [yaw, pitch, roll] in radians with all swaps and calibration correction applied
+    const [yaw, pitch, roll] = eulerXYZ(s.quat);
+    const [yawDeg, pitchDeg, rollDeg] = [yaw, pitch, roll].map(rad => rad * 180 / Math.PI);
     draw3DPrismIndicator(
       prism.canvas.getContext('2d')!,
       s.quat,       // pass the **quaternion**
       s.color
     );
     drawDial(dYaw.canvas.getContext('2d')!, yawDeg, s.color);
-    drawDial(dPit.canvas.getContext('2d')!, pitDeg, s.color);
-    drawDial(dRol.canvas.getContext('2d')!, rolDeg, s.color);
+    drawDial(dPit.canvas.getContext('2d')!, pitchDeg, s.color);
+    drawDial(dRol.canvas.getContext('2d')!, rollDeg, s.color);
     drawForwardVector(fVec.canvas.getContext('2d')!, Array.from(s.fwd), s.color);
     drawUpVector(uVec.canvas.getContext('2d')!, Array.from(s.up), s.color);
   };
