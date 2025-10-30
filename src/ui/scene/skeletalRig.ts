@@ -100,7 +100,8 @@ export class SkeletalRig {
   /* ------------ once, both arms in one mesh ------------- */
   private init(root: THREE.Group) {
     root.position.set(this.pendingPosition.x, -1, this.pendingPosition.z);
-    root.rotation.set(0, 180 * d2r, 0);
+    // Initialize with 0 rotation - yaw will be set by updateChestYaw() based on chest orientation
+    root.rotation.set(0, 0, 0);
     root.scale.setScalar(this.pendingScale);
     
     // Apply any pending visibility state BEFORE adding to scene
@@ -224,30 +225,89 @@ export class SkeletalRig {
     // }
   }
 
-  /* ------------ Update model yaw based on chest UP vector ----- */
-  private updateChestYaw(): void {
+  /* ------------ Update model yaw based on chest UP vector (negated) ----- */
+  /* NOTE: This function is not currently used, but can be tested as an alternative approach */
+  private updateChestYawFromChestUp(): void {
     if (!this.root) return;
     
     const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
     if (!chest || !chest.up) return;
     
-    // Project chest UP vector onto yaw plane (XZ plane, horizontal plane)
-    // chest.up is [x, y, z] in sensor space
-    // For yaw calculation, we need the projection onto the horizontal plane
-    const upX = chest.up[0];  // Left/Right component
-    const upZ = chest.up[2];  // Forward/Back component (Y/Z swap from sensor)
+    // Chest device is worn vertically, with UP vector pointing forward
+    // We negate the UP direction to align model orientation correctly
+    // Project negated chest UP vector onto yaw plane (XZ plane, horizontal plane)
+    // chest.up from quaternionToVectors() is [x, z, y] in scene space:
+    // - chest.up[0] = X component (left/right)
+    // - chest.up[1] = Z component (forward/back)
+    // - chest.up[2] = Y component (up/down, vertical - not used for yaw)
     
-    // Calculate yaw angle from UP vector projection onto XZ plane
-    // atan2(z, x) gives us the angle in the horizontal plane
-    const yawRad = Math.atan2(upZ, upX);
+    // Negate the UP vector components for yaw calculation
+    const upX = -chest.up[0];  // Negated X component (left/right)
+    const upZ = -chest.up[1];  // Negated Z component (forward/back)
     
-    // Convert to degrees
-    const yawDeg = yawRad / d2r;
+    // Calculate yaw angle from negated UP vector projection onto XZ plane
+    // atan2(x, z) gives us the angle in the horizontal plane:
+    // - atan2(0, 1) = 0° = +Z (forward) 
+    // - atan2(1, 0) = 90° = +X (right)
+    // - atan2(0, -1) = 180° = -Z (backward)
+    const yawRad = Math.atan2(upX, upZ);
     
     // Apply rotation to model root
-    // The model currently has 180° offset at initialization, so we add that
-    // to maintain the same orientation as before, but now aligned with chest UP
-    this.root.rotation.y = (yawDeg + 180) * d2r;
+    // Model should face in the negated direction of chest UP vector
+    this.root.rotation.y = yawRad;
+  }
+
+  /* ------------ Update model yaw based on average hub forward vectors ----- */
+  private updateChestYaw(): void {
+    if (!this.root) return;
+    
+    // Get left and right hub (shoulder) devices
+    const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
+    const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+    
+    // Project forward vectors onto yaw plane (XZ plane, horizontal plane)
+    // fwd from quaternionToVectors() is [x, z, -y] in scene space:
+    // - fwd[0] = X component (left/right)
+    // - fwd[1] = Z component (forward/back)
+    // - fwd[2] = -Y component (vertical, not used for yaw)
+    
+    let avgFwdX = 0;
+    let avgFwdZ = 0;
+    let count = 0;
+    
+    if (leftHub && leftHub.fwd) {
+      // Project onto yaw plane: use X and Z components only
+      avgFwdX += leftHub.fwd[0];  // X component
+      avgFwdZ += leftHub.fwd[1];  // Z component
+      count++;
+    }
+    
+    if (rightHub && rightHub.fwd) {
+      // Project onto yaw plane: use X and Z components only
+      avgFwdX += rightHub.fwd[0];  // X component
+      avgFwdZ += rightHub.fwd[1];  // Z component
+      count++;
+    }
+    
+    // If no hubs available, don't update rotation
+    if (count === 0) return;
+    
+    // Average the yaw plane projections
+    avgFwdX /= count;
+    avgFwdZ /= count;
+    
+    // Calculate yaw angle from averaged forward vector projection
+    // The model is consistently 90° off, so we swap atan2 arguments
+    // atan2(x, z) instead of atan2(z, x) to compensate:
+    // - atan2(0, 1) = 0° = +Z (forward) 
+    // - atan2(1, 0) = 90° = +X (right)
+    // - atan2(0, -1) = 180° = -Z (backward)
+    // This accounts for Three.js rotation convention vs vector direction
+    const yawRad = Math.atan2(avgFwdX, avgFwdZ);
+    
+    // Apply rotation to model root
+    // Model should face in the average forward direction of the two hub devices
+    this.root.rotation.y = yawRad;
   }
 
   /* ------------ Quaternion-based rotation (smooth) ---- */

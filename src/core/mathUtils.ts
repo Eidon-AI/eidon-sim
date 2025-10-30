@@ -114,7 +114,7 @@ export function quaternionToVectors(q: quat): { up: vec3; fwd: vec3 } {
   // - Device Z [0, 0, 1] → Up (Scene Y)
   
   const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);   // sensor Z
-  const up = [upZ[0], upZ[2], upZ[1]] as vec3;                  // [x, z, y] conversion: Device X→Scene X, Device Z→Scene Y (up), Device Y→Scene Z
+  const up = [upZ[0], upZ[2], -upZ[1]] as vec3;                  // [x, z, y] conversion: Device X→Scene X, Device Z→Scene Y (up), Device Y→Scene Z
   
   const fwdY = vec3.transformQuat(vec3.create(), [0, 1, 0], q);  // sensor Y (forward)
   const fwd = [fwdY[0], fwdY[2], -fwdY[1]] as vec3;             // [x, z, -y] conversion: Device Y→Scene Z (forward)

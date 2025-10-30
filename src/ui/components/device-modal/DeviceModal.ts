@@ -18,6 +18,7 @@ export class DeviceModal {
   private deviceConfigs = new Map<string, { selectedColor?: string; selectedRole?: DeviceRole }>();
   private deviceQuaternionData = new Map<string, { quaternion: number[]; timestamp: number }>();
   private deviceEditStates = new Map<string, boolean>(); // Track which devices have config section visible
+  private deviceDataViewStates = new Map<string, boolean>(); // Track which devices have data stream visible
   private deviceDisconnecting = new Set<string>(); // Track devices currently disconnecting to prevent reconnection attempts
 
   constructor(trackerManager: EidonTrackerManager) {
@@ -501,6 +502,19 @@ export class DeviceModal {
       }
     });
     
+    // Restore data view state (show data stream if it was previously visible)
+    this.deviceDataViewStates.forEach((isVisible, deviceId) => {
+      if (isVisible) {
+        const dataContent = this.modal.querySelector(`.${savedCardStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+        const toggleBtn = this.modal.querySelector(`.${savedCardStyles.dataToggle}[data-device-id="${deviceId}"]`) as HTMLElement;
+        const icon = toggleBtn?.querySelector(`.${savedCardStyles.dataToggleIcon}`) as HTMLElement;
+        if (dataContent && toggleBtn && icon) {
+          dataContent.style.display = 'block';
+          icon.style.transform = 'rotate(180deg)';
+        }
+      }
+    });
+    
     // Initialize dials for devices with quaternion data
     import('./SavedDeviceConnectionCard').then(({ updateDeviceDials }) => {
       this.savedDevices.forEach(device => {
@@ -691,6 +705,9 @@ export class DeviceModal {
     const isHidden = dataContent.style.display === 'none';
     dataContent.style.display = isHidden ? 'block' : 'none';
     icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+    
+    // Track the data view state to preserve across re-renders
+    this.deviceDataViewStates.set(deviceId, isHidden);
   }
 
   private async updateDeviceDataView(deviceId: string): Promise<void> {
@@ -1374,6 +1391,19 @@ export class DeviceModal {
     container.innerHTML = html;
     setNewDeviceCardStyles(container);
     this.attachDeviceEventListeners();
+    
+    // Restore data view state for discovered devices (show data stream if it was previously visible)
+    this.deviceDataViewStates.forEach((isVisible, deviceId) => {
+      if (isVisible) {
+        const dataContent = this.modal.querySelector(`.${newCardStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+        const toggleBtn = this.modal.querySelector(`.${newCardStyles.dataToggle}[data-device-id="${deviceId}"]`) as HTMLElement;
+        const icon = toggleBtn?.querySelector(`.${newCardStyles.dataToggleIcon}`) as HTMLElement;
+        if (dataContent && toggleBtn && icon) {
+          dataContent.style.display = 'block';
+          icon.style.transform = 'rotate(180deg)';
+        }
+      }
+    });
     
     // Initialize dials for devices with quaternion data
     import('./NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
