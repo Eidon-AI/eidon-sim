@@ -72,6 +72,17 @@
   transform: translateY(-1px);
 }
 
+.navButton.active {
+  background: rgba(233, 51, 112, 0.15);
+  border-color: rgba(233, 51, 112, 0.6);
+  color: rgba(233, 51, 112, 1);
+}
+
+.navButton.active:hover {
+  background: rgba(233, 51, 112, 0.25);
+  border-color: rgba(233, 51, 112, 0.8);
+}
+
 .navButton i {
   font-size: 18px;
   width: 18px;

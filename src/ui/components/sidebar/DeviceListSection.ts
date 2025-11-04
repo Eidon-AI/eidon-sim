@@ -1,6 +1,7 @@
 // src/ui/components/sidebar/DeviceListSection.ts
 import { DeviceStore } from '../../../core/DeviceStore';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
+import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
 import { renderCard } from './DeviceCard';
 import { Device, DeviceRole } from '../../../types/device';
 import styles from './styles/DeviceListSection.module.css';
@@ -28,11 +29,14 @@ export class DeviceListSection {
   private isExpanded: boolean = true; // Default expanded
   private store: DeviceStore;
   private trackerManager?: EidonTrackerManager;
+  private deviceConnectionStateManager: DeviceConnectionStateManager;
   private renderedDeviceIds = new Set<string>();
+  private connectionCountIndicator: HTMLElement | null = null;
 
-  constructor(store: DeviceStore, trackerManager?: EidonTrackerManager) {
+  constructor(store: DeviceStore, trackerManager: EidonTrackerManager | undefined, deviceConnectionStateManager: DeviceConnectionStateManager) {
     this.store = store;
     this.trackerManager = trackerManager;
+    this.deviceConnectionStateManager = deviceConnectionStateManager;
     
     this.section = document.createElement('div');
     this.section.className = styles.section;
@@ -42,6 +46,7 @@ export class DeviceListSection {
         <h4 class="${styles.sectionTitle}">
           <i class="fas fa-chevron-down ${styles.chevron}"></i>
           📱 Device List
+          <span class="${styles.connectionCount}">0/7</span>
         </h4>
       </div>
       <div class="${styles.sectionContent}">
@@ -49,6 +54,7 @@ export class DeviceListSection {
     `;
     
     this.content = this.section.querySelector(`.${styles.sectionContent}`) as HTMLElement;
+    this.connectionCountIndicator = this.section.querySelector(`.${styles.connectionCount}`) as HTMLElement;
     
     // Initialize as expanded
     this.section.classList.add(styles.expanded);
@@ -58,6 +64,10 @@ export class DeviceListSection {
     header.addEventListener('click', () => this.toggle());
     
     this.setupDeviceUpdates();
+    this.setupConnectionStateUpdates();
+    
+    // Initial update
+    this.updateConnectionCountVisibility();
   }
 
   private setupDeviceUpdates(): void {
@@ -75,6 +85,40 @@ export class DeviceListSection {
       this.renderedDeviceIds.delete(id);
       this.renderDeviceList();
     });
+  }
+
+  private setupConnectionStateUpdates(): void {
+    // Listen for connection state changes
+    this.deviceConnectionStateManager.addEventListener('connectionStateChanged', () => {
+      this.updateConnectionCount();
+    });
+
+    // Listen for playback mode changes
+    this.store.addEventListener('update', () => {
+      // Check playback mode on any update (DeviceStore doesn't dispatch playback mode changes separately)
+      // We'll check it in updateConnectionCountVisibility
+      this.updateConnectionCountVisibility();
+    });
+  }
+
+  private updateConnectionCount(): void {
+    if (!this.connectionCountIndicator) return;
+    
+    const count = this.deviceConnectionStateManager.totalConnectedDevices;
+    this.connectionCountIndicator.textContent = `${count}/7`;
+  }
+
+  private updateConnectionCountVisibility(): void {
+    if (!this.connectionCountIndicator) return;
+    
+    // Only show connection count when NOT in playback mode
+    const isPlaybackMode = this.store.isPlaybackMode();
+    if (isPlaybackMode) {
+      this.connectionCountIndicator.style.display = 'none';
+    } else {
+      this.connectionCountIndicator.style.display = '';
+      this.updateConnectionCount();
+    }
   }
 
   private renderDeviceList(): void {

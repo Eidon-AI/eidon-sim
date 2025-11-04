@@ -360,8 +360,11 @@ export function initScene(
 
   // Handle model reset events (from playback exit)
   document.addEventListener('resetModel', () => {
+    // Reset all rigs to normal position (neutral pose)
+    rigs.forEach(rig => rig.resetToNormalPosition());
+    
     // Trigger a device update to refresh all visuals
-    // This will cause the rigs to return to default positions
+    // This will cause the rigs to update with current device data
     store.dispatchEvent(new CustomEvent('update'));
   });
 

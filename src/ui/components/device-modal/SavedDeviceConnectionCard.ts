@@ -151,9 +151,61 @@ function formatQuaternionData(quaternion?: number[]): { euler: { yaw: number; pi
 }
 
 /**
- * Render data content HTML with canvas dials
+ * Get child devices for a hub device
+ * Tries multiple matching strategies: by hub ID, connectionId, or macAddress
  */
-function renderDataContent(quaternionData?: { quaternion: number[]; timestamp: number }): string {
+function getChildDevicesForHub(hubDevice: EidonDevice, allDevices?: EidonDevice[]): EidonDevice[] {
+  if (!allDevices) return [];
+  
+  // Try to match by hub ID first
+  let childDevices = allDevices.filter(d => d.parentHub === hubDevice.id);
+  
+  // If no matches, try by connectionId or macAddress
+  if (childDevices.length === 0 && (hubDevice.connectionId || hubDevice.macAddress)) {
+    const hubConnectionId = hubDevice.connectionId || hubDevice.macAddress;
+    // Find the trackerManager device that matches this hub by connectionId/macAddress
+    const matchingHub = allDevices.find(d => 
+      (d.connectionId === hubConnectionId || d.macAddress === hubConnectionId) &&
+      (d.role === hubDevice.role)
+    );
+    
+    if (matchingHub) {
+      // Use the matching hub's ID to find children
+      childDevices = allDevices.filter(d => d.parentHub === matchingHub.id);
+    }
+  }
+  
+  return childDevices;
+}
+
+/**
+ * Count connected child devices for a hub
+ */
+function getConnectedChildCount(device: EidonDevice, allDevices?: EidonDevice[]): string {
+  if (!device.isHub || device.role === DeviceRole.CHEST) {
+    return '';
+  }
+  
+  const childDevices = getChildDevicesForHub(device, allDevices);
+  const connectedCount = childDevices.filter(d => d.isConnected).length;
+  const totalCount = childDevices.length;
+  
+  // If no children exist yet, show 0/2
+  if (totalCount === 0) {
+    return '0/2';
+  }
+  
+  return `${connectedCount}/${totalCount}`;
+}
+
+/**
+ * Render data content HTML with canvas dials for a single device
+ */
+function renderSingleDeviceDataContent(
+  deviceName: string,
+  deviceId: string,
+  quaternionData?: { quaternion: number[]; timestamp: number }
+): string {
   if (!quaternionData) {
     return `<div class="${styles.noData}">Waiting for data...</div>`;
   }
@@ -164,40 +216,156 @@ function renderDataContent(quaternionData?: { quaternion: number[]; timestamp: n
   }
   
   return `
-    <div class="${styles.dialGrid}">
-      <div class="${styles.dialItem}">
-        <canvas class="${styles.dialCanvas}" data-dial="yaw" width="40" height="40"></canvas>
-        <div class="${styles.dialLabel}">Yaw</div>
-        <div class="${styles.dialValue}">${formatted.euler.yaw.toFixed(1)}°</div>
+    <div class="${styles.deviceDataSection}" data-device-id="${deviceId}">
+      <div class="${styles.deviceDataHeader}">${deviceName}</div>
+      <div class="${styles.dialGrid}">
+        <div class="${styles.dialItem}">
+          <canvas class="${styles.dialCanvas}" data-dial="yaw" data-device-id="${deviceId}" width="40" height="40"></canvas>
+          <div class="${styles.dialLabel}">Yaw</div>
+          <div class="${styles.dialValue}">${formatted.euler.yaw.toFixed(1)}°</div>
+        </div>
+        <div class="${styles.dialItem}">
+          <canvas class="${styles.dialCanvas}" data-dial="pitch" data-device-id="${deviceId}" width="40" height="40"></canvas>
+          <div class="${styles.dialLabel}">Pitch</div>
+          <div class="${styles.dialValue}">${formatted.euler.pitch.toFixed(1)}°</div>
+        </div>
+        <div class="${styles.dialItem}">
+          <canvas class="${styles.dialCanvas}" data-dial="roll" data-device-id="${deviceId}" width="40" height="40"></canvas>
+          <div class="${styles.dialLabel}">Roll</div>
+          <div class="${styles.dialValue}">${formatted.euler.roll.toFixed(1)}°</div>
+        </div>
       </div>
-      <div class="${styles.dialItem}">
-        <canvas class="${styles.dialCanvas}" data-dial="pitch" width="40" height="40"></canvas>
-        <div class="${styles.dialLabel}">Pitch</div>
-        <div class="${styles.dialValue}">${formatted.euler.pitch.toFixed(1)}°</div>
+      <div class="${styles.quatRow}">
+        <div class="${styles.dataLabel}">Quat:</div>
+        <div class="${styles.dataValue} ${styles.quatValue}" data-device-id="${deviceId}">${formatted.quat}</div>
       </div>
-      <div class="${styles.dialItem}">
-        <canvas class="${styles.dialCanvas}" data-dial="roll" width="40" height="40"></canvas>
-        <div class="${styles.dialLabel}">Roll</div>
-        <div class="${styles.dialValue}">${formatted.euler.roll.toFixed(1)}°</div>
-      </div>
-    </div>
-    <div class="${styles.quatRow}">
-      <div class="${styles.dataLabel}">Quaternion:</div>
-      <div class="${styles.dataValue} ${styles.quatValue}">${formatted.quat}</div>
     </div>
   `;
+}
+
+/**
+ * Render data content HTML with canvas dials (supports hub with child devices)
+ */
+function renderDataContent(
+  device: EidonDevice,
+  allDevices?: EidonDevice[],
+  quaternionDataMap?: Map<string, { quaternion: number[]; timestamp: number }>
+): string {
+  const isHub = device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB);
+  
+  if (!isHub) {
+    // Non-hub device - render single device data
+    const quatData = quaternionDataMap?.get(device.id);
+    return renderSingleDeviceDataContent(device.name, device.id, quatData);
+  }
+  
+  // Hub device - render hub data + child device data
+  const hubQuatData = quaternionDataMap?.get(device.id);
+  const childDevices = getChildDevicesForHub(device, allDevices);
+  
+  let html = '';
+  
+  // Hub's own data
+  const hubRoleName = DEVICE_ROLE_NAMES[device.role];
+  html += renderSingleDeviceDataContent(hubRoleName, device.id, hubQuatData);
+  
+  // Child device data
+  const expectedChildRoles = device.role === DeviceRole.LEFT_HUB
+    ? [
+        { role: DeviceRole.LEFT_HAND, name: DEVICE_ROLE_NAMES[DeviceRole.LEFT_HAND] },
+        { role: DeviceRole.LEFT_FOREARM, name: DEVICE_ROLE_NAMES[DeviceRole.LEFT_FOREARM] }
+      ]
+    : [
+        { role: DeviceRole.RIGHT_HAND, name: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_HAND] },
+        { role: DeviceRole.RIGHT_FOREARM, name: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_FOREARM] }
+      ];
+  
+  for (const expectedRole of expectedChildRoles) {
+    const childDevice = childDevices.find(d => d.role === expectedRole.role);
+    
+    // Try to find quaternion data using multiple possible IDs
+    let childQuatData = childDevice ? quaternionDataMap?.get(childDevice.id) : undefined;
+    
+    // If no data found by child device ID, try to find by role in allDevices
+    if (!childQuatData && allDevices) {
+      // Find any device with matching role and parentHub that matches this hub
+      const matchingChild = allDevices.find(d => 
+        d.role === expectedRole.role &&
+        d.parentHub && (
+          d.parentHub === device.id ||
+          (device.connectionId && d.parentHub === device.connectionId) ||
+          (device.macAddress && d.parentHub === device.macAddress)
+        )
+      );
+      
+      if (matchingChild) {
+        childQuatData = quaternionDataMap?.get(matchingChild.id);
+        // Use the matching child device if we didn't have one before
+        if (!childDevice && matchingChild) {
+          // Update the childDevices array reference (childDevice is a local variable)
+          const actualChildDevice = matchingChild;
+          if (childQuatData) {
+            html += renderSingleDeviceDataContent(expectedRole.name, actualChildDevice.id, childQuatData);
+          } else {
+            html += `
+              <div class="${styles.deviceDataSection}" data-device-id="${actualChildDevice.id}">
+                <div class="${styles.deviceDataHeader}">${expectedRole.name}</div>
+                <div class="${styles.noData}">Waiting for data...</div>
+              </div>
+            `;
+          }
+          continue;
+        }
+      }
+    }
+    
+    if (childDevice && childQuatData) {
+      // Child device exists and has data
+      html += renderSingleDeviceDataContent(expectedRole.name, childDevice.id, childQuatData);
+    } else if (childDevice) {
+      // Child device exists but no data yet
+      html += `
+        <div class="${styles.deviceDataSection}" data-device-id="${childDevice.id}">
+          <div class="${styles.deviceDataHeader}">${expectedRole.name}</div>
+          <div class="${styles.noData}">Waiting for data...</div>
+        </div>
+      `;
+    } else {
+      // Child device doesn't exist yet
+      html += `
+        <div class="${styles.deviceDataSection}">
+          <div class="${styles.deviceDataHeader}">${expectedRole.name}</div>
+          <div class="${styles.noData}">Device not connected</div>
+        </div>
+      `;
+    }
+  }
+  
+  return html;
 }
 
 /**
  * Update dial canvases for a device
  */
 export function updateDeviceDials(deviceId: string, quaternionData?: { quaternion: number[]; timestamp: number }): void {
-  const card = document.querySelector(`[data-device-id="${deviceId}"]`);
-  if (!card) return;
+  // First try to find a card element (for hub/chest devices)
+  let container = document.querySelector(`.${styles.deviceCard}[data-device-id="${deviceId}"]`) as HTMLElement;
+  
+  // If not found, try to find a deviceDataSection (for child devices nested in parent hub cards)
+  if (!container) {
+    container = document.querySelector(`.${styles.deviceDataSection}[data-device-id="${deviceId}"]`) as HTMLElement;
+  }
+  
+  // If still not found, try to find any element with this deviceId (fallback)
+  if (!container) {
+    container = document.querySelector(`[data-device-id="${deviceId}"]`) as HTMLElement;
+  }
+  
+  if (!container) return;
   
   if (!quaternionData) {
     // Clear dials
-    const canvases = card.querySelectorAll<HTMLCanvasElement>(`.${styles.dialCanvas}`);
+    const canvases = container.querySelectorAll<HTMLCanvasElement>(`.${styles.dialCanvas}[data-device-id="${deviceId}"]`);
     canvases.forEach(canvas => {
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -217,27 +385,30 @@ export function updateDeviceDials(deviceId: string, quaternionData?: { quaternio
     { name: 'roll', value: formatted.euler.roll }
   ];
   
+  // Find all dials for this device (may be nested in child device sections)
   dials.forEach(({ name, value }) => {
-    const canvas = card.querySelector<HTMLCanvasElement>(`.${styles.dialCanvas}[data-dial="${name}"]`);
+    const canvas = container.querySelector<HTMLCanvasElement>(`.${styles.dialCanvas}[data-dial="${name}"][data-device-id="${deviceId}"]`);
     if (canvas) {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         drawDial(ctx, value);
       }
-    }
-    
-    // Update the text value next to the dial
-    const valueElement = canvas?.closest(`.${styles.dialItem}`)?.querySelector(`.${styles.dialValue}`);
-    if (valueElement) {
-      valueElement.textContent = `${value.toFixed(1)}°`;
+      
+      // Update the text value next to the dial
+      const valueElement = canvas?.closest(`.${styles.dialItem}`)?.querySelector(`.${styles.dialValue}`);
+      if (valueElement) {
+        valueElement.textContent = `${value.toFixed(1)}°`;
+      }
     }
   });
 
-  // Update the raw quaternion value text
-  const quatValueElement = card.querySelector(`.${styles.quatValue}`);
-  if (quatValueElement && formatted.quat) {
-    quatValueElement.textContent = formatted.quat;
-  }
+  // Update the raw quaternion value text (may be multiple instances for hub + children)
+  const quatValueElements = container.querySelectorAll(`.${styles.quatValue}[data-device-id="${deviceId}"]`);
+  quatValueElements.forEach((element) => {
+    if (formatted.quat) {
+      element.textContent = formatted.quat;
+    }
+  });
 }
 
 
@@ -250,7 +421,7 @@ export function createDeviceConnectionCard(
   selectedColor?: string, 
   selectedRole?: DeviceRole, 
   hasChanges?: boolean,
-  quaternionData?: { quaternion: number[]; timestamp: number }
+  quaternionDataMap?: Map<string, { quaternion: number[]; timestamp: number }>
 ): string {
   const status = getDeviceStatus(device, allDevices);
   const statusColor = getStatusColor(status);
@@ -259,6 +430,10 @@ export function createDeviceConnectionCard(
   const displayColor = selectedColor || device.color || '#666';
   const displayRole = selectedRole !== undefined ? DEVICE_ROLE_NAMES[selectedRole] : roleName;
 
+  // Check if this is a hub and get child device count
+  const isHub = device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB);
+  const childCountText = isHub ? getConnectedChildCount(device, allDevices) : '';
+  
   let cardHtml = `
     <div class="${styles.deviceCard} ${deviceTypeClass}" data-device-id="${device.id}">
       <div class="${styles.cardTop}">
@@ -266,16 +441,31 @@ export function createDeviceConnectionCard(
           <div class="${styles.colorIndicator}" data-color="${displayColor}"></div>
           <div class="${styles.deviceInfo}">
             <div class="${styles.deviceName}">${device.name}</div>
-            <div class="${styles.deviceRole}">${displayRole}</div>
           </div>
         </div>
-        <div class="${styles.cardRight}">
-          <div class="${styles.statusBadge}" data-status-color="${statusColor}">
-            ${status}
+      </div>
+      <div class="${styles.cardMiddle}">
+        <div class="${styles.leftColumn}">
+          <div class="${styles.roleSection}">
+            <div class="${styles.deviceRole}">${displayRole}</div>
           </div>
-          <button class="${styles.connectBtn}" data-device-id="${device.id}">
-            ${device.isConnected ? 'Disconnect' : 'Connect'}
-          </button>
+          ${childCountText ? `
+          <div class="${styles.childIndicatorRow}">
+            <div class="${styles.childIndicator}">${childCountText} children connected</div>
+          </div>
+          ` : ''}
+        </div>
+        <div class="${styles.rightColumn}">
+          <div class="${styles.connectSection}">
+            <button class="${styles.connectBtn}" data-device-id="${device.id}">
+              ${device.isConnected ? 'Disconnect' : 'Connect'}
+            </button>
+          </div>
+          <div class="${styles.statusSection}">
+            <div class="${styles.statusBadge}" data-status-color="${statusColor}">
+              ${status}
+            </div>
+          </div>
         </div>
       </div>
   `;
@@ -311,7 +501,7 @@ export function createDeviceConnectionCard(
           <span>Data Stream</span>
         </button>
         <div class="${styles.dataContent}" data-device-id="${device.id}" style="display: none;">
-          ${renderDataContent(quaternionData)}
+          ${renderDataContent(device, allDevices, quaternionDataMap)}
         </div>
       </div>
     `;

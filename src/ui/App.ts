@@ -4,6 +4,7 @@ import { EidonTrackerManager, EidonDevice } from '../core/EidonTrackerManager';
 import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
 import { PlaybackManager } from '../core/PlaybackManager';
+import { DeviceConnectionStateManager } from '../core/DeviceConnectionStateManager';
 import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
 import { prefs } from '../core/preferences';
@@ -25,6 +26,7 @@ let controls: Controls;
 let sceneDestroy: (() => void) | null = null;
 let trackerManager: EidonTrackerManager | null = null;
 let deviceStore: DeviceStore | null = null;
+let deviceConnectionStateManager: DeviceConnectionStateManager | null = null;
 let authModal: AuthModal | null = null;
 let authManager: AuthManager | null = null;
 let loginStateManager: LoginStateManager | null = null;
@@ -275,11 +277,18 @@ function initializeApp(root: HTMLElement) {
   trackerManager = tracker;
   const solver = new ArmSolver(store);
 
+  // Create device connection state manager
+  const connectionStateManager = new DeviceConnectionStateManager();
+  deviceConnectionStateManager = connectionStateManager;
+  
+  // Expose to window for Sidebar access (temporary until we refactor to pass it properly)
+  (window as any).deviceConnectionStateManager = connectionStateManager;
+
   const { destroy } = initScene(canvas, store, solver);
   sceneDestroy = destroy;
 
   playbackManager = new PlaybackManager(store, solver);
-  controls = new Controls(playbackManager, tracker);
+  controls = new Controls(playbackManager, tracker, connectionStateManager);
   controls.mount(root);
 
   storeRef = store;
@@ -290,6 +299,22 @@ function initializeApp(root: HTMLElement) {
     const event = e as CustomEvent<{ deviceId: string; device: any }>;
     const { deviceId, device: eidonDevice } = event.detail;
     bridgeEidonDeviceToDeviceStore(eidonDevice, store);
+    
+    // Update connection state manager
+    // For child devices, add individually
+    if (eidonDevice.parentHub) {
+      connectionStateManager.addDeviceWithColor(
+        deviceId,
+        eidonDevice.name,
+        eidonDevice.role,
+        eidonDevice.color,
+        true // isChild
+      );
+    } else {
+      // For primary devices, do bulk update from all connected devices
+      const connectedDevices = tracker.getConnectedDevices();
+      connectionStateManager.updateConnectedDevices(connectedDevices);
+    }
   }) as EventListener);
 
   // Handle quaternion data updates
@@ -306,6 +331,13 @@ function initializeApp(root: HTMLElement) {
     // Remove from store and dispatch event
     store['map'].delete(deviceId);
     document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id: deviceId } }));
+    
+    // Update connection state manager
+    connectionStateManager.removeDevice(deviceId);
+    
+    // Also sync bulk update to ensure consistency
+    const connectedDevices = tracker.getConnectedDevices();
+    connectionStateManager.updateConnectedDevices(connectedDevices);
   }) as EventListener);
 
   // Handle device info updates (including color updates from saved devices)
@@ -321,7 +353,29 @@ function initializeApp(root: HTMLElement) {
         store.dispatchEvent(new CustomEvent('update', { detail: storeDevice }));
       }
     }
+    
+    // Update connection state manager if device is connected
+    if (eidonDevice.isConnected) {
+      const existingDevice = connectionStateManager.getDevice(deviceId);
+      if (existingDevice) {
+        connectionStateManager.addDeviceWithColor(
+          deviceId,
+          eidonDevice.name,
+          eidonDevice.role,
+          eidonDevice.color,
+          !!eidonDevice.parentHub // isChild
+        );
+      }
+    }
   }) as EventListener);
+
+  // Periodic sync of connection state (handles edge cases)
+  setInterval(() => {
+    if (!store.isPlaybackMode()) {
+      const connectedDevices = tracker.getConnectedDevices();
+      connectionStateManager.updateConnectedDevices(connectedDevices);
+    }
+  }, 2000); // Sync every 2 seconds
 
   /* ------------------------------------------------------------
    * 4. Controls (navigation)
@@ -366,6 +420,12 @@ function initializeApp(root: HTMLElement) {
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();
   iconOverlay.mount();
+
+  /* ------------ Initialize angle mode from preferences ------------ */
+  // Dispatch initial angle mode state so SkeletalRig loads with correct mode
+  document.dispatchEvent(new CustomEvent('angleModeChanged', {
+    detail: { useActuatorAngles: prefs.useActuatorAngles || false }
+  }));
 }
 
 // Cleanup function for proper resource management

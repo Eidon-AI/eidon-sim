@@ -11,6 +11,7 @@ type Prefs = {
   stereoEnabled: boolean;
   leftURL:  string;
   rightURL: string;
+  useActuatorAngles: boolean;  // Use actuator angles instead of quaternion-based rotation
 };
 
 const DEFAULT: Prefs = {
@@ -22,7 +23,8 @@ const DEFAULT: Prefs = {
   symColor: '#FF006F',  // Default sym color
   stereoEnabled: false,
   leftURL: 'http://eidon-glass-47bc.local:81/stream',
-  rightURL: 'http://eidon-glass-0214.local:81/stream'
+  rightURL: 'http://eidon-glass-0214.local:81/stream',
+  useActuatorAngles: false  // Default to quaternion mode (smooth)
 };
 
 export const prefs: Prefs = Object.assign(

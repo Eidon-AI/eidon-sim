@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { ArmSolver } from '../../core/ArmSolver';
 import { DeviceStore } from '../../core/DeviceStore';
-import { DeviceRole } from '../../types/device';
+import { DeviceRole, Device } from '../../types/device';
 import { prefs } from '../../core/preferences';
-import { quat } from 'gl-matrix';
+import { quat, vec3 } from 'gl-matrix';
+import { eulerXYZ } from '../../core/mathUtils';
 
 const loader = new GLTFLoader();
 const d2r = Math.PI / 180;
@@ -12,12 +13,16 @@ const d2r = Math.PI / 180;
 type Side = 'left' | 'right';
 type ArmMap = Record<'shoulder' | 'elbow' | 'wrist', THREE.Bone>;
 
+// Timeout threshold for considering data stale (2 seconds)
+const DATA_TIMEOUT_MS = 2000;
+
 export class SkeletalRig {
   private armBones:   Record<Side, ArmMap>        = {} as any;
   private handMesh:   Record<Side, THREE.Mesh[]>  = { left: [], right: [] };
   private fingerMap:  Record<Side, THREE.Bone[]>  = { left: [], right: [] };
   private extraMeshes!: { surface: THREE.Mesh; joints: THREE.Mesh };
   private root: THREE.Group | null = null;
+  private useActuatorAngles: boolean = false;
   private pendingVisible: boolean = true; // Store visibility state until model loads
   private pendingPosition: { x: number; z: number } = { x: 0, z: 0 };
   private pendingScale: number = 1.0;
@@ -26,6 +31,7 @@ export class SkeletalRig {
   
   // Store event handler references for proper cleanup
   private deviceColorHandler: (e: Event) => void;
+  private angleModeHandler: (e: Event) => void;
   private recolorHandler: () => void;
   private anglesHandler: () => void;
 
@@ -59,6 +65,11 @@ export class SkeletalRig {
       }
     };
     
+    this.angleModeHandler = (e: Event) => {
+      const { useActuatorAngles } = (e as CustomEvent<any>).detail;
+      this.useActuatorAngles = useActuatorAngles;
+    };
+    
     this.recolorHandler = () => {
       if (this.extraMeshes) {
         const surfaceMaterial = this.extraMeshes.surface?.material as THREE.MeshStandardMaterial;
@@ -79,6 +90,7 @@ export class SkeletalRig {
     
     // Add event listeners
     document.addEventListener('deviceColor', this.deviceColorHandler);
+    document.addEventListener('angleModeChanged', this.angleModeHandler);
     
     loader.load(
       gltfPath,
@@ -175,8 +187,11 @@ export class SkeletalRig {
     // Prevent updates after destruction
     if (this.isDestroyed) return;
     
-    // Always use actuator angles for the physical device
-    this.applySideActuatorAngles(side);
+    if (this.useActuatorAngles) {
+      this.applySideActuatorAngles(side);
+    } else {
+      this.applySideQuaternion(side);
+    }
 
     /* ----- Fingers mapping (disabled - finger data removed from Device interface) ----- */
     // const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
@@ -257,6 +272,44 @@ export class SkeletalRig {
     this.root.rotation.y = yawRad;
   }
 
+  /**
+   * Check if a device has active incoming data
+   * For child devices (forearm/hand), we require recent data (within DATA_TIMEOUT_MS)
+   * For hub devices, we're more lenient (they might be connected but children not yet)
+   */
+  private hasActiveData(device: Device | undefined, isChildDevice: boolean): boolean {
+    if (!device) {
+      return false;
+    }
+
+    // Check if device has valid vectors (not zero/default)
+    const hasValidVectors = vec3.length(device.fwd) > 0.001 && vec3.length(device.up) > 0.001;
+    
+    if (!hasValidVectors) {
+      return false;
+    }
+
+    // Check if quaternion is not identity (identity = [0, 0, 0, 1])
+    const isIdentity = Math.abs(device.quat[0]) < 0.001 && 
+                       Math.abs(device.quat[1]) < 0.001 && 
+                       Math.abs(device.quat[2]) < 0.001 && 
+                       Math.abs(device.quat[3] - 1.0) < 0.001;
+    
+    if (isIdentity) {
+      return false;
+    }
+
+    // For child devices, require recent data (within timeout window)
+    if (isChildDevice) {
+      const now = performance.now();
+      const timeSinceLastData = now - device.lastSeen;
+      return timeSinceLastData < DATA_TIMEOUT_MS;
+    }
+
+    // For hub devices, just check that data exists (more lenient)
+    return true;
+  }
+
   /* ------------ Update model yaw based on average hub forward vectors ----- */
   private updateChestYaw(): void {
     if (!this.root) return;
@@ -275,14 +328,14 @@ export class SkeletalRig {
     let avgFwdZ = 0;
     let count = 0;
     
-    if (leftHub && leftHub.fwd) {
+    if (leftHub && leftHub.fwd && this.hasActiveData(leftHub, false)) {
       // Project onto yaw plane: use X and Z components only
       avgFwdX += leftHub.fwd[0];  // X component
       avgFwdZ += leftHub.fwd[1];  // Z component
       count++;
     }
     
-    if (rightHub && rightHub.fwd) {
+    if (rightHub && rightHub.fwd && this.hasActiveData(rightHub, false)) {
       // Project onto yaw plane: use X and Z components only
       avgFwdX += rightHub.fwd[0];  // X component
       avgFwdZ += rightHub.fwd[1];  // Z component
@@ -320,22 +373,21 @@ export class SkeletalRig {
     /* Shoulder: Use quaternion directly to avoid angle wrapping */
     const upperRole = side === 'left' ? DeviceRole.ROLE_LEFT_HUB : DeviceRole.ROLE_RIGHT_HUB;
     const upperDevice = this.store.getByPosition(upperRole);
-    if (upperDevice) {
+    if (upperDevice && this.hasActiveData(upperDevice, false)) {
       const deviceQuat = upperDevice.quat;
       
-      // Convert gl-matrix quat to THREE.js quaternion
-      const threeQuat = new THREE.Quaternion(deviceQuat[0], deviceQuat[1], deviceQuat[2], deviceQuat[3]);
-      
-      // Convert to Euler angles and apply EXACT same corrections as actuator mode
-      const euler = new THREE.Euler().setFromQuaternion(threeQuat, 'XYZ');
+      // Use eulerXYZ() which matches legacy firmware implementation
+      // Returns [yaw, roll, pitch] in radians (note: pitch and roll are swapped in return)
+      const [yawRad, rollRad, pitchRad] = eulerXYZ(deviceQuat);
       
       // Apply same coordinate corrections as actuator mode for shoulder:
-      // arm.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -(a.shYaw - 180)*d2r);
-      const correctedRoll = -euler.x;   // X = roll
-      const correctedPitch = euler.y; // Y = pitch (negated)
-      const correctedYaw = -euler.z; // Z = yaw (offset and negated)
+      // arm.shoulder.rotation.set(-a.shRoll*d2r, a.shPitch*d2r, -a.shYaw*d2r);
+      // Map eulerXYZ output [yaw, roll, pitch] to bone rotations
+      const correctedRoll = -rollRad;   // roll (negated)
+      const correctedPitch = pitchRad;  // pitch (no negation)
+      const correctedYaw = -yawRad;     // yaw (negated)
       
-      // Convert back to quaternion with corrected Euler angles
+      // Convert to THREE.js Euler angles (XYZ order)
       const correctedEuler = new THREE.Euler(correctedRoll, correctedPitch, correctedYaw, 'XYZ');
       const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
       
@@ -344,13 +396,15 @@ export class SkeletalRig {
       arm.shoulder.quaternion.copy(correctedQuat);
     } else {
       // Fallback to Euler if no device quaternion available
+      // Match actuator mode formula: negate roll, no pitch negation, negate yaw, no offset
       arm.shoulder.quaternion.set(0, 0, 0, 1); // Reset quaternion
-      arm.shoulder.rotation.set(a.shRoll*d2r, -a.shPitch*d2r, -(a.shYaw - 180)*d2r);
+      arm.shoulder.rotation.set(-(a.shRoll - 0)*d2r, (a.shPitch - 0)*d2r, -(a.shYaw - 0)*d2r);
     }
 
     /* Elbow: Use quaternion-based calculation when devices available */
     const lowerRole = side === 'left' ? DeviceRole.ROLE_LEFT_FOREARM : DeviceRole.ROLE_RIGHT_FOREARM;
-    const lowerDevice = this.store.getByPosition(lowerRole);
+    const lowerDeviceRaw = this.store.getByPosition(lowerRole);
+    const lowerDevice = lowerDeviceRaw && this.hasActiveData(lowerDeviceRaw, true) ? lowerDeviceRaw : undefined;
     if (upperDevice && lowerDevice) {
       // Calculate relative rotation between upper and lower arm
       const upperQuat = upperDevice.quat;
@@ -377,7 +431,8 @@ export class SkeletalRig {
 
     /* Wrist: Use relative quaternion between hand and forearm if both devices available */
     const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
-    const handDevice = this.store.getByPosition(handRole);
+    const handDeviceRaw = this.store.getByPosition(handRole);
+    const handDevice = handDeviceRaw && this.hasActiveData(handDeviceRaw, true) ? handDeviceRaw : undefined;
     if (handDevice && lowerDevice) {
       // Calculate relative rotation between forearm and hand
       const lowerQuat = lowerDevice.quat;
@@ -387,15 +442,15 @@ export class SkeletalRig {
       const lowerInverse = quat.invert(quat.create(), lowerQuat);
       const relativeQuat = quat.multiply(quat.create(), lowerInverse, handQuat);
       
-      // Convert to THREE.js quaternion and then to Euler
-      const threeRelQuat = new THREE.Quaternion(relativeQuat[0], relativeQuat[1], relativeQuat[2], relativeQuat[3]);
-      const relativeEuler = new THREE.Euler().setFromQuaternion(threeRelQuat, 'XYZ');
+      // Use eulerXYZ() for consistency - returns [yaw, roll, pitch] in radians
+      const [relYawRad, relRollRad, relPitchRad] = eulerXYZ(relativeQuat);
       
       // Apply coordinate corrections for wrist relative motion
-      const correctedPitch = -relativeEuler.x; // X = pitch (negated)
-      const correctedYaw = -relativeEuler.z;   // Z = yaw (negated) 
+      // Map eulerXYZ output [yaw, roll, pitch] to wrist rotations
+      const correctedPitch = -relPitchRad; // pitch (negated)
+      const correctedYaw = -relYawRad;     // yaw (negated)
       
-      // Convert back to quaternion with corrected Euler angles
+      // Convert to THREE.js Euler angles (XYZ order)
       const correctedEuler = new THREE.Euler(correctedPitch, 0, correctedYaw, 'XYZ');
       const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
       
@@ -406,18 +461,15 @@ export class SkeletalRig {
       // Fallback to absolute hand orientation if forearm device not available
       const deviceQuat = handDevice.quat;
       
-      // Convert gl-matrix quat to THREE.js quaternion
-      const threeQuat = new THREE.Quaternion(deviceQuat[0], deviceQuat[1], deviceQuat[2], deviceQuat[3]);
-      
-      // Convert to Euler angles and apply EXACT same corrections as actuator mode
-      const euler = new THREE.Euler().setFromQuaternion(threeQuat, 'XYZ');
+      // Use eulerXYZ() for consistency - returns [yaw, roll, pitch] in radians
+      const [yawRad, rollRad, pitchRad] = eulerXYZ(deviceQuat);
       
       // Apply same coordinate corrections as actuator mode for wrist:
       // arm.wrist.rotation.set(-a.wrPitch*d2r, 0, -a.wrYaw*d2r);
-      const correctedPitch = -euler.x; // Y = pitch (negated)
-      const correctedYaw = -euler.z + 120*d2r;   // Z = yaw (negated)
+      const correctedPitch = -pitchRad;      // pitch (negated)
+      const correctedYaw = -yawRad + 120*d2r; // yaw (negated + 120° offset)
       
-      // Convert back to quaternion with corrected Euler angles
+      // Convert to THREE.js Euler angles (XYZ order)
       const correctedEuler = new THREE.Euler(correctedPitch, 0, correctedYaw, 'XYZ');
       const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
       
@@ -517,12 +569,50 @@ export class SkeletalRig {
     }
   }
 
+  public resetToNormalPosition(): void {
+    // Prevent operations after destruction
+    if (this.isDestroyed || !this.root) return;
+    
+    // Reset root rotation to default (no yaw)
+    this.root.rotation.y = 0;
+    
+    // Reset all arm bones to default rotation
+    ['left', 'right'].forEach(side => {
+      const arm = this.armBones[side as Side];
+      if (arm) {
+        // Reset quaternion to identity
+        arm.shoulder.quaternion.set(0, 0, 0, 1);
+        arm.shoulder.rotation.set(0, 0, 0);
+        
+        arm.elbow.quaternion.set(0, 0, 0, 1);
+        arm.elbow.rotation.set(0, 0, 0);
+        
+        arm.wrist.quaternion.set(0, 0, 0, 1);
+        arm.wrist.rotation.set(0, 0, 0);
+      }
+    });
+    
+    // Reset finger bones if they exist
+    ['left', 'right'].forEach(side => {
+      const fingers = this.fingerMap[side as Side];
+      if (fingers) {
+        fingers.forEach(bone => {
+          if (bone) {
+            bone.quaternion.set(0, 0, 0, 1);
+            bone.rotation.set(0, 0, 0);
+          }
+        });
+      }
+    });
+  }
+
   public destroy(): void {
     // Mark as destroyed first to prevent any further updates during cleanup
     this.isDestroyed = true;
     
     // Clean up event listeners
     document.removeEventListener('deviceColor', this.deviceColorHandler);
+    document.removeEventListener('angleModeChanged', this.angleModeHandler);
     document.removeEventListener('prefsChanged', this.recolorHandler);
     
     // Remove solver event listener

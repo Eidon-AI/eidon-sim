@@ -1,6 +1,7 @@
 import { EidonTrackerManager, EidonDevice } from '../../../core/EidonTrackerManager';
 import { DeviceRole } from '../../../core/constants';
 import { LoginStateManager } from '../../../core/LoginStateManager';
+import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
 import { createDeviceConnectionCard as createNewDeviceCard, setDeviceCardStyles as setNewDeviceCardStyles, cardStyles as newCardStyles } from './NewDeviceConnectionCard';
 import { createDeviceConnectionCard as createSavedDeviceCard, setDeviceCardStyles as setSavedDeviceCardStyles, cardStyles as savedCardStyles } from './SavedDeviceConnectionCard';
 import colorDropdownStyles from './styles/ColorDropdown.module.css';
@@ -11,6 +12,7 @@ export class DeviceModal {
   private container: HTMLElement;
   private modal: HTMLElement;
   private trackerManager: EidonTrackerManager;
+  private deviceConnectionStateManager: DeviceConnectionStateManager;
   private loginStateManager: LoginStateManager;
   private isVisible = false;
   private savedDevices: EidonDevice[] = [];
@@ -20,13 +22,20 @@ export class DeviceModal {
   private deviceEditStates = new Map<string, boolean>(); // Track which devices have config section visible
   private deviceDataViewStates = new Map<string, boolean>(); // Track which devices have data stream visible
   private deviceDisconnecting = new Set<string>(); // Track devices currently disconnecting to prevent reconnection attempts
+  private connectionCountIndicator: HTMLElement | null = null;
+  private calibrateAllBtn: HTMLButtonElement | null = null;
 
-  constructor(trackerManager: EidonTrackerManager) {
+  constructor(trackerManager: EidonTrackerManager, deviceConnectionStateManager: DeviceConnectionStateManager) {
     this.trackerManager = trackerManager;
+    this.deviceConnectionStateManager = deviceConnectionStateManager;
     this.loginStateManager = LoginStateManager.getInstance();
     this.container = this.createContainer();
     this.modal = this.createModal();
     this.container.appendChild(this.modal);
+    
+    // Store reference to connection count indicator after modal is created
+    this.connectionCountIndicator = this.modal.querySelector(`.${styles.connectionCount}`) as HTMLElement;
+    this.calibrateAllBtn = this.modal.querySelector(`.${styles.calibrateAllBtn}`) as HTMLButtonElement;
     
     this.setupEventListeners();
     
@@ -42,6 +51,9 @@ export class DeviceModal {
     
     // Show arrow indicator by default when logged in
     this.updateArrowVisibility();
+    
+    // Initialize connection count indicator
+    this.updateConnectionCount();
   }
 
   private createContainer(): HTMLElement {
@@ -68,8 +80,15 @@ export class DeviceModal {
     
     modal.innerHTML = `
       <div class="${styles.content}">
-        <!-- Header with close button -->
+        <!-- Header with close button and connection count -->
         <div class="${styles.header}">
+          <div class="${styles.headerLeft}">
+            <div class="${styles.connectionCount}">0/7</div>
+            <button class="${styles.calibrateAllBtn}" disabled>
+              <i class="fas fa-compass"></i>
+              <span>Calibrate All</span>
+            </button>
+          </div>
           <button class="${styles.closeButton}">&times;</button>
         </div>
 
@@ -78,10 +97,6 @@ export class DeviceModal {
           <div class="${styles.section}">
             <div class="${styles.sectionHeader}">
               <h3 class="${styles.title} saved-devices-title">Saved Devices</h3>
-              <button class="${styles.connectAllBtn}">
-                <i class="fas fa-link mr-2"></i>
-                Connect to All
-              </button>
             </div>
             <div class="${styles.devicesContainer} saved-devices-container">
               <!-- Devices will be populated here -->
@@ -105,6 +120,9 @@ export class DeviceModal {
       </div>
     `;
 
+    // Store reference to connection count indicator
+    const connectionCountElement = modal.querySelector(`.${styles.connectionCount}`) as HTMLElement;
+
     return modal;
   }
 
@@ -115,10 +133,6 @@ export class DeviceModal {
 
     // Remove overlay click to close since we're not using an overlay anymore
 
-    // Connect all button
-    const connectAllBtn = this.modal.querySelector(`.${styles.connectAllBtn}`) as HTMLButtonElement;
-    connectAllBtn.addEventListener('click', () => this.handleConnectAll());
-
     // Scan button
     const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
     scanBtn.addEventListener('click', () => this.handleScan());
@@ -126,8 +140,42 @@ export class DeviceModal {
     // Tracker manager events
     this.trackerManager.addEventListener('deviceConnected', (e: any) => {
       const { deviceId, device } = e.detail;
-      // Update by trackerManager deviceId
+      
+      // For child devices, sync them to savedDevices/discoveredDevices
+      if (device && device.parentHub) {
+        // Check if child device is already in our lists
+        const existingChildSaved = this.savedDevices.find(d => d.id === deviceId);
+        const existingChildDiscovered = this.discoveredDevices.find(d => d.id === deviceId);
+        
+        if (existingChildSaved) {
+          // Update existing child device status
+          existingChildSaved.isConnected = true;
+          Object.assign(existingChildSaved, device);
+          this.renderSavedDevices();
+        } else if (existingChildDiscovered) {
+          // Update existing child device status
+          existingChildDiscovered.isConnected = true;
+          Object.assign(existingChildDiscovered, device);
+          this.renderDiscoveredDevices();
+        } else {
+          // Add child device to appropriate list
+          // Check if parent hub is in savedDevices
+          const parentHub = this.savedDevices.find(d => d.id === device.parentHub);
+          if (parentHub) {
+            // Parent is saved, so add child to savedDevices too
+            this.savedDevices.push(device);
+            this.renderSavedDevices();
+          } else {
+            // Parent is not saved, add to discoveredDevices
+            this.discoveredDevices.push(device);
+            this.renderDiscoveredDevices();
+          }
+        }
+      }
+      
+      // Update by trackerManager deviceId (for non-child devices or after child is added)
       this.updateDeviceConnectionStatus(deviceId, true);
+      
       // Also update saved/discovered devices by connectionId if they match
       if (device && device.connectionId) {
         const savedDevice = this.savedDevices.find(d => 
@@ -235,11 +283,21 @@ export class DeviceModal {
         );
       }
       
+      // Check if this is a child device by looking at trackerManager device
+      const isChildDevice = trackerDevice?.parentHub !== undefined;
+      
       if (device) {
         // Store quaternion data using the saved/discovered device's ID (not trackerManager's deviceId)
         // This ensures dials update correctly
         const deviceIdForData = device.id;
+        
+        // Check if this is the first data packet for this device (for child devices, trigger re-render)
+        const isFirstPacket = !this.deviceQuaternionData.has(deviceIdForData);
+        
         this.deviceQuaternionData.set(deviceIdForData, { quaternion, timestamp });
+        
+        // Also store by trackerManager deviceId for consistency
+        this.deviceQuaternionData.set(deviceId, { quaternion, timestamp });
         
         // Update data view if it's currently visible
         this.updateDeviceDataView(deviceIdForData);
@@ -249,10 +307,42 @@ export class DeviceModal {
         import(isSaved ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
           updateDeviceDials(deviceIdForData, { quaternion, timestamp });
         });
+        
+        // If this is a child device's first data packet, re-render parent hub card to show child data stream
+        if (isChildDevice && trackerDevice?.parentHub && isFirstPacket) {
+          const parentHub = this.savedDevices.find(d => d.id === trackerDevice.parentHub) || 
+                           this.discoveredDevices.find(d => d.id === trackerDevice.parentHub);
+          if (parentHub) {
+            // First data packet - re-render parent hub card to show child data stream
+            if (this.savedDevices.find(d => d.id === trackerDevice.parentHub)) {
+              this.renderSavedDevices();
+            } else {
+              this.renderDiscoveredDevices();
+            }
+          }
+        }
       } else {
         // Device not found in saved/discovered lists - still store by trackerManager deviceId
         // This handles edge cases where device might be connected but not in our lists
+        // For child devices, they might not be in lists yet, so we need to add them
         this.deviceQuaternionData.set(deviceId, { quaternion, timestamp });
+        
+        // If this is a child device, ensure it's added to the appropriate list
+        if (isChildDevice && trackerDevice?.parentHub) {
+          const parentHub = this.savedDevices.find(d => d.id === trackerDevice.parentHub) || 
+                           this.discoveredDevices.find(d => d.id === trackerDevice.parentHub);
+          if (parentHub && !this.savedDevices.find(d => d.id === deviceId) && !this.discoveredDevices.find(d => d.id === deviceId)) {
+            // Add child device to same list as parent
+            if (this.savedDevices.find(d => d.id === trackerDevice.parentHub)) {
+              this.savedDevices.push(trackerDevice);
+              this.renderSavedDevices();
+            } else {
+              this.discoveredDevices.push(trackerDevice);
+              this.renderDiscoveredDevices();
+            }
+          }
+        }
+        
         this.updateDeviceDataView(deviceId);
       }
     }) as EventListener);
@@ -279,6 +369,20 @@ export class DeviceModal {
     this.loginStateManager.addListener(() => {
       this.updateArrowVisibility();
     });
+
+    // Listen for connection state changes
+    this.deviceConnectionStateManager.addEventListener('connectionStateChanged', () => {
+      this.updateConnectionCount();
+      this.updateCalibrateAllButtonState();
+    });
+
+    // Calibrate all button
+    if (this.calibrateAllBtn) {
+      this.calibrateAllBtn.addEventListener('click', () => this.handleCalibrateAll());
+    }
+    
+    // Initial button state update
+    this.updateCalibrateAllButtonState();
   }
 
   private async loadSavedDevices(): Promise<void> {
@@ -373,12 +477,8 @@ export class DeviceModal {
     
     if (!container || !title) return;
 
-    // Hide the title and connect button when logged out
+    // Hide the title when logged out
     title.classList.add('display-hidden');
-    const connectAllBtn = this.modal.querySelector('.connect-all-btn') as HTMLElement;
-    if (connectAllBtn) {
-      connectAllBtn.classList.add('display-hidden');
-    }
     
     // Show login prompt
     container.innerHTML = `
@@ -481,11 +581,34 @@ export class DeviceModal {
     }
 
     // Simple list - no grouping needed
+    // Get all devices from trackerManager (including child devices) for rendering child device data streams
+    const allTrackerDevices = this.trackerManager.getAllDevices();
+    
+    // Sync device statuses from trackerManager to savedDevices
+    this.savedDevices.forEach(savedDevice => {
+      const trackerDevice = allTrackerDevices.find(d => d.id === savedDevice.id);
+      if (trackerDevice) {
+        savedDevice.isConnected = trackerDevice.isConnected;
+        // Also sync other properties that might have changed
+        Object.assign(savedDevice, trackerDevice);
+      }
+    });
+    
+    // Ensure child devices from trackerManager are in savedDevices if their parent hub is saved
+    allTrackerDevices.forEach(trackerDevice => {
+      if (trackerDevice.parentHub && !this.savedDevices.find(d => d.id === trackerDevice.id)) {
+        const parentHub = this.savedDevices.find(d => d.id === trackerDevice.parentHub);
+        if (parentHub) {
+          // Parent hub is saved, so add child to savedDevices
+          this.savedDevices.push(trackerDevice);
+        }
+      }
+    });
+    
     const html = this.savedDevices.map(device => {
       const config = this.deviceConfigs.get(device.id);
       const hasChanges = this.hasDeviceChanges(device, config);
-      const quatData = this.deviceQuaternionData.get(device.id);
-      return createSavedDeviceCard(device, this.savedDevices, config?.selectedColor, config?.selectedRole, hasChanges, quatData);
+      return createSavedDeviceCard(device, allTrackerDevices, config?.selectedColor, config?.selectedRole, hasChanges, this.deviceQuaternionData);
     }).join('');
 
     container.innerHTML = html;
@@ -515,12 +638,19 @@ export class DeviceModal {
       }
     });
     
-    // Initialize dials for devices with quaternion data
+    // Initialize dials for devices with quaternion data (including child devices)
     import('./SavedDeviceConnectionCard').then(({ updateDeviceDials }) => {
-      this.savedDevices.forEach(device => {
-        const quatData = this.deviceQuaternionData.get(device.id);
+      // Get all devices including child devices from trackerManager
+      const allTrackerDevices = this.trackerManager.getAllDevices();
+      const allDeviceIds = new Set([
+        ...this.savedDevices.map(d => d.id),
+        ...allTrackerDevices.map(d => d.id)
+      ]);
+      
+      allDeviceIds.forEach(deviceId => {
+        const quatData = this.deviceQuaternionData.get(deviceId);
         if (quatData) {
-          updateDeviceDials(device.id, quatData);
+          updateDeviceDials(deviceId, quatData);
         }
       });
     });
@@ -964,28 +1094,6 @@ export class DeviceModal {
     }
   }
 
-  private async handleConnectAll(): Promise<void> {
-    const connectAllBtn = this.modal.querySelector(`.${styles.connectAllBtn}`) as HTMLButtonElement;
-    if (!connectAllBtn) return;
-
-    try {
-      // Set loading state
-      connectAllBtn.disabled = true;
-      connectAllBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Connecting...';
-      console.log('Starting connection to all devices...');
-
-      await this.trackerManager.connectToAll();
-      
-      console.log('Successfully connected to all devices');
-    } catch (error) {
-      console.error('Failed to connect to all devices:', error);
-    } finally {
-      // Reset button state
-      connectAllBtn.disabled = false;
-      connectAllBtn.innerHTML = '<i class="fas fa-link mr-2"></i>Connect to All';
-    }
-  }
-
   private async handleScan(): Promise<void> {
     const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
     const container = this.modal.querySelector('.discovered-devices-container') as HTMLElement;
@@ -1332,6 +1440,10 @@ export class DeviceModal {
   }
 
   private updateDeviceConnectionStatus(deviceId: string, isConnected: boolean): void {
+    // Get the device from trackerManager to check if it's a child device
+    const trackerDevice = this.trackerManager.getDevice(deviceId);
+    const isChildDevice = trackerDevice?.parentHub !== undefined;
+    
     // Update device in savedDevices
     const savedDevice = this.savedDevices.find(d => d.id === deviceId);
     if (savedDevice) {
@@ -1344,6 +1456,21 @@ export class DeviceModal {
     if (discoveredDevice) {
       discoveredDevice.isConnected = isConnected;
       this.renderDiscoveredDevices();
+    }
+    
+    // If this is a child device, also re-render the parent hub card to update child count
+    if (isChildDevice && trackerDevice?.parentHub) {
+      const parentHub = this.savedDevices.find(d => d.id === trackerDevice.parentHub);
+      if (parentHub) {
+        // Update parent hub connection status (child devices affect parent's child count)
+        // Don't change parent's isConnected, just trigger re-render
+        this.renderSavedDevices();
+      } else {
+        const parentHubDiscovered = this.discoveredDevices.find(d => d.id === trackerDevice.parentHub);
+        if (parentHubDiscovered) {
+          this.renderDiscoveredDevices();
+        }
+      }
     }
   }
 
@@ -1381,11 +1508,35 @@ export class DeviceModal {
     }
 
     // Simple list of discovered devices
+    // Get all devices from trackerManager (including child devices) for rendering child device data streams
+    const allTrackerDevices = this.trackerManager.getAllDevices();
+    
+    // Sync device statuses from trackerManager to discoveredDevices
+    this.discoveredDevices.forEach(discoveredDevice => {
+      const trackerDevice = allTrackerDevices.find(d => d.id === discoveredDevice.id);
+      if (trackerDevice) {
+        discoveredDevice.isConnected = trackerDevice.isConnected;
+        // Also sync other properties that might have changed
+        Object.assign(discoveredDevice, trackerDevice);
+      }
+    });
+    
+    // Ensure child devices from trackerManager are in discoveredDevices if their parent hub is discovered
+    allTrackerDevices.forEach(trackerDevice => {
+      if (trackerDevice.parentHub && !this.discoveredDevices.find(d => d.id === trackerDevice.id) && 
+          !this.savedDevices.find(d => d.id === trackerDevice.id)) {
+        const parentHub = this.discoveredDevices.find(d => d.id === trackerDevice.parentHub);
+        if (parentHub) {
+          // Parent hub is discovered, so add child to discoveredDevices
+          this.discoveredDevices.push(trackerDevice);
+        }
+      }
+    });
+    
     const html = this.discoveredDevices.map(device => {
       const config = this.deviceConfigs.get(device.id);
       const hasChanges = this.hasDeviceChanges(device, config);
-      const quatData = this.deviceQuaternionData.get(device.id);
-      return createNewDeviceCard(device, this.discoveredDevices, config?.selectedColor, config?.selectedRole, hasChanges, quatData);
+      return createNewDeviceCard(device, allTrackerDevices, config?.selectedColor, config?.selectedRole, hasChanges, this.deviceQuaternionData);
     }).join('');
 
     container.innerHTML = html;
@@ -1405,12 +1556,19 @@ export class DeviceModal {
       }
     });
     
-    // Initialize dials for devices with quaternion data
+    // Initialize dials for devices with quaternion data (including child devices)
     import('./NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
-      this.discoveredDevices.forEach(device => {
-        const quatData = this.deviceQuaternionData.get(device.id);
+      // Get all devices including child devices from trackerManager
+      const allTrackerDevices = this.trackerManager.getAllDevices();
+      const allDeviceIds = new Set([
+        ...this.discoveredDevices.map(d => d.id),
+        ...allTrackerDevices.map(d => d.id)
+      ]);
+      
+      allDeviceIds.forEach(deviceId => {
+        const quatData = this.deviceQuaternionData.get(deviceId);
         if (quatData) {
-          updateDeviceDials(device.id, quatData);
+          updateDeviceDials(deviceId, quatData);
         }
       });
     });
@@ -1446,6 +1604,67 @@ export class DeviceModal {
     } else {
       arrow.style.display = 'none';
       arrow.style.opacity = '0';
+    }
+  }
+
+  private updateConnectionCount(): void {
+    if (!this.connectionCountIndicator) return;
+    
+    const count = this.deviceConnectionStateManager.totalConnectedDevices;
+    this.connectionCountIndicator.textContent = `${count}/7`;
+  }
+
+  private updateCalibrateAllButtonState(): void {
+    if (!this.calibrateAllBtn) return;
+    
+    const count = this.deviceConnectionStateManager.totalConnectedDevices;
+    this.calibrateAllBtn.disabled = count === 0;
+  }
+
+  private async handleCalibrateAll(): Promise<void> {
+    if (!this.calibrateAllBtn) return;
+    
+    // Get all connected devices from trackerManager
+    const connectedDevices = this.trackerManager.getConnectedDevices();
+    
+    if (connectedDevices.length === 0) {
+      return;
+    }
+
+    try {
+      this.calibrateAllBtn.disabled = true;
+      this.calibrateAllBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Calibrating...</span>';
+
+      // Calibrate all connected devices
+      const calibrationPromises = connectedDevices.map(device => {
+        const connectionId = device.connectionId || device.macAddress;
+        if (!connectionId) {
+          console.warn(`No connectionId found for device ${device.id}`);
+          return Promise.resolve();
+        }
+        return this.trackerManager.calibrateDevice(connectionId);
+      });
+
+      await Promise.allSettled(calibrationPromises);
+      
+      this.calibrateAllBtn.innerHTML = '<i class="fas fa-check"></i> <span>Calibrated</span>';
+      setTimeout(() => {
+        if (this.calibrateAllBtn) {
+          this.calibrateAllBtn.innerHTML = '<i class="fas fa-compass"></i> <span>Calibrate All</span>';
+          this.updateCalibrateAllButtonState();
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('Calibrate all failed:', error);
+      if (this.calibrateAllBtn) {
+        this.calibrateAllBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Failed</span>';
+        setTimeout(() => {
+          if (this.calibrateAllBtn) {
+            this.calibrateAllBtn.innerHTML = '<i class="fas fa-compass"></i> <span>Calibrate All</span>';
+            this.updateCalibrateAllButtonState();
+          }
+        }, 2000);
+      }
     }
   }
 

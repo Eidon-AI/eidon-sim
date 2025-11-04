@@ -29,6 +29,11 @@ export class DeviceStore extends EventTarget {
     console.log('DeviceStore playback mode:', enabled ? 'ON' : 'OFF');
   }
 
+  /** Check if playback mode is enabled */
+  isPlaybackMode(): boolean {
+    return this.playbackMode;
+  }
+
   /** Update device state during playback (bypasses live input blocking) */
   updateDeviceForPlayback(deviceId: string, updates: Partial<Device>) {
     const device = this.map.get(deviceId);

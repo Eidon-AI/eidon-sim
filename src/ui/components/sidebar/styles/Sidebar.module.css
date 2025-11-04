@@ -76,3 +76,49 @@
 .sidebar:not(.expanded) .sidebarContent {
   display: none;
 }
+
+.angleModeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: none;
+  border-right: none;
+  border-top: 1px solid rgba(64, 64, 64, 0.5);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.angleModeButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.angleModeButton.active {
+  background: rgba(233, 51, 112, 0.15);
+  border-color: rgba(233, 51, 112, 0.4);
+  color: rgba(233, 51, 112, 1);
+}
+
+.angleModeButton.active:hover {
+  background: rgba(233, 51, 112, 0.25);
+  border-color: rgba(233, 51, 112, 0.6);
+}
+
+.angleModeButton i {
+  font-size: 1rem;
+  width: 1.25rem;
+  text-align: center;
+}
+
+.angleModeButton span {
+  flex: 1;
+}

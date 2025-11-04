@@ -28,6 +28,18 @@
   align-items: center;
   gap: 0.5rem;
   color: rgba(255, 255, 255, 0.9);
+  flex: 1;
+}
+
+.connectionCount {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(233, 51, 112, 0.9);
+  background: rgba(233, 51, 112, 0.15);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid rgba(233, 51, 112, 0.3);
+  margin-left: auto;
 }
 
 .chevron {

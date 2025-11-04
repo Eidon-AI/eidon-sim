@@ -11,6 +11,11 @@ import {
   DEVICE_ROLE_NAMES
 } from './constants';
 
+// Types for child devices (no longer using ChildDeviceConnectionManager)
+export type ChildDeviceId = string;
+export type ChildDeviceType = 'hand' | 'forearm';
+export type ChildDeviceRole = 'left_hand' | 'right_hand' | 'left_forearm' | 'right_forearm';
+
 export type DeviceId = string;
 
 export interface EidonDevice {
@@ -548,14 +553,19 @@ export class EidonTrackerManager extends EventTarget {
     }
 
     try {
-      // Disconnect child devices if this is a hub
+      // Remove child devices if this is a hub
       const device = this.devices.get(deviceId);
       if (device?.isHub) {
+        // Remove child devices from devices map
         const childDevices = Array.from(this.devices.values()).filter(
           d => d.parentHub === deviceId
         );
         for (const child of childDevices) {
-          await this.disconnectDevice(child.id);
+          // Dispatch disconnection event for each child
+          this.dispatchEvent(new CustomEvent('deviceDisconnected', { detail: { deviceId: child.id } }));
+          // Remove from devices map
+          this.devices.delete(child.id);
+          this.connectionStates.delete(child.id);
         }
       }
 
@@ -885,6 +895,15 @@ export class EidonTrackerManager extends EventTarget {
 
       connectionState.isConnecting = false;
 
+      // If this is a hub, create and subscribe to child devices
+      // Only setup if not already set up (check if child devices already exist)
+      if (device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB)) {
+        const existingChildren = Array.from(this.devices.values()).filter(d => d.parentHub === deviceId);
+        if (existingChildren.length === 0) {
+          await this.setupChildDevicesForHub(deviceId);
+        }
+      }
+
       this.dispatchEvent(new CustomEvent('deviceConnected', { detail: { deviceId, device } }));
 
     } catch (error) {
@@ -1004,6 +1023,184 @@ export class EidonTrackerManager extends EventTarget {
         timestamp: performance.now()
       }
     }));
+  }
+
+
+  /**
+   * Generate child device ID based on hub ID and device type
+   */
+  private generateChildDeviceId(hubId: DeviceId, type: ChildDeviceType): ChildDeviceId {
+    return `${hubId}_${type}`;
+  }
+
+  /**
+   * Determine child device role based on hub role and characteristic UUID
+   */
+  private getChildDeviceRole(hubRole: DeviceRole, characteristicUuid: string): ChildDeviceRole | null {
+    const isHand = characteristicUuid.toLowerCase() === HAND_QUATERNION_CHAR_UUID.toLowerCase();
+    const isForearm = characteristicUuid.toLowerCase() === FOREARM_QUATERNION_CHAR_UUID.toLowerCase();
+    
+    if (!isHand && !isForearm) {
+      return null;
+    }
+
+    if (hubRole === DeviceRole.LEFT_HUB) {
+      return isHand ? 'left_hand' : 'left_forearm';
+    } else if (hubRole === DeviceRole.RIGHT_HUB) {
+      return isHand ? 'right_hand' : 'right_forearm';
+    }
+
+    return null;
+  }
+
+  /**
+   * Map child device role to DeviceRole enum
+   */
+  private mapChildRoleToDeviceRole(childRole: ChildDeviceRole): DeviceRole {
+    switch (childRole) {
+      case 'left_hand':
+        return DeviceRole.LEFT_HAND;
+      case 'right_hand':
+        return DeviceRole.RIGHT_HAND;
+      case 'left_forearm':
+        return DeviceRole.LEFT_FOREARM;
+      case 'right_forearm':
+        return DeviceRole.RIGHT_FOREARM;
+      default:
+        return DeviceRole.UNKNOWN;
+    }
+  }
+
+  /**
+   * Create virtual child devices for a hub and subscribe to their characteristics
+   */
+  private async setupChildDevicesForHub(hubId: DeviceId): Promise<void> {
+    const hubDevice = this.devices.get(hubId);
+    const connectionState = this.connectionStates.get(hubId);
+    
+    if (!hubDevice || !connectionState || !hubDevice.isHub) {
+      return;
+    }
+
+    // Only handle LEFT_HUB and RIGHT_HUB (not CHEST)
+    if (hubDevice.role !== DeviceRole.LEFT_HUB && hubDevice.role !== DeviceRole.RIGHT_HUB) {
+      return;
+    }
+
+    const mainService = connectionState.services.get(EIDON_SERVICE_UUID);
+    if (!mainService) {
+      console.warn(`[EidonTrackerManager] Cannot setup child devices: main service not found for hub ${hubId}`);
+      return;
+    }
+
+    // Check if hub has child characteristics
+    const handChar = connectionState.characteristics.get(HAND_QUATERNION_CHAR_UUID);
+    const forearmChar = connectionState.characteristics.get(FOREARM_QUATERNION_CHAR_UUID);
+
+    if (!handChar && !forearmChar) {
+      console.log(`[EidonTrackerManager] Hub ${hubId} does not have child device characteristics - skipping child device setup`);
+      return;
+    }
+
+    // Create child devices
+    const childDevices: Array<{ id: ChildDeviceId; type: ChildDeviceType; role: ChildDeviceRole; char: BluetoothRemoteGATTCharacteristic }> = [];
+
+    if (handChar) {
+      const handId = this.generateChildDeviceId(hubId, 'hand');
+      const handRole = this.getChildDeviceRole(hubDevice.role, HAND_QUATERNION_CHAR_UUID);
+      if (handRole) {
+        childDevices.push({ id: handId, type: 'hand', role: handRole, char: handChar });
+      }
+    }
+
+    if (forearmChar) {
+      const forearmId = this.generateChildDeviceId(hubId, 'forearm');
+      const forearmRole = this.getChildDeviceRole(hubDevice.role, FOREARM_QUATERNION_CHAR_UUID);
+      if (forearmRole) {
+        childDevices.push({ id: forearmId, type: 'forearm', role: forearmRole, char: forearmChar });
+      }
+    }
+
+    // Create EidonDevice entries for each child and subscribe to characteristics
+    for (const child of childDevices) {
+      const childDevice: EidonDevice = {
+        id: child.id,
+        name: `${hubDevice.name} ${child.type === 'hand' ? 'Hand' : 'Forearm'}`,
+        role: this.mapChildRoleToDeviceRole(child.role),
+        macAddress: `${hubDevice.macAddress}_${child.type}`,
+        connectionId: hubDevice.connectionId, // Use parent hub's connectionId
+        isConnected: true, // Child devices are "connected" when hub is connected
+        isHub: false,
+        parentHub: hubId,
+        color: hubDevice.color, // Inherit color from parent
+        lastSeen: performance.now()
+      };
+
+      this.devices.set(child.id, childDevice);
+
+      // Dispatch deviceConnected event for child device
+      this.dispatchEvent(new CustomEvent('deviceConnected', { detail: { deviceId: child.id, device: childDevice } }));
+
+      // Subscribe to characteristic notifications
+      try {
+        await child.char.startNotifications();
+        
+        // Create event handler that routes data to child device ID
+        const eventHandler = (event: Event) => {
+          try {
+            this.handleChildQuaternionData(hubId, child.id, child.type, event);
+          } catch (error) {
+            console.error(`[EidonTrackerManager] Error in child quaternion event handler for ${child.id}:`, error);
+          }
+        };
+        
+        child.char.addEventListener('characteristicvaluechanged', eventHandler);
+      } catch (error) {
+        console.error(`[EidonTrackerManager] Failed to subscribe to ${child.type} quaternion data for hub ${hubId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Handle quaternion data from child device characteristics
+   */
+  private handleChildQuaternionData(
+    hubId: DeviceId,
+    childId: ChildDeviceId,
+    childType: ChildDeviceType,
+    event: Event
+  ): void {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const data = characteristic.value;
+    
+    if (!data) {
+      return;
+    }
+
+    try {
+      // Parse quaternion data (16 bytes: 4 floats)
+      // Byte order: Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
+      const quaternion = new Float32Array(data.buffer, data.byteOffset, 4);
+      
+      // Update child device lastSeen
+      const childDevice = this.devices.get(childId);
+      if (childDevice) {
+        childDevice.lastSeen = performance.now();
+        childDevice.isConnected = true; // Mark as connected when we receive data
+        this.devices.set(childId, childDevice);
+      }
+
+      // Dispatch quaternion data event with child device ID
+      this.dispatchEvent(new CustomEvent('quaternionData', {
+        detail: {
+          deviceId: childId, // Use child device ID, not hub ID
+          quaternion: Array.from(quaternion),
+          timestamp: performance.now()
+        }
+      }));
+    } catch (error) {
+      console.error(`[EidonTrackerManager] Error handling child quaternion data for ${childId}:`, error);
+    }
   }
 
   private async autoReconnect(): Promise<void> {
