@@ -141,37 +141,8 @@ export class DeviceModal {
     this.trackerManager.addEventListener('deviceConnected', (e: any) => {
       const { deviceId, device } = e.detail;
       
-      // For child devices, sync them to savedDevices/discoveredDevices
-      if (device && device.parentHub) {
-        // Check if child device is already in our lists
-        const existingChildSaved = this.savedDevices.find(d => d.id === deviceId);
-        const existingChildDiscovered = this.discoveredDevices.find(d => d.id === deviceId);
-        
-        if (existingChildSaved) {
-          // Update existing child device status
-          existingChildSaved.isConnected = true;
-          Object.assign(existingChildSaved, device);
-          this.renderSavedDevices();
-        } else if (existingChildDiscovered) {
-          // Update existing child device status
-          existingChildDiscovered.isConnected = true;
-          Object.assign(existingChildDiscovered, device);
-          this.renderDiscoveredDevices();
-        } else {
-          // Add child device to appropriate list
-          // Check if parent hub is in savedDevices
-          const parentHub = this.savedDevices.find(d => d.id === device.parentHub);
-          if (parentHub) {
-            // Parent is saved, so add child to savedDevices too
-            this.savedDevices.push(device);
-            this.renderSavedDevices();
-          } else {
-            // Parent is not saved, add to discoveredDevices
-            this.discoveredDevices.push(device);
-            this.renderDiscoveredDevices();
-          }
-        }
-      }
+      // Don't add child devices to any lists - they're handled by DeviceConnectionStateManager
+      // Just update connection status for the device itself
       
       // Update by trackerManager deviceId (for non-child devices or after child is added)
       this.updateDeviceConnectionStatus(deviceId, true);
@@ -286,27 +257,33 @@ export class DeviceModal {
       // Check if this is a child device by looking at trackerManager device
       const isChildDevice = trackerDevice?.parentHub !== undefined;
       
+      // Store quaternion data by trackerManager deviceId (always use this for updates)
+      // CRITICAL: Always use trackerManager deviceId for child devices (hand/forearm)
+      // This ensures we can update dials correctly using the same ID pattern
+      this.deviceQuaternionData.set(deviceId, { quaternion, timestamp });
+      
+      // ALWAYS update dials using trackerManager deviceId (works for hub, hand, and forearm)
+      // This is similar to DeviceCard.ts which listens to every update event
+      import('./SavedDeviceConnectionCard').then(({ updateDeviceDials: updateSaved }) => {
+        import('./NewDeviceConnectionCard').then(({ updateDeviceDials: updateNew }) => {
+          // Try both card types - one will match
+          updateSaved(deviceId, { quaternion, timestamp });
+          updateNew(deviceId, { quaternion, timestamp });
+        });
+      });
+      
+      // Also try to update data view using trackerManager deviceId
+      this.updateDeviceDataView(deviceId);
+      
       if (device) {
-        // Store quaternion data using the saved/discovered device's ID (not trackerManager's deviceId)
-        // This ensures dials update correctly
+        // Store quaternion data using the saved/discovered device's ID as well (for backward compatibility)
+        // But primary updates use trackerManager deviceId above
         const deviceIdForData = device.id;
         
         // Check if this is the first data packet for this device (for child devices, trigger re-render)
         const isFirstPacket = !this.deviceQuaternionData.has(deviceIdForData);
         
         this.deviceQuaternionData.set(deviceIdForData, { quaternion, timestamp });
-        
-        // Also store by trackerManager deviceId for consistency
-        this.deviceQuaternionData.set(deviceId, { quaternion, timestamp });
-        
-        // Update data view if it's currently visible
-        this.updateDeviceDataView(deviceIdForData);
-        
-        // Determine which card type based on device location
-        const isSaved = this.savedDevices.find(d => d.id === deviceIdForData) !== undefined;
-        import(isSaved ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard').then(({ updateDeviceDials }) => {
-          updateDeviceDials(deviceIdForData, { quaternion, timestamp });
-        });
         
         // If this is a child device's first data packet, re-render parent hub card to show child data stream
         if (isChildDevice && trackerDevice?.parentHub && isFirstPacket) {
@@ -321,29 +298,6 @@ export class DeviceModal {
             }
           }
         }
-      } else {
-        // Device not found in saved/discovered lists - still store by trackerManager deviceId
-        // This handles edge cases where device might be connected but not in our lists
-        // For child devices, they might not be in lists yet, so we need to add them
-        this.deviceQuaternionData.set(deviceId, { quaternion, timestamp });
-        
-        // If this is a child device, ensure it's added to the appropriate list
-        if (isChildDevice && trackerDevice?.parentHub) {
-          const parentHub = this.savedDevices.find(d => d.id === trackerDevice.parentHub) || 
-                           this.discoveredDevices.find(d => d.id === trackerDevice.parentHub);
-          if (parentHub && !this.savedDevices.find(d => d.id === deviceId) && !this.discoveredDevices.find(d => d.id === deviceId)) {
-            // Add child device to same list as parent
-            if (this.savedDevices.find(d => d.id === trackerDevice.parentHub)) {
-              this.savedDevices.push(trackerDevice);
-              this.renderSavedDevices();
-            } else {
-              this.discoveredDevices.push(trackerDevice);
-              this.renderDiscoveredDevices();
-            }
-          }
-        }
-        
-        this.updateDeviceDataView(deviceId);
       }
     }) as EventListener);
 
@@ -594,16 +548,7 @@ export class DeviceModal {
       }
     });
     
-    // Ensure child devices from trackerManager are in savedDevices if their parent hub is saved
-    allTrackerDevices.forEach(trackerDevice => {
-      if (trackerDevice.parentHub && !this.savedDevices.find(d => d.id === trackerDevice.id)) {
-        const parentHub = this.savedDevices.find(d => d.id === trackerDevice.parentHub);
-        if (parentHub) {
-          // Parent hub is saved, so add child to savedDevices
-          this.savedDevices.push(trackerDevice);
-        }
-      }
-    });
+    // Don't add child devices to savedDevices - they're handled by DeviceConnectionStateManager
     
     const html = this.savedDevices.map(device => {
       const config = this.deviceConfigs.get(device.id);
@@ -614,6 +559,22 @@ export class DeviceModal {
     container.innerHTML = html;
     setSavedDeviceCardStyles(container);
     this.attachDeviceEventListeners();
+    
+    // Update dials for devices with quaternion data (HTML is already rendered, just update canvases)
+    import('./SavedDeviceConnectionCard').then(({ updateDeviceDials }) => {
+      const allTrackerDevicesForMount = this.trackerManager.getAllDevices();
+      const allDeviceIds = new Set([
+        ...this.savedDevices.map(d => d.id),
+        ...allTrackerDevicesForMount.map(d => d.id)
+      ]);
+      
+      allDeviceIds.forEach(deviceId => {
+        const quatData = this.deviceQuaternionData.get(deviceId);
+        if (quatData) {
+          updateDeviceDials(deviceId, quatData);
+        }
+      });
+    });
     
     // Restore edit state (show config section if it was previously visible)
     this.deviceEditStates.forEach((isVisible, deviceId) => {
@@ -636,23 +597,6 @@ export class DeviceModal {
           icon.style.transform = 'rotate(180deg)';
         }
       }
-    });
-    
-    // Initialize dials for devices with quaternion data (including child devices)
-    import('./SavedDeviceConnectionCard').then(({ updateDeviceDials }) => {
-      // Get all devices including child devices from trackerManager
-      const allTrackerDevices = this.trackerManager.getAllDevices();
-      const allDeviceIds = new Set([
-        ...this.savedDevices.map(d => d.id),
-        ...allTrackerDevices.map(d => d.id)
-      ]);
-      
-      allDeviceIds.forEach(deviceId => {
-        const quatData = this.deviceQuaternionData.get(deviceId);
-        if (quatData) {
-          updateDeviceDials(deviceId, quatData);
-        }
-      });
     });
   }
 
@@ -841,27 +785,69 @@ export class DeviceModal {
   }
 
   private async updateDeviceDataView(deviceId: string): Promise<void> {
-    // Determine if it's a saved or new device
-    const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
-    const cardStyles = isSaved ? savedCardStyles : newCardStyles;
+    // Get quaternion data by trackerManager deviceId (always use this for updates)
+    const quatData = this.deviceQuaternionData.get(deviceId);
+    if (!quatData) return;
     
-    const dataContent = this.modal.querySelector(`.${cardStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+    // Try to find device in saved/discovered lists
+    const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+    
+    // Determine if it's a saved or new device
+    const isSaved = device ? this.savedDevices.find(d => d.id === deviceId) !== undefined : undefined;
+    
+    // Try both card styles if device not found (might be child device nested in parent card)
+    const cardStylesList = isSaved !== undefined 
+      ? [isSaved ? savedCardStyles : newCardStyles]
+      : [savedCardStyles, newCardStyles];
+    
+    // Try to find data content in either card type
+    let dataContent: HTMLElement | null = null;
+    let cardStyles: typeof savedCardStyles | typeof newCardStyles | null = null;
+    
+    for (const styles of cardStylesList) {
+      dataContent = this.modal.querySelector(`.${styles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+      if (dataContent) {
+        cardStyles = styles;
+        break;
+      }
+    }
+    
+    // If not found by deviceId, might be a child device - try to find parent hub card and search within it
+    if (!dataContent) {
+      const trackerDevice = this.trackerManager.getDevice(deviceId);
+      if (trackerDevice?.parentHub) {
+        // Find parent hub card
+        const parentHub = this.savedDevices.find(d => d.id === trackerDevice.parentHub) || 
+                         this.discoveredDevices.find(d => d.id === trackerDevice.parentHub);
+        if (parentHub) {
+          const parentIsSaved = this.savedDevices.find(d => d.id === parentHub.id) !== undefined;
+          const parentCardStyles = parentIsSaved ? savedCardStyles : newCardStyles;
+          const parentDataContent = this.modal.querySelector(`.${parentCardStyles.dataContent}[data-device-id="${parentHub.id}"]`) as HTMLElement;
+          
+          if (parentDataContent) {
+            // Search for child device section within parent card
+            dataContent = parentDataContent.querySelector(`.${parentCardStyles.deviceDataSection}[data-device-id="${deviceId}"]`) as HTMLElement;
+            if (dataContent) {
+              cardStyles = parentCardStyles;
+            }
+          }
+        }
+      }
+    }
+    
     if (!dataContent || dataContent.style.display === 'none') {
       return;
     }
-
-    const quatData = this.deviceQuaternionData.get(deviceId);
-    const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
     
-    if (!device || !quatData) return;
+    if (!cardStyles) return;
 
-    const { updateDeviceDials } = await import(isSaved ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard');
+    const { updateDeviceDials } = await import(cardStyles === savedCardStyles ? './SavedDeviceConnectionCard' : './NewDeviceConnectionCard');
     const dialCanvas = dataContent.querySelector(`.${cardStyles.dialCanvas}`);
     if (!dialCanvas) {
       // Re-render the specific device card to update data view
-      if (this.savedDevices.find(d => d.id === deviceId)) {
+      if (device && this.savedDevices.find(d => d.id === deviceId)) {
         this.renderSavedDevices();
-      } else {
+      } else if (device) {
         this.renderDiscoveredDevices();
       }
       // Re-attach event listeners since we re-rendered
@@ -879,12 +865,11 @@ export class DeviceModal {
     }
     
     // Re-expand the data view if it was open
-    const contentStyles = isSaved ? savedCardStyles : newCardStyles;
-    const newDataContent = this.modal.querySelector(`.${contentStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
+    const newDataContent = this.modal.querySelector(`.${cardStyles.dataContent}[data-device-id="${deviceId}"]`) as HTMLElement;
     if (newDataContent) {
       newDataContent.style.display = 'block';
-      const toggleBtn = this.modal.querySelector(`.${contentStyles.dataToggle}[data-device-id="${deviceId}"]`) as HTMLElement;
-      const icon = toggleBtn?.querySelector(`.${contentStyles.dataToggleIcon}`) as HTMLElement;
+      const toggleBtn = this.modal.querySelector(`.${cardStyles.dataToggle}[data-device-id="${deviceId}"]`) as HTMLElement;
+      const icon = toggleBtn?.querySelector(`.${cardStyles.dataToggleIcon}`) as HTMLElement;
       if (icon) {
         icon.style.transform = 'rotate(180deg)';
       }
@@ -1476,8 +1461,15 @@ export class DeviceModal {
 
   private updateDiscoveredDevices(devices: EidonDevice[]): void {
     // Filter out devices that are already in savedDevices
+    // Also filter out child devices - they connect through hub characteristics, not BLE directly
     // Match by name (exact) or connectionId/macAddress
     this.discoveredDevices = devices.filter(discoveredDevice => {
+      // Filter out child devices - they connect through hub characteristics, not BLE
+      if (discoveredDevice.parentHub) {
+        return false;
+      }
+      
+      // Filter out devices that are already in savedDevices
       return !this.savedDevices.some(savedDevice => {
         // Match by exact name (case-insensitive)
         if (savedDevice.name && discoveredDevice.name && 
@@ -1521,17 +1513,7 @@ export class DeviceModal {
       }
     });
     
-    // Ensure child devices from trackerManager are in discoveredDevices if their parent hub is discovered
-    allTrackerDevices.forEach(trackerDevice => {
-      if (trackerDevice.parentHub && !this.discoveredDevices.find(d => d.id === trackerDevice.id) && 
-          !this.savedDevices.find(d => d.id === trackerDevice.id)) {
-        const parentHub = this.discoveredDevices.find(d => d.id === trackerDevice.parentHub);
-        if (parentHub) {
-          // Parent hub is discovered, so add child to discoveredDevices
-          this.discoveredDevices.push(trackerDevice);
-        }
-      }
-    });
+    // Don't add child devices to discoveredDevices - they connect through hub characteristics, not BLE
     
     const html = this.discoveredDevices.map(device => {
       const config = this.deviceConfigs.get(device.id);

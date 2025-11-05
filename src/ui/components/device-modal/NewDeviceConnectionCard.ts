@@ -206,18 +206,16 @@ function renderSingleDeviceDataContent(
   deviceId: string,
   quaternionData?: { quaternion: number[]; timestamp: number }
 ): string {
-  if (!quaternionData) {
-    return `<div class="${styles.noData}">Waiting for data...</div>`;
-  }
+  // CRITICAL: Always render the full dial structure with canvas elements
+  // This ensures updateDeviceDials can find the canvases even when data hasn't arrived yet
+  // If no data, show "Waiting for data..." but keep the canvas structure
   
-  const formatted = formatQuaternionData(quaternionData.quaternion);
-  if (!formatted) {
-    return `<div class="${styles.noData}">No data available</div>`;
-  }
+  const formatted = quaternionData ? formatQuaternionData(quaternionData.quaternion) : null;
   
   return `
     <div class="${styles.deviceDataSection}" data-device-id="${deviceId}">
       <div class="${styles.deviceDataHeader}">${deviceName}</div>
+      ${formatted ? `
       <div class="${styles.dialGrid}">
         <div class="${styles.dialItem}">
           <canvas class="${styles.dialCanvas}" data-dial="yaw" data-device-id="${deviceId}" width="40" height="40"></canvas>
@@ -239,12 +237,37 @@ function renderSingleDeviceDataContent(
         <div class="${styles.dataLabel}">Quat:</div>
         <div class="${styles.dataValue} ${styles.quatValue}" data-device-id="${deviceId}">${formatted.quat}</div>
       </div>
+      ` : `
+      <div class="${styles.dialGrid}">
+        <div class="${styles.dialItem}">
+          <canvas class="${styles.dialCanvas}" data-dial="yaw" data-device-id="${deviceId}" width="40" height="40"></canvas>
+          <div class="${styles.dialLabel}">Yaw</div>
+          <div class="${styles.dialValue}">--</div>
+        </div>
+        <div class="${styles.dialItem}">
+          <canvas class="${styles.dialCanvas}" data-dial="pitch" data-device-id="${deviceId}" width="40" height="40"></canvas>
+          <div class="${styles.dialLabel}">Pitch</div>
+          <div class="${styles.dialValue}">--</div>
+        </div>
+        <div class="${styles.dialItem}">
+          <canvas class="${styles.dialCanvas}" data-dial="roll" data-device-id="${deviceId}" width="40" height="40"></canvas>
+          <div class="${styles.dialLabel}">Roll</div>
+          <div class="${styles.dialValue}">--</div>
+        </div>
+      </div>
+      <div class="${styles.quatRow}">
+        <div class="${styles.dataLabel}">Quat:</div>
+        <div class="${styles.dataValue} ${styles.quatValue}" data-device-id="${deviceId}">Waiting for data...</div>
+      </div>
+      `}
     </div>
   `;
 }
 
 /**
  * Render data content HTML with canvas dials (supports hub with child devices)
+ * Simple approach: Directly map quaternion data by deviceId pattern
+ * Uses trackerManager device ID to ensure correct quaternion data lookup
  */
 function renderDataContent(
   device: EidonDevice,
@@ -255,108 +278,104 @@ function renderDataContent(
   
   if (!isHub) {
     // Non-hub device - render single device data
-    const quatData = quaternionDataMap?.get(device.id);
-    return renderSingleDeviceDataContent(device.name, device.id, quatData);
+    // Try to find matching trackerManager device to get correct ID
+    const trackerDevice = allDevices?.find(d => 
+      d.id === device.id || 
+      d.connectionId === device.connectionId || 
+      d.macAddress === device.macAddress ||
+      (d.connectionId === device.connectionId && d.role === device.role)
+    );
+    const deviceIdForData = trackerDevice?.id || device.id;
+    const quatData = quaternionDataMap?.get(deviceIdForData);
+    return renderSingleDeviceDataContent(device.name, deviceIdForData, quatData);
   }
   
-  // Hub device - render hub data + child device data
-  const hubQuatData = quaternionDataMap?.get(device.id);
-  const childDevices = getChildDevicesForHub(device, allDevices);
+  // Hub device - render hub data + child device data streams
+  // CRITICAL: Find matching trackerManager hub device to get correct ID for quaternion lookups
+  // The trackerManager uses IDs like `${hubId}_hand` and `${hubId}_forearm` for child devices
+  const trackerHubDevice = allDevices?.find(d => 
+    d.id === device.id || 
+    d.connectionId === device.connectionId || 
+    d.macAddress === device.macAddress ||
+    (d.connectionId === device.connectionId && d.role === device.role)
+  );
+  
+  // Use trackerManager hub device ID if found, otherwise fall back to saved device ID
+  const hubIdForData = trackerHubDevice?.id || device.id;
+  const handId = `${hubIdForData}_hand`;
+  const forearmId = `${hubIdForData}_forearm`;
+  
+  const hubQuatData = quaternionDataMap?.get(hubIdForData);
+  const handQuatData = quaternionDataMap?.get(handId);
+  const forearmQuatData = quaternionDataMap?.get(forearmId);
   
   let html = '';
   
-  // Hub's own data
+  // Hub's own quaternion data (from QUATERNION_CHAR_UUID)
   const hubRoleName = DEVICE_ROLE_NAMES[device.role];
-  html += renderSingleDeviceDataContent(hubRoleName, device.id, hubQuatData);
+  html += renderSingleDeviceDataContent(hubRoleName, hubIdForData, hubQuatData);
   
-  // Child device data
-  const expectedChildRoles = device.role === DeviceRole.LEFT_HUB
-    ? [
-        { role: DeviceRole.LEFT_HAND, name: DEVICE_ROLE_NAMES[DeviceRole.LEFT_HAND] },
-        { role: DeviceRole.LEFT_FOREARM, name: DEVICE_ROLE_NAMES[DeviceRole.LEFT_FOREARM] }
-      ]
-    : [
-        { role: DeviceRole.RIGHT_HAND, name: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_HAND] },
-        { role: DeviceRole.RIGHT_FOREARM, name: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_FOREARM] }
-      ];
+  // Hand quaternion data (from HAND_QUATERNION_CHAR_UUID)
+  // CRITICAL: Always render the full dial structure (with canvases) so updateDeviceDials can find them
+  // even if data hasn't arrived yet
+  const handRoleName = device.role === DeviceRole.LEFT_HUB 
+    ? DEVICE_ROLE_NAMES[DeviceRole.LEFT_HAND]
+    : DEVICE_ROLE_NAMES[DeviceRole.RIGHT_HAND];
   
-  for (const expectedRole of expectedChildRoles) {
-    const childDevice = childDevices.find(d => d.role === expectedRole.role);
-    
-    // Try to find quaternion data using multiple possible IDs
-    let childQuatData = childDevice ? quaternionDataMap?.get(childDevice.id) : undefined;
-    
-    // If no data found by child device ID, try to find by role in allDevices
-    if (!childQuatData && allDevices) {
-      // Find any device with matching role and parentHub that matches this hub
-      const matchingChild = allDevices.find(d => 
-        d.role === expectedRole.role &&
-        d.parentHub && (
-          d.parentHub === device.id ||
-          (device.connectionId && d.parentHub === device.connectionId) ||
-          (device.macAddress && d.parentHub === device.macAddress)
-        )
-      );
-      
-      if (matchingChild) {
-        childQuatData = quaternionDataMap?.get(matchingChild.id);
-        // Use the matching child device if we didn't have one before
-        if (!childDevice && matchingChild) {
-          // Update the childDevices array reference (childDevice is a local variable)
-          const actualChildDevice = matchingChild;
-          if (childQuatData) {
-            html += renderSingleDeviceDataContent(expectedRole.name, actualChildDevice.id, childQuatData);
-          } else {
-            html += `
-              <div class="${styles.deviceDataSection}" data-device-id="${actualChildDevice.id}">
-                <div class="${styles.deviceDataHeader}">${expectedRole.name}</div>
-                <div class="${styles.noData}">Waiting for data...</div>
-              </div>
-            `;
-          }
-          continue;
-        }
-      }
-    }
-    
-    if (childDevice && childQuatData) {
-      // Child device exists and has data
-      html += renderSingleDeviceDataContent(expectedRole.name, childDevice.id, childQuatData);
-    } else if (childDevice) {
-      // Child device exists but no data yet
-      html += `
-        <div class="${styles.deviceDataSection}" data-device-id="${childDevice.id}">
-          <div class="${styles.deviceDataHeader}">${expectedRole.name}</div>
-          <div class="${styles.noData}">Waiting for data...</div>
-        </div>
-      `;
-    } else {
-      // Child device doesn't exist yet
-      html += `
-        <div class="${styles.deviceDataSection}">
-          <div class="${styles.deviceDataHeader}">${expectedRole.name}</div>
-          <div class="${styles.noData}">Device not connected</div>
-        </div>
-      `;
-    }
-  }
+  html += renderSingleDeviceDataContent(handRoleName, handId, handQuatData);
+  
+  // Forearm quaternion data (from FOREARM_QUATERNION_CHAR_UUID)
+  // CRITICAL: Always render the full dial structure (with canvases) so updateDeviceDials can find them
+  // even if data hasn't arrived yet
+  const forearmRoleName = device.role === DeviceRole.LEFT_HUB
+    ? DEVICE_ROLE_NAMES[DeviceRole.LEFT_FOREARM]
+    : DEVICE_ROLE_NAMES[DeviceRole.RIGHT_FOREARM];
+  
+  html += renderSingleDeviceDataContent(forearmRoleName, forearmId, forearmQuatData);
   
   return html;
 }
 
 /**
- * Update dial canvases for a device
+ * Update dial canvases for a device (same approach as SavedDeviceConnectionCard - query DOM directly)
+ * Similar to DeviceCard.ts which continuously listens for updates and redraws
  */
 export function updateDeviceDials(deviceId: string, quaternionData?: { quaternion: number[]; timestamp: number }): void {
-  // First try to find a card element (for hub/chest devices)
-  let container = document.querySelector(`.${styles.deviceCard}[data-device-id="${deviceId}"]`) as HTMLElement;
+  // Strategy: For child devices (hand/forearm), they're nested inside parent hub cards
+  // We need to find the parent hub card first, then search within it
   
-  // If not found, try to find a deviceDataSection (for child devices nested in parent hub cards)
+  // Check if this is a child device ID (ends with _hand or _forearm)
+  const isChildDevice = deviceId.endsWith('_hand') || deviceId.endsWith('_forearm');
+  
+  let container: HTMLElement | null = null;
+  
+  if (isChildDevice) {
+    // For child devices, find ALL hub cards and search within each for the child device's data section
+    // The child deviceId format is: ${hubId}_hand or ${hubId}_forearm
+    // We need to search all hub cards since the saved device ID might differ from trackerManager hub ID
+    const allHubCards = document.querySelectorAll(`.${styles.deviceCard}`);
+    
+    for (const hubCard of Array.from(allHubCards)) {
+      // Search within this hub card for the child device's data section
+      const childSection = hubCard.querySelector(`.${styles.deviceDataSection}[data-device-id="${deviceId}"]`) as HTMLElement;
+      if (childSection) {
+        container = childSection;
+        break;
+      }
+    }
+  }
+  
+  // If not found yet, try direct search (for hub devices or if parent search failed)
   if (!container) {
     container = document.querySelector(`.${styles.deviceDataSection}[data-device-id="${deviceId}"]`) as HTMLElement;
   }
   
-  // If still not found, try to find any element with this deviceId (fallback)
+  // If still not found, try to find a card element (for hub/chest devices)
+  if (!container) {
+    container = document.querySelector(`.${styles.deviceCard}[data-device-id="${deviceId}"]`) as HTMLElement;
+  }
+  
+  // Last resort: try any element with this deviceId (fallback)
   if (!container) {
     container = document.querySelector(`[data-device-id="${deviceId}"]`) as HTMLElement;
   }
@@ -364,7 +383,7 @@ export function updateDeviceDials(deviceId: string, quaternionData?: { quaternio
   if (!container) return;
   
   if (!quaternionData) {
-    // Clear dials
+    // Clear dials - search within the container for all canvases with this deviceId
     const canvases = container.querySelectorAll<HTMLCanvasElement>(`.${styles.dialCanvas}[data-device-id="${deviceId}"]`);
     canvases.forEach(canvas => {
       const ctx = canvas.getContext('2d');
@@ -385,8 +404,11 @@ export function updateDeviceDials(deviceId: string, quaternionData?: { quaternio
     { name: 'roll', value: formatted.euler.roll }
   ];
   
-  // Find all dials for this device (may be nested in child device sections)
+  // Find all dials for this device within the container
+  // For child devices: container is deviceDataSection, canvases are direct descendants
+  // For hub devices: container is deviceCard, canvases are direct descendants
   dials.forEach(({ name, value }) => {
+    // Search within the container for the specific dial canvas
     const canvas = container.querySelector<HTMLCanvasElement>(`.${styles.dialCanvas}[data-dial="${name}"][data-device-id="${deviceId}"]`);
     if (canvas) {
       const ctx = canvas.getContext('2d');
@@ -395,14 +417,19 @@ export function updateDeviceDials(deviceId: string, quaternionData?: { quaternio
       }
       
       // Update the text value next to the dial
-      const valueElement = canvas?.closest(`.${styles.dialItem}`)?.querySelector(`.${styles.dialValue}`);
-      if (valueElement) {
-        valueElement.textContent = `${value.toFixed(1)}°`;
+      // Find the dialItem parent, then find the dialValue within it
+      const dialItem = canvas.closest(`.${styles.dialItem}`);
+      if (dialItem) {
+        const valueElement = dialItem.querySelector(`.${styles.dialValue}`);
+        if (valueElement) {
+          valueElement.textContent = `${value.toFixed(1)}°`;
+        }
       }
     }
   });
 
   // Update the raw quaternion value text (may be multiple instances for hub + children)
+  // Search within the container for all quatValue elements with this deviceId
   const quatValueElements = container.querySelectorAll(`.${styles.quatValue}[data-device-id="${deviceId}"]`);
   quatValueElements.forEach((element) => {
     if (formatted.quat) {
