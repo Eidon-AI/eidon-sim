@@ -67,6 +67,18 @@ export class DeviceStore extends EventTarget {
 
   /** Convenience: fetch device by specific position */
   getByPosition(position: DeviceRole): Device | undefined {
+    // During playback mode, prioritize playback devices over live devices
+    if (this.playbackMode) {
+      // First try to find a playback device
+      const playbackDevice = [...this.map.values()].find(
+        s => s.position === position && s.userId === 'playback'
+      );
+      if (playbackDevice) {
+        return playbackDevice;
+      }
+    }
+    
+    // Fallback to any device with that position (for live mode or if no playback device found)
     return [...this.map.values()].find(
       s => s.position === position
     );
