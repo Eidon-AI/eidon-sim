@@ -177,9 +177,11 @@ export class VectorArm {
     const validatedHand = useHand ? hand : undefined;
 
     /* ---- shoulder anchor ---- */
+    // Swapped positions: left side renders on right, right side renders on left
+    // This fixes the issue where left devices were appearing on the right side
     const shoulder: vec3 = this.side === 'left'
-      ? [-0.3, 0,  0]
-      : [0.3, 0, 0];
+      ? [0.3, 0, 0]   // Left side renders at right position (positive X)
+      : [-0.3, 0, 0]; // Right side renders at left position (negative X)
 
     /* helper functions - no rotation applied (matches legacy RoArmController) */
     const rotFwd = (v: vec3) => v;  // Passthrough - no rotation

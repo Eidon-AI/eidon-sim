@@ -14,6 +14,8 @@ export class PlaybackManager extends EventTarget {
   private playbackStartTime = 0;
   private playbackAnimationId: number | null = null;
   private temporaryDeviceIds: Set<string> = new Set(); // Track devices created for playback
+  private originalUserIds: Map<string, string | undefined> = new Map(); // Track original userIds to restore later
+  private hiddenLiveDeviceIds: Set<string> = new Set(); // Track live devices hidden during playback due to conflicts
 
   constructor(
     private store: DeviceStore,
@@ -199,6 +201,10 @@ export class PlaybackManager extends EventTarget {
         const { up, fwd } = quaternionToVectors(q);
         updates.up = up;
         updates.fwd = fwd;
+        
+        // Ensure userId is set to 'playback' during playback
+        // This ensures devices remain marked as playback devices even if they were updated
+        updates.userId = 'playback';
 
         // Apply updates using the playback method
         this.store.updateDeviceForPlayback(deviceId, updates);
@@ -212,6 +218,34 @@ export class PlaybackManager extends EventTarget {
   }
 
   private createTemporaryDevices(recording: SensorRecording): void {
+    // First, find all devices in the recording by their position
+    const recordingDevicesByPosition = new Map<DeviceRole, DeviceSimple>();
+    recording.devices.forEach(deviceSimple => {
+      const position = stringToDeviceRole(deviceSimple.position);
+      recordingDevicesByPosition.set(position, deviceSimple);
+    });
+
+    // Hide any live devices that conflict with playback devices (same position)
+    // This ensures getByPosition() will return playback devices instead of live ones
+    this.store['map'].forEach((device, deviceId) => {
+      if (device.userId !== 'playback') {
+        // This is a live device
+        const recordingDevice = recordingDevicesByPosition.get(device.position);
+        if (recordingDevice) {
+          // There's a playback device with the same position - hide the live device
+          // Store original userId if not already stored
+          if (!this.originalUserIds.has(deviceId)) {
+            this.originalUserIds.set(deviceId, device.userId);
+          }
+          // Mark as hidden (we'll use a special userId to hide it)
+          device.userId = 'hidden_during_playback';
+          this.hiddenLiveDeviceIds.add(deviceId);
+          this.store.dispatchEvent(new CustomEvent('update', { detail: device }));
+        }
+      }
+    });
+
+    // Now create or mark playback devices
     recording.devices.forEach(deviceSimple => {
       // Check if device already exists in store
       const existingDevice = this.store['map'].get(deviceSimple.id);
@@ -225,7 +259,7 @@ export class PlaybackManager extends EventTarget {
           position: stringToDeviceRole(deviceSimple.position),
           color: DeviceColor.ORANGE, // Default color
           connectionId: deviceSimple.connectionId,
-          userId: 'playback', // Placeholder for playback
+          userId: 'playback', // Mark as playback device
           createdAt: new Date(),
           updatedAt: new Date(),
           
@@ -244,11 +278,22 @@ export class PlaybackManager extends EventTarget {
         
         // Trigger update event so UI and 3D scene know about this device
         this.store.dispatchEvent(new CustomEvent('update', { detail: tempDevice }));
+      } else {
+        // Device already exists - mark it as playback device
+        // Store original userId so we can restore it later
+        if (!this.originalUserIds.has(deviceSimple.id)) {
+          this.originalUserIds.set(deviceSimple.id, existingDevice.userId);
+        }
+        
+        // Update the existing device to mark it as playback
+        existingDevice.userId = 'playback';
+        this.store.dispatchEvent(new CustomEvent('update', { detail: existingDevice }));
       }
     });
   }
 
   private cleanupTemporaryDevices(): void {
+    // Remove temporary devices created for playback
     this.temporaryDeviceIds.forEach(deviceId => {
       const device = this.store['map'].get(deviceId);
       if (device) {
@@ -258,6 +303,28 @@ export class PlaybackManager extends EventTarget {
       this.store['map'].delete(deviceId);
     });
     this.temporaryDeviceIds.clear();
+    
+    // Restore hidden live devices
+    this.hiddenLiveDeviceIds.forEach(deviceId => {
+      const device = this.store['map'].get(deviceId);
+      if (device && this.originalUserIds.has(deviceId)) {
+        const originalUserId = this.originalUserIds.get(deviceId);
+        device.userId = originalUserId;
+        this.store.dispatchEvent(new CustomEvent('update', { detail: device }));
+      }
+    });
+    this.hiddenLiveDeviceIds.clear();
+    
+    // Restore original userIds for devices that existed before playback
+    this.originalUserIds.forEach((originalUserId, deviceId) => {
+      const device = this.store['map'].get(deviceId);
+      if (device && device.userId !== originalUserId) {
+        // Only restore if it hasn't been restored already (avoid double restoration)
+        device.userId = originalUserId;
+        this.store.dispatchEvent(new CustomEvent('update', { detail: device }));
+      }
+    });
+    this.originalUserIds.clear();
   }
 
   // Getters for UI

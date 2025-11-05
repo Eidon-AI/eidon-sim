@@ -6,6 +6,7 @@ import { DeviceRole, Device } from '../../types/device';
 import { prefs } from '../../core/preferences';
 import { quat, vec3 } from 'gl-matrix';
 import { eulerXYZ } from '../../core/mathUtils';
+import { calculateYawFromChestUp, calculateYawFromHubs, calculateYawFromChestYaw, CHEST_YAW_METHOD } from '../../core/chestUtils';
 
 const loader = new GLTFLoader();
 const d2r = Math.PI / 180;
@@ -28,6 +29,12 @@ export class SkeletalRig {
   private pendingScale: number = 1.0;
   private rigId: string;
   private isDestroyed: boolean = false; // Flag to prevent updates after destruction
+  
+  // Store initial pose quaternions for left and right shoulders
+  private initialPoseQuat: Record<Side, THREE.Quaternion> = {
+    left: new THREE.Quaternion(),
+    right: new THREE.Quaternion()
+  };
   
   // Store event handler references for proper cleanup
   private deviceColorHandler: (e: Event) => void;
@@ -112,7 +119,7 @@ export class SkeletalRig {
   /* ------------ once, both arms in one mesh ------------- */
   private init(root: THREE.Group) {
     root.position.set(this.pendingPosition.x, -1, this.pendingPosition.z);
-    // Initialize with 0 rotation - yaw will be set by updateChestYaw() based on chest orientation
+    // Initialize with 0 rotation - yaw will be set by updateChestYaw() based on CHEST_YAW_METHOD
     root.rotation.set(0, 0, 0);
     root.scale.setScalar(this.pendingScale);
     
@@ -137,6 +144,27 @@ export class SkeletalRig {
       elbow:    root.getObjectByName('RightForeArm') as THREE.Bone,
       wrist:    root.getObjectByName('RightHand')    as THREE.Bone
     };
+
+    // Set default pose to arms extended forward with palms facing down
+    // Rotation order: XYZ (roll, pitch, yaw)
+    // - X rotation (roll): 90 degrees to rotate palms down (negated for left arm for mirroring)
+    // - Y rotation (pitch): -90 degrees - shoulder flexion forward
+    // - Z rotation (yaw): 0 (no yaw rotation)
+    const forwardPitch = -Math.PI;   // -90 degrees - shoulder flexion forward
+    
+    // Left arm: forward extension with palms down (negated roll for mirroring)
+    if (this.armBones.left.shoulder) {
+      this.armBones.left.shoulder.rotation.set(-Math.PI, forwardPitch, -Math.PI / 2);
+      // Store initial pose quaternion for left shoulder
+      this.initialPoseQuat.left.copy(this.armBones.left.shoulder.quaternion);
+    }
+    
+    // Right arm: forward extension with palms down
+    if (this.armBones.right.shoulder) {
+      this.armBones.right.shoulder.rotation.set(Math.PI, forwardPitch, Math.PI / 2);
+      // Store initial pose quaternion for right shoulder
+      this.initialPoseQuat.right.copy(this.armBones.right.shoulder.quaternion);
+    }
 
     // Find all mesh objects that are children of the hand bones
     const leftHand = root.getObjectByName('LeftHand') as THREE.Object3D;
@@ -187,11 +215,8 @@ export class SkeletalRig {
     // Prevent updates after destruction
     if (this.isDestroyed) return;
     
-    if (this.useActuatorAngles) {
-      this.applySideActuatorAngles(side);
-    } else {
-      this.applySideQuaternion(side);
-    }
+    // Always use actuator angles for the physical device
+    this.applySideActuatorAngles(side);
 
     /* ----- Fingers mapping (disabled - finger data removed from Device interface) ----- */
     // const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
@@ -276,10 +301,19 @@ export class SkeletalRig {
    * Check if a device has active incoming data
    * For child devices (forearm/hand), we require recent data (within DATA_TIMEOUT_MS)
    * For hub devices, we're more lenient (they might be connected but children not yet)
+   * During playback mode, only accepts devices with playback data (userId === 'playback')
    */
   private hasActiveData(device: Device | undefined, isChildDevice: boolean): boolean {
     if (!device) {
       return false;
+    }
+
+    // During playback mode, only use devices that have playback data
+    // Playback devices are identified by userId === 'playback'
+    if (this.store.isPlaybackMode()) {
+      if (device.userId !== 'playback') {
+        return false; // Reject live devices during playback
+      }
     }
 
     // Check if device has valid vectors (not zero/default)
@@ -300,7 +334,8 @@ export class SkeletalRig {
     }
 
     // For child devices, require recent data (within timeout window)
-    if (isChildDevice) {
+    // During playback, we don't need to check timeout since playback updates are continuous
+    if (isChildDevice && !this.store.isPlaybackMode()) {
       const now = performance.now();
       const timeSinceLastData = now - device.lastSeen;
       return timeSinceLastData < DATA_TIMEOUT_MS;
@@ -310,57 +345,35 @@ export class SkeletalRig {
     return true;
   }
 
-  /* ------------ Update model yaw based on average hub forward vectors ----- */
+  /* ------------ Update model yaw based on CHEST_YAW_METHOD selection ----- */
   private updateChestYaw(): void {
     if (!this.root) return;
     
-    // Get left and right hub (shoulder) devices
-    const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
-    const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+    let yawRad: number | null = null;
     
-    // Project forward vectors onto yaw plane (XZ plane, horizontal plane)
-    // fwd from quaternionToVectors() is [x, z, -y] in scene space:
-    // - fwd[0] = X component (left/right)
-    // - fwd[1] = Z component (forward/back)
-    // - fwd[2] = -Y component (vertical, not used for yaw)
-    
-    let avgFwdX = 0;
-    let avgFwdZ = 0;
-    let count = 0;
-    
-    if (leftHub && leftHub.fwd && this.hasActiveData(leftHub, false)) {
-      // Project onto yaw plane: use X and Z components only
-      avgFwdX += leftHub.fwd[0];  // X component
-      avgFwdZ += leftHub.fwd[1];  // Z component
-      count++;
+    if (CHEST_YAW_METHOD === 1) {
+      // Method 1: Calculate yaw from average forward direction of hubs
+      const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
+      const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+      yawRad = calculateYawFromHubs(leftHub, rightHub, this.hasActiveData.bind(this));
+    } else if (CHEST_YAW_METHOD === 2) {
+      // Method 2: Calculate yaw from chest UP vector projection
+      const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+      if (chest && this.hasActiveData(chest, false)) {
+        yawRad = calculateYawFromChestUp(chest);
+      }
+    } else if (CHEST_YAW_METHOD === 3) {
+      // Method 3: Calculate yaw directly from chest device quaternion
+      const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+      if (chest && this.hasActiveData(chest, false)) {
+        yawRad = calculateYawFromChestYaw(chest);
+      }
     }
     
-    if (rightHub && rightHub.fwd && this.hasActiveData(rightHub, false)) {
-      // Project onto yaw plane: use X and Z components only
-      avgFwdX += rightHub.fwd[0];  // X component
-      avgFwdZ += rightHub.fwd[1];  // Z component
-      count++;
+    // Apply rotation to model root if we have a valid yaw
+    if (yawRad !== null) {
+      this.root.rotation.y = yawRad;
     }
-    
-    // If no hubs available, don't update rotation
-    if (count === 0) return;
-    
-    // Average the yaw plane projections
-    avgFwdX /= count;
-    avgFwdZ /= count;
-    
-    // Calculate yaw angle from averaged forward vector projection
-    // The model is consistently 90° off, so we swap atan2 arguments
-    // atan2(x, z) instead of atan2(z, x) to compensate:
-    // - atan2(0, 1) = 0° = +Z (forward) 
-    // - atan2(1, 0) = 90° = +X (right)
-    // - atan2(0, -1) = 180° = -Z (backward)
-    // This accounts for Three.js rotation convention vs vector direction
-    const yawRad = Math.atan2(avgFwdX, avgFwdZ);
-    
-    // Apply rotation to model root
-    // Model should face in the average forward direction of the two hub devices
-    this.root.rotation.y = yawRad;
   }
 
   /* ------------ Quaternion-based rotation (smooth) ---- */
@@ -380,25 +393,23 @@ export class SkeletalRig {
       // Returns [yaw, roll, pitch] in radians (note: pitch and roll are swapped in return)
       const [yawRad, rollRad, pitchRad] = eulerXYZ(deviceQuat);
       
-      // Apply same coordinate corrections as actuator mode for shoulder:
-      // arm.shoulder.rotation.set(-a.shRoll*d2r, a.shPitch*d2r, -a.shYaw*d2r);
+      // Apply coordinate corrections for shoulder:
       // Map eulerXYZ output [yaw, roll, pitch] to bone rotations
       const correctedRoll = -rollRad;   // roll (negated)
       const correctedPitch = pitchRad;  // pitch (no negation)
       const correctedYaw = -yawRad;     // yaw (negated)
       
-      // Convert to THREE.js Euler angles (XYZ order)
+      // Convert to THREE.js Euler angles (XYZ order) and apply directly
       const correctedEuler = new THREE.Euler(correctedRoll, correctedPitch, correctedYaw, 'XYZ');
       const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
       
-      // Reset Euler rotation and use quaternion
+      // Apply quaternion directly (no relative rotation math)
       arm.shoulder.rotation.set(0, 0, 0);
       arm.shoulder.quaternion.copy(correctedQuat);
     } else {
-      // Fallback to Euler if no device quaternion available
-      // Match actuator mode formula: negate roll, no pitch negation, negate yaw, no offset
-      arm.shoulder.quaternion.set(0, 0, 0, 1); // Reset quaternion
-      arm.shoulder.rotation.set(-(a.shRoll - 0)*d2r, (a.shPitch - 0)*d2r, -(a.shYaw - 0)*d2r);
+      // Fallback: when no device, use initial pose
+      arm.shoulder.quaternion.copy(this.initialPoseQuat[side]);
+      arm.shoulder.rotation.set(0, 0, 0);
     }
 
     /* Elbow: Use quaternion-based calculation when devices available */
@@ -495,9 +506,23 @@ export class SkeletalRig {
     const arm = this.armBones[side];
     const sgn = side === 'left' ? 1 : -1;      // mirroring sign
 
-    /* Shoulder: Use calculated actuator angles */
+    /* Shoulder: Apply actuator angles with offset to forward pose */
+    // Define forward pose offsets (in degrees) - these represent the forward pose when actuator angles are 0
+    // Forward pose rotations: Left (-180°, -180°, -90°), Right (180°, -180°, 90°)
+    const forwardPoseOffsets = {
+      left: { roll: -180, pitch: -180, yaw: -90 },
+      right: { roll: 180, pitch: -180, yaw: 90 }
+    };
+    const offsets = forwardPoseOffsets[side];
+    
+    // Apply actuator angles with offsets: rotation = offset + actuator_angle
+    // Note: signs match the original mapping: -roll, +pitch, -yaw
     arm.shoulder.quaternion.set(0, 0, 0, 1); // Reset quaternion
-    arm.shoulder.rotation.set(-(a.shRoll - 0)*d2r, (a.shPitch - 0)*d2r, -(a.shYaw - 0)*d2r);
+    arm.shoulder.rotation.set(
+      -(offsets.roll + a.shRoll) * d2r,
+      (offsets.pitch + a.shPitch) * d2r,
+      -(offsets.yaw + a.shYaw) * d2r
+    );
 
     /* Elbow: Use calculated actuator angle */
     arm.elbow.quaternion.set(0, 0, 0, 1); // Reset quaternion
@@ -576,13 +601,21 @@ export class SkeletalRig {
     // Reset root rotation to default (no yaw)
     this.root.rotation.y = 0;
     
-    // Reset all arm bones to default rotation
+    // Reset all arm bones to default rotation (arms extended forward with palms down)
+    // Match the initial pose values exactly
+    const forwardPitch = -Math.PI;
+    
     ['left', 'right'].forEach(side => {
       const arm = this.armBones[side as Side];
       if (arm) {
         // Reset quaternion to identity
         arm.shoulder.quaternion.set(0, 0, 0, 1);
-        arm.shoulder.rotation.set(0, 0, 0);
+        // Match initial pose: left arm has negated roll and yaw, right arm has positive
+        if (side === 'left') {
+          arm.shoulder.rotation.set(-Math.PI, forwardPitch, -Math.PI / 2);
+        } else {
+          arm.shoulder.rotation.set(Math.PI, forwardPitch, Math.PI / 2);
+        }
         
         arm.elbow.quaternion.set(0, 0, 0, 1);
         arm.elbow.rotation.set(0, 0, 0);
