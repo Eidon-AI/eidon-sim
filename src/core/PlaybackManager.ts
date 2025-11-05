@@ -14,6 +14,7 @@ export class PlaybackManager extends EventTarget {
   private playbackStartTime = 0;
   private playbackAnimationId: number | null = null;
   private temporaryDeviceIds: Set<string> = new Set(); // Track devices created for playback
+  private originalUserIds: Map<string, string | undefined> = new Map(); // Track original userIds to restore later
 
   constructor(
     private store: DeviceStore,
@@ -199,6 +200,10 @@ export class PlaybackManager extends EventTarget {
         const { up, fwd } = quaternionToVectors(q);
         updates.up = up;
         updates.fwd = fwd;
+        
+        // Ensure userId is set to 'playback' during playback
+        // This ensures devices remain marked as playback devices even if they were updated
+        updates.userId = 'playback';
 
         // Apply updates using the playback method
         this.store.updateDeviceForPlayback(deviceId, updates);
@@ -225,7 +230,7 @@ export class PlaybackManager extends EventTarget {
           position: stringToDeviceRole(deviceSimple.position),
           color: DeviceColor.ORANGE, // Default color
           connectionId: deviceSimple.connectionId,
-          userId: 'playback', // Placeholder for playback
+          userId: 'playback', // Mark as playback device
           createdAt: new Date(),
           updatedAt: new Date(),
           
@@ -244,11 +249,20 @@ export class PlaybackManager extends EventTarget {
         
         // Trigger update event so UI and 3D scene know about this device
         this.store.dispatchEvent(new CustomEvent('update', { detail: tempDevice }));
+      } else {
+        // Device already exists - mark it as playback device
+        // Store original userId so we can restore it later
+        this.originalUserIds.set(deviceSimple.id, existingDevice.userId);
+        
+        // Update the existing device to mark it as playback
+        existingDevice.userId = 'playback';
+        this.store.dispatchEvent(new CustomEvent('update', { detail: existingDevice }));
       }
     });
   }
 
   private cleanupTemporaryDevices(): void {
+    // Remove temporary devices created for playback
     this.temporaryDeviceIds.forEach(deviceId => {
       const device = this.store['map'].get(deviceId);
       if (device) {
@@ -258,6 +272,16 @@ export class PlaybackManager extends EventTarget {
       this.store['map'].delete(deviceId);
     });
     this.temporaryDeviceIds.clear();
+    
+    // Restore original userIds for devices that existed before playback
+    this.originalUserIds.forEach((originalUserId, deviceId) => {
+      const device = this.store['map'].get(deviceId);
+      if (device) {
+        device.userId = originalUserId;
+        this.store.dispatchEvent(new CustomEvent('update', { detail: device }));
+      }
+    });
+    this.originalUserIds.clear();
   }
 
   // Getters for UI

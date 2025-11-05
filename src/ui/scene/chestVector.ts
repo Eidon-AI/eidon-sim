@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { vec3 } from 'gl-matrix';
 import { DeviceStore } from '../../core/DeviceStore';
-import { DeviceRole } from '../../types/device';
+import { DeviceRole, Device } from '../../types/device';
+import { CHEST_YAW_METHOD } from '../../core/chestUtils';
+import { eulerXYZ } from '../../core/mathUtils';
 
 export class ChestVector {
   private tubeSeg: THREE.Mesh;
-  private upTubeSeg: THREE.Mesh;
   private arrowTip: THREE.Mesh;
-  private upArrowTip: THREE.Mesh;
   private group: THREE.Group;
   
   // Geometry and material pools to prevent memory leaks
@@ -23,19 +23,14 @@ export class ChestVector {
     this.tubeGeometry = new THREE.CylinderGeometry(0.005, 0.005, 1, 8); // Same as VectorArm
     this.arrowGeometry = new THREE.ConeGeometry(0.01, 0.04, 8); // Same as VectorArm
     
-    // Create chest vector elements - pink for forward, green for up
-    const forwardColor = '#ff69b4'; // Pink
-    const upColor = '#00ff00'; // Green
-    this.tubeSeg = this.buildTube([0,0,0], [0,0.1,0], forwardColor);
-    this.upTubeSeg = this.buildTube([0,0,0], [0,0.1,0], upColor);
-    this.arrowTip = this.buildArrowTip(forwardColor);
-    this.upArrowTip = this.buildArrowTip(upColor);
+    // Create chest vector elements - yellow for UP vector projection on XZ plane
+    const projectionColor = '#ffff00'; // Yellow
+    this.tubeSeg = this.buildTube([0,0,0], [0,0.1,0], projectionColor);
+    this.arrowTip = this.buildArrowTip(projectionColor);
     
     this.group = new THREE.Group();
     this.group.add(this.tubeSeg);
-    this.group.add(this.upTubeSeg);
     this.group.add(this.arrowTip);
-    this.group.add(this.upArrowTip);
     scene.add(this.group);
 
     store.addEventListener('update', () => this.refresh());
@@ -88,43 +83,176 @@ export class ChestVector {
     return new THREE.Mesh(this.arrowGeometry, material);
   }
 
-  private refresh() {
-    // Get chest device
-    const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
-    
-    if (!chest) {
-      // Hide all elements if no chest device
-      this.tubeSeg.visible = false;
-      this.upTubeSeg.visible = false;
-      this.arrowTip.visible = false;
-      this.upArrowTip.visible = false;
-      return;
+  /**
+   * Check if a device has active incoming data
+   * For hub devices, we're more lenient (they might be connected but children not yet)
+   * During playback mode, only accepts devices with playback data (userId === 'playback')
+   */
+  private hasActiveData(device: Device | undefined): boolean {
+    if (!device) {
+      return false;
     }
 
-    // Chest anchor point (moved forward to avoid model overlap)
-    const chestAnchor: vec3 = [0, 0.4, -0.2]; // Moved 30cm forward
+    // During playback mode, only use devices that have playback data
+    // Playback devices are identified by userId === 'playback'
+    if (this.store.isPlaybackMode()) {
+      if (device.userId !== 'playback') {
+        return false; // Reject live devices during playback
+      }
+    }
+
+    // Check if device has valid vectors (not zero/default)
+    const hasValidVectors = vec3.length(device.fwd) > 0.001 && vec3.length(device.up) > 0.001;
     
-    // Chest forward vector length - fixed 0.35 unit length
-    const chestLength = 0.35; // Same as arm forward vectors
-    const chestEnd = vec3.scaleAndAdd(vec3.create(), chestAnchor, chest.fwd, chestLength);
+    if (!hasValidVectors) {
+      return false;
+    }
+
+    // Check if quaternion is not identity (identity = [0, 0, 0, 1])
+    const isIdentity = Math.abs(device.quat[0]) < 0.001 && 
+                       Math.abs(device.quat[1]) < 0.001 && 
+                       Math.abs(device.quat[2]) < 0.001 && 
+                       Math.abs(device.quat[3] - 1.0) < 0.001;
     
-    // Chest up vector length - fixed 0.2 unit length
-    const upLength = 0.2; // Same as arm up vectors
-    const upEnd = vec3.scaleAndAdd(vec3.create(), chestAnchor, chest.up, upLength);
+    if (isIdentity) {
+      return false;
+    }
+
+    // For hub devices, just check that data exists (more lenient)
+    return true;
+  }
+
+  private refresh() {
+    // Chest anchor point (positioned above the model)
+    const chestAnchor: vec3 = [0, 1.0, -0.2]; // Moved up above the model
+    const fixedLength = 0.35; // Fixed 0.35 unit length
     
-    // Update forward vector tube
+    let directionVector: vec3 | null = null;
+    
+    if (CHEST_YAW_METHOD === 1) {
+      // Method 1: Show average forward direction of hubs
+      const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
+      const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+      
+      const leftHubValid = leftHub && this.hasActiveData(leftHub);
+      const rightHubValid = rightHub && this.hasActiveData(rightHub);
+      
+      if (!leftHubValid && !rightHubValid) {
+        // Hide if no valid hubs
+        this.tubeSeg.visible = false;
+        this.arrowTip.visible = false;
+        return;
+      }
+      
+      // Average the forward vectors from available hubs
+      // fwd from quaternionToVectors() is [x, z, y] in scene space:
+      let avgFwdX = 0;
+      let avgFwdZ = 0;
+      let count = 0;
+      
+      if (leftHubValid && leftHub.fwd) {
+        avgFwdX += leftHub.fwd[0];
+        avgFwdZ += leftHub.fwd[1];
+        count++;
+      }
+      
+      if (rightHubValid && rightHub.fwd) {
+        avgFwdX += rightHub.fwd[0];
+        avgFwdZ += rightHub.fwd[1];
+        count++;
+      }
+      
+      if (count > 0) {
+        avgFwdX /= count;
+        avgFwdZ /= count;
+        
+        // Create direction vector on XZ plane [x, y, z]
+        directionVector = [avgFwdX, 0, avgFwdZ];
+      }
+      
+    } else if (CHEST_YAW_METHOD === 2) {
+      // Method 2: Show chest UP vector projection on XZ plane
+      const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+      
+      if (!chest || !chest.up || !this.hasActiveData(chest)) {
+        // Hide if no chest device
+        this.tubeSeg.visible = false;
+        this.arrowTip.visible = false;
+        return;
+      }
+      
+      // Project chest UP vector onto XZ plane
+      // chest.up from quaternionToVectors() is [x, z, y] in scene space:
+      const projectionX = chest.up[0];  // X component
+      const projectionZ = chest.up[1];  // Z component
+      
+      // Create projection vector on XZ plane in vec3 format [x, y, z]
+      directionVector = [projectionX, 0, projectionZ];
+      
+    } else if (CHEST_YAW_METHOD === 3) {
+      // Method 3: Show yaw direction from chest quaternion
+      const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+      
+      if (!chest || !chest.quat || !this.hasActiveData(chest)) {
+        // Hide if no chest device
+        this.tubeSeg.visible = false;
+        this.arrowTip.visible = false;
+        return;
+      }
+      
+      // Extract yaw directly from quaternion
+      const [yawRad] = eulerXYZ(chest.quat);
+      
+      // Convert yaw angle to direction vector on XZ plane
+      // yawRad is rotation around Y axis:
+      // - 0° = +Z (forward)
+      // - 90° = +X (right)
+      // - 180° = -Z (backward)
+      const dirX = Math.sin(yawRad);  // X component
+      const dirZ = Math.cos(yawRad);  // Z component
+      
+      // Create direction vector on XZ plane [x, y, z]
+      directionVector = [dirX, 0, dirZ];
+      
+    } else {
+      // Invalid method - hide
+      this.tubeSeg.visible = false;
+      this.arrowTip.visible = false;
+      return;
+    }
+    
+    // Check if we have a valid direction vector
+    if (!directionVector || vec3.length(directionVector) < 0.001) {
+      // Hide if vector is too small
+      this.tubeSeg.visible = false;
+      this.arrowTip.visible = false;
+      return;
+    }
+    
+    // Normalize the direction and scale to fixed length for visualization
+    const normalizedDirection = vec3.normalize(vec3.create(), directionVector);
+    const scaledDirection = vec3.scale(vec3.create(), normalizedDirection, fixedLength);
+    
+    // Calculate end point on XZ plane (Y stays at anchor Y)
+    const vectorEnd: vec3 = [
+      chestAnchor[0] + scaledDirection[0],
+      chestAnchor[1], // Keep Y at anchor height (horizontal)
+      chestAnchor[2] + scaledDirection[2]
+    ];
+    
+    // Update tube visualization
     this.tubeSeg.visible = true;
-    const direction = vec3.subtract(vec3.create(), chestEnd, chestAnchor);
+    const direction = vec3.subtract(vec3.create(), vectorEnd, chestAnchor);
     const length = vec3.length(direction);
     
     if (length > 0.001) {
       this.tubeSeg.scale.set(1, length, 1);
       
       // Position the tube at the midpoint
-      const midpoint = vec3.lerp(vec3.create(), chestAnchor, chestEnd, 0.5);
+      const midpoint = vec3.lerp(vec3.create(), chestAnchor, vectorEnd, 0.5);
       this.tubeSeg.position.set(midpoint[0], midpoint[1], midpoint[2]);
 
-      // Orient the tube to point from start to end
+      // Orient the tube to point from start to end (horizontal direction)
       const normalizedDirection = vec3.normalize(vec3.create(), direction);
       this.tubeSeg.lookAt(
         this.tubeSeg.position.x + normalizedDirection[0],
@@ -136,73 +264,25 @@ export class ChestVector {
       this.tubeSeg.scale.set(1, 0, 1); // Zero length
     }
 
-    // Position and orient forward arrow tip
+    // Position and orient arrow tip
     this.arrowTip.visible = true;
-    this.arrowTip.position.set(chestEnd[0], chestEnd[1], chestEnd[2]);
+    this.arrowTip.position.set(vectorEnd[0], vectorEnd[1], vectorEnd[2]);
     
     // Calculate direction vector for orientation
-    if (vec3.length(direction) > 0) {
-      vec3.normalize(direction, direction);
-      this.arrowTip.lookAt(
-        this.arrowTip.position.x + direction[0],
-        this.arrowTip.position.y + direction[1], 
-        this.arrowTip.position.z + direction[2]
-      );
-      // Rotate 90 degrees to point the cone tip in the right direction
-      this.arrowTip.rotateX(Math.PI / 2);
-    }
+    const normalizedDir = vec3.normalize(vec3.create(), directionVector);
+    this.arrowTip.lookAt(
+      this.arrowTip.position.x + normalizedDir[0],
+      this.arrowTip.position.y + normalizedDir[1], 
+      this.arrowTip.position.z + normalizedDir[2]
+    );
+    // Rotate 90 degrees to point the cone tip in the right direction
+    this.arrowTip.rotateX(Math.PI / 2);
     
-    // Use fixed pink color for forward vector
-    const forwardColor = '#ff69b4'; // Pink
-    const material = this.getMaterial(forwardColor);
+    // Use fixed yellow color for visualization
+    const projectionColor = '#ffff00'; // Yellow
+    const material = this.getMaterial(projectionColor);
     this.tubeSeg.material = material;
     this.arrowTip.material = material;
-
-    // Update up vector tube
-    this.upTubeSeg.visible = true;
-    const upDirection = vec3.subtract(vec3.create(), upEnd, chestAnchor);
-    const upLengthActual = vec3.length(upDirection);
-    
-    if (upLengthActual > 0.001) {
-      this.upTubeSeg.scale.set(1, upLengthActual, 1);
-      
-      // Position the tube at the midpoint
-      const upMidpoint = vec3.lerp(vec3.create(), chestAnchor, upEnd, 0.5);
-      this.upTubeSeg.position.set(upMidpoint[0], upMidpoint[1], upMidpoint[2]);
-
-      // Orient the tube to point from start to end
-      const normalizedUp = vec3.normalize(vec3.create(), upDirection);
-      this.upTubeSeg.lookAt(
-        this.upTubeSeg.position.x + normalizedUp[0],
-        this.upTubeSeg.position.y + normalizedUp[1],
-        this.upTubeSeg.position.z + normalizedUp[2]
-      );
-      this.upTubeSeg.rotateX(Math.PI / 2);
-    } else {
-      this.upTubeSeg.scale.set(1, 0, 1); // Zero length
-    }
-
-    // Position and orient up vector arrow tip
-    this.upArrowTip.visible = true;
-    this.upArrowTip.position.set(upEnd[0], upEnd[1], upEnd[2]);
-    
-    // Calculate direction vector for orientation
-    if (vec3.length(chest.up) > 0) {
-      const normalizedUp = vec3.normalize(vec3.create(), chest.up);
-      this.upArrowTip.lookAt(
-        this.upArrowTip.position.x + normalizedUp[0],
-        this.upArrowTip.position.y + normalizedUp[1], 
-        this.upArrowTip.position.z + normalizedUp[2]
-      );
-      // Rotate 90 degrees to point the cone tip in the right direction
-      this.upArrowTip.rotateX(Math.PI / 2);
-    }
-    
-    // Use fixed green color for up vector
-    const upColor = '#00ff00'; // Green
-    const upMaterial = this.getMaterial(upColor);
-    this.upTubeSeg.material = upMaterial;
-    this.upArrowTip.material = upMaterial;
   }
 
   public destroy(): void {

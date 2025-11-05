@@ -6,6 +6,7 @@ import { DeviceRole, Device } from '../../types/device';
 import { prefs } from '../../core/preferences';
 import { quat, vec3 } from 'gl-matrix';
 import { eulerXYZ } from '../../core/mathUtils';
+import { calculateYawFromChestUp, calculateYawFromHubs, calculateYawFromChestYaw, CHEST_YAW_METHOD } from '../../core/chestUtils';
 
 const loader = new GLTFLoader();
 const d2r = Math.PI / 180;
@@ -118,7 +119,7 @@ export class SkeletalRig {
   /* ------------ once, both arms in one mesh ------------- */
   private init(root: THREE.Group) {
     root.position.set(this.pendingPosition.x, -1, this.pendingPosition.z);
-    // Initialize with 0 rotation - yaw will be set by updateChestYaw() based on chest orientation
+    // Initialize with 0 rotation - yaw will be set by updateChestYaw() based on CHEST_YAW_METHOD
     root.rotation.set(0, 0, 0);
     root.scale.setScalar(this.pendingScale);
     
@@ -300,10 +301,19 @@ export class SkeletalRig {
    * Check if a device has active incoming data
    * For child devices (forearm/hand), we require recent data (within DATA_TIMEOUT_MS)
    * For hub devices, we're more lenient (they might be connected but children not yet)
+   * During playback mode, only accepts devices with playback data (userId === 'playback')
    */
   private hasActiveData(device: Device | undefined, isChildDevice: boolean): boolean {
     if (!device) {
       return false;
+    }
+
+    // During playback mode, only use devices that have playback data
+    // Playback devices are identified by userId === 'playback'
+    if (this.store.isPlaybackMode()) {
+      if (device.userId !== 'playback') {
+        return false; // Reject live devices during playback
+      }
     }
 
     // Check if device has valid vectors (not zero/default)
@@ -324,7 +334,8 @@ export class SkeletalRig {
     }
 
     // For child devices, require recent data (within timeout window)
-    if (isChildDevice) {
+    // During playback, we don't need to check timeout since playback updates are continuous
+    if (isChildDevice && !this.store.isPlaybackMode()) {
       const now = performance.now();
       const timeSinceLastData = now - device.lastSeen;
       return timeSinceLastData < DATA_TIMEOUT_MS;
@@ -334,40 +345,35 @@ export class SkeletalRig {
     return true;
   }
 
-  /* ------------ Update model yaw based on chest tracker forward vector ----- */
+  /* ------------ Update model yaw based on CHEST_YAW_METHOD selection ----- */
   private updateChestYaw(): void {
     if (!this.root) return;
     
-    // Get chest device
-    const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+    let yawRad: number | null = null;
     
-    // Project forward vector onto yaw plane (XZ plane, horizontal plane)
-    // fwd from quaternionToVectors() is [x, z, -y] in scene space:
-    // - fwd[0] = X component (left/right)
-    // - fwd[1] = Z component (forward/back)
-    // - fwd[2] = -Y component (vertical, not used for yaw)
-    
-    if (!chest || !chest.fwd || !this.hasActiveData(chest, false)) {
-      // If no chest device available, don't update rotation
-      return;
+    if (CHEST_YAW_METHOD === 1) {
+      // Method 1: Calculate yaw from average forward direction of hubs
+      const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
+      const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+      yawRad = calculateYawFromHubs(leftHub, rightHub, this.hasActiveData.bind(this));
+    } else if (CHEST_YAW_METHOD === 2) {
+      // Method 2: Calculate yaw from chest UP vector projection
+      const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+      if (chest && this.hasActiveData(chest, false)) {
+        yawRad = calculateYawFromChestUp(chest);
+      }
+    } else if (CHEST_YAW_METHOD === 3) {
+      // Method 3: Calculate yaw directly from chest device quaternion
+      const chest = this.store.getByPosition(DeviceRole.ROLE_CHEST);
+      if (chest && this.hasActiveData(chest, false)) {
+        yawRad = calculateYawFromChestYaw(chest);
+      }
     }
     
-    // Project onto yaw plane: use X and Z components only
-    const fwdX = chest.fwd[0];  // X component
-    const fwdZ = chest.fwd[1];  // Z component
-    
-    // Calculate yaw angle from chest forward vector projection
-    // The model is consistently 180° off, so we add π radians to compensate
-    // atan2(x, z) gives us the angle in the horizontal plane:
-    // - atan2(0, 1) = 0° = +Z (forward) 
-    // - atan2(1, 0) = 90° = +X (right)
-    // - atan2(0, -1) = 180° = -Z (backward)
-    // Adding π rotates the model 180° to face the correct direction
-    const yawRad = Math.atan2(fwdX, fwdZ) + Math.PI;
-    
-    // Apply rotation to model root
-    // Model should face in the forward direction of the chest tracker
-    this.root.rotation.y = yawRad;
+    // Apply rotation to model root if we have a valid yaw
+    if (yawRad !== null) {
+      this.root.rotation.y = yawRad;
+    }
   }
 
   /* ------------ Quaternion-based rotation (smooth) ---- */
@@ -504,8 +510,8 @@ export class SkeletalRig {
     // Define forward pose offsets (in degrees) - these represent the forward pose when actuator angles are 0
     // Forward pose rotations: Left (-180°, -180°, -90°), Right (180°, -180°, 90°)
     const forwardPoseOffsets = {
-      left: { roll: -180, pitch: -180, yaw: 90 },
-      right: { roll: 180, pitch: -180, yaw: -90 }
+      left: { roll: -180, pitch: -180, yaw: -90 },
+      right: { roll: 180, pitch: -180, yaw: 90 }
     };
     const offsets = forwardPoseOffsets[side];
     
