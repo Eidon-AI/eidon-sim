@@ -1,7 +1,7 @@
-import { HidManager } from '../../core/HidManager';
-import { DeviceStore } from '../../core/DeviceStore';
+import { DeviceStore } from '../../../core/DeviceStore';
+import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
 import { renderCard }  from './DeviceCard';
-import { Device, DeviceRole } from '../../types/device';
+import { Device, DeviceRole } from '../../../types/device';
 import styles from './styles/DeviceList.module.css';
 
 // Define sorting order for consistent device display
@@ -22,7 +22,7 @@ function sortDevices(devices: Device[]): Device[] {
   });
 }
 
-export function mountDeviceList(parent: HTMLElement, hid: HidManager, store: DeviceStore){
+export function mountDeviceList(parent: HTMLElement, store: DeviceStore, trackerManager?: EidonTrackerManager){
   const wrapper = document.createElement('div');
   wrapper.id = 'deviceList';
   wrapper.className = styles.wrapper;
@@ -50,7 +50,7 @@ export function mountDeviceList(parent: HTMLElement, hid: HidManager, store: Dev
       
       // Render devices in sorted order
       sortedDevices.forEach(device => {
-        const card = renderCard(device, hid, store);
+        const card = renderCard(device, store, trackerManager);
         card.setAttribute('data-id', device.id);
         wrapper.appendChild(card);
         renderedDeviceIds.add(device.id);

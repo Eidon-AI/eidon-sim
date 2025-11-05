@@ -116,6 +116,104 @@ export function initScene(
   const { mesh: gridMesh, material: gridMaterial } = createInfiniteGrid();
   scene.add(gridMesh);
 
+  /* ------------ axis indicators on grid plane ------------ */
+  const createAxisIndicators = () => {
+    const axisGroup = new THREE.Group();
+    const gridY = -1.0; // Same Y position as grid plane
+    const arrowLength = 2.0;
+    const arrowRadius = 0.05;
+    const arrowHeadLength = 0.3;
+    const arrowHeadRadius = 0.15;
+    const labelDistance = 2.5; // Distance from origin to label
+    
+    // Helper function to create text sprite
+    const createTextSprite = (text: string, color: string = '#ffffff') => {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d')!;
+      canvas.width = 256;
+      canvas.height = 128;
+      
+      context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      
+      context.font = 'Bold 64px Arial';
+      context.fillStyle = color;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(text, canvas.width / 2, canvas.height / 2);
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      
+      const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+      const sprite = new THREE.Sprite(spriteMaterial);
+      sprite.scale.set(0.5, 0.25, 1);
+      
+      return sprite;
+    };
+    
+    // +X axis (red, pointing right)
+    const arrowXPos = new THREE.ArrowHelper(
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, gridY, 0),
+      arrowLength,
+      0xff0000,
+      arrowHeadLength,
+      arrowHeadRadius
+    );
+    axisGroup.add(arrowXPos);
+    const labelXPos = createTextSprite('+X', '#ff0000');
+    labelXPos.position.set(labelDistance, gridY + 0.1, 0);
+    axisGroup.add(labelXPos);
+    
+    // -X axis (dark red, pointing left)
+    const arrowXNeg = new THREE.ArrowHelper(
+      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(0, gridY, 0),
+      arrowLength,
+      0x990000,
+      arrowHeadLength,
+      arrowHeadRadius
+    );
+    axisGroup.add(arrowXNeg);
+    const labelXNeg = createTextSprite('-X', '#990000');
+    labelXNeg.position.set(-labelDistance, gridY + 0.1, 0);
+    axisGroup.add(labelXNeg);
+    
+    // +Z axis (blue, pointing forward/away from camera)
+    const arrowZPos = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, gridY, 0),
+      arrowLength,
+      0x0000ff,
+      arrowHeadLength,
+      arrowHeadRadius
+    );
+    axisGroup.add(arrowZPos);
+    const labelZPos = createTextSprite('+Z', '#0000ff');
+    labelZPos.position.set(0, gridY + 0.1, labelDistance);
+    axisGroup.add(labelZPos);
+    
+    // -Z axis (dark blue, pointing backward/toward camera)
+    const arrowZNeg = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(0, gridY, 0),
+      arrowLength,
+      0x000099,
+      arrowHeadLength,
+      arrowHeadRadius
+    );
+    axisGroup.add(arrowZNeg);
+    const labelZNeg = createTextSprite('-Z', '#000099');
+    labelZNeg.position.set(0, gridY + 0.1, -labelDistance);
+    axisGroup.add(labelZNeg);
+    
+    return axisGroup;
+  };
+  
+  const axisIndicators = createAxisIndicators();
+  scene.add(axisIndicators);
+
   /* ------------ view controls -------------------- */
   const viewControls = new ViewControls();
   viewControls.mount();
@@ -360,8 +458,11 @@ export function initScene(
 
   // Handle model reset events (from playback exit)
   document.addEventListener('resetModel', () => {
+    // Reset all rigs to normal position (neutral pose)
+    rigs.forEach(rig => rig.resetToNormalPosition());
+    
     // Trigger a device update to refresh all visuals
-    // This will cause the rigs to return to default positions
+    // This will cause the rigs to update with current device data
     store.dispatchEvent(new CustomEvent('update'));
   });
 

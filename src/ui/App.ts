@@ -1,30 +1,32 @@
 
 // src/ui/App.ts
-import { EidonTrackerManager } from '../core/EidonTrackerManager';
+import { EidonTrackerManager, EidonDevice } from '../core/EidonTrackerManager';
 import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
 import { PlaybackManager } from '../core/PlaybackManager';
-import { mountDeviceList } from './components/DeviceList';
+import { DeviceConnectionStateManager } from '../core/DeviceConnectionStateManager';
 import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
 import { prefs } from '../core/preferences';
 import { IconOverlay } from './components/IconOverlay';
 import { Controls } from './components/controls/Controls';
-import { renderCard } from './components/DeviceCard';
 import { AuthModal } from './components/AuthModal';
 import { AuthManager } from '../core/AuthManager';
 import { LoginStateManager } from '../core/LoginStateManager';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar } from './components/sidebar/Sidebar';
+import { Device, DeviceRole, DeviceColor } from '../types/device';
+import { quat, vec3 } from 'gl-matrix';
+import { quaternionToVectors } from '../core/mathUtils';
 import styles from './App.module.css';
 
 let selectedId: string | null = null;
 let storeRef:  DeviceStore | null = null;
-let logRef:    HTMLPreElement | null = null;
 let playbackManager: PlaybackManager;
 let controls: Controls;
 let sceneDestroy: (() => void) | null = null;
 let trackerManager: EidonTrackerManager | null = null;
 let deviceStore: DeviceStore | null = null;
+let deviceConnectionStateManager: DeviceConnectionStateManager | null = null;
 let authModal: AuthModal | null = null;
 let authManager: AuthManager | null = null;
 let loginStateManager: LoginStateManager | null = null;
@@ -34,21 +36,12 @@ let isAuthenticated = false;
 /* export so DeviceCard can import it */
 export function setSelected(id: string | null) {
   selectedId = id;
-  if (!storeRef || !logRef) return;
-
-  if (id) {
-    const s = storeRef['map'].get(id);
-    logRef.textContent = s ? JSON.stringify(s, null, 2) : '';
-  } else {
-    logRef.textContent = '';
-  }
+  // Log functionality removed - sidebar no longer has log element
 }
 
 export function log(msg: string) {
-  if (!logRef) return;
-  const ts = new Date().toLocaleTimeString();
-  logRef.textContent += `[${ts}] ${msg}\n`;
-  logRef.scrollTop = logRef.scrollHeight;
+  // Log functionality removed - sidebar no longer has log element
+  console.log(msg);
 }
 
 // For debugging
@@ -134,6 +127,134 @@ function showAuthModal(root: HTMLElement) {
   authModal.mount(root);
 }
 
+/**
+ * Convert hex color to RGB format (for DeviceColor enum compatibility)
+ */
+function hexToRgb(hex: string): string {
+  // Remove # if present
+  hex = hex.replace('#', '');
+  // Parse r, g, b
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/**
+ * Get device color prioritizing saved database color, then device color, then default
+ */
+function getDeviceColor(eidonDevice: EidonDevice): DeviceColor {
+  // Priority 1: Use saved color from database if available
+  if (eidonDevice.color) {
+    // Convert hex to RGB if needed (saved colors from database are hex)
+    const colorStr = eidonDevice.color.startsWith('#') 
+      ? hexToRgb(eidonDevice.color)
+      : eidonDevice.color;
+    // Cast to DeviceColor (enum allows any color string in practice)
+    return colorStr as DeviceColor;
+  }
+  
+  // Priority 2: Default color (device's own color would be read from hardware via DEVICE_INFO characteristic,
+  // but that's handled separately in EidonTrackerManager.fetchDeviceInfo)
+  // For now, use default orange
+  return DeviceColor.ORANGE;
+}
+
+/**
+ * Bridge function: Convert EidonDevice (Bluetooth) to Device (DeviceStore)
+ */
+function bridgeEidonDeviceToDeviceStore(eidonDevice: EidonDevice, store: DeviceStore): void {
+  // Check if device already exists
+  if (store['map'].has(eidonDevice.id)) {
+    // Update existing device
+    const existingDevice = store['map'].get(eidonDevice.id)!;
+    existingDevice.name = eidonDevice.name;
+    // Map from constants.DeviceRole to types/device.DeviceRole
+    existingDevice.position = mapDeviceRole(eidonDevice.role);
+    existingDevice.connectionId = eidonDevice.connectionId;
+    
+    // Update color if saved color is available (prioritize saved database color)
+    const deviceColor = getDeviceColor(eidonDevice);
+    if (deviceColor !== existingDevice.color) {
+      existingDevice.color = deviceColor;
+    }
+    
+    existingDevice.lastSeen = performance.now();
+    store.dispatchEvent(new CustomEvent('update', { detail: existingDevice }));
+    return;
+  }
+
+  // Create new Device from EidonDevice
+  const device: Device = {
+    id: eidonDevice.id,
+    name: eidonDevice.name,
+    position: mapDeviceRole(eidonDevice.role),
+    color: getDeviceColor(eidonDevice), // Use saved color from database if available, otherwise default
+    connectionId: eidonDevice.connectionId,
+    quat: quat.create(),
+    up: vec3.create(),
+    fwd: vec3.create(),
+    chainStart: vec3.create(),
+    chainEnd: vec3.create(),
+    lastSeen: performance.now()
+  };
+
+  store['map'].set(device.id, device);
+  store.dispatchEvent(new CustomEvent('update', { detail: device }));
+}
+
+/**
+ * Map DeviceRole from constants.ts to DeviceRole from types/device.ts
+ * Both enums have the same numeric values but different names
+ */
+function mapDeviceRole(role: import('../core/constants').DeviceRole): DeviceRole {
+  // Map by numeric value since they have the same values
+  const roleMap: Record<number, DeviceRole> = {
+    [0]: DeviceRole.ROLE_LEFT_HAND,
+    [1]: DeviceRole.ROLE_RIGHT_HAND,
+    [2]: DeviceRole.ROLE_LEFT_FOREARM,
+    [3]: DeviceRole.ROLE_RIGHT_FOREARM,
+    [4]: DeviceRole.ROLE_LEFT_HUB,
+    [5]: DeviceRole.ROLE_RIGHT_HUB,
+    [6]: DeviceRole.ROLE_CHEST,
+  };
+  return roleMap[role] ?? DeviceRole.ROLE_LEFT_HAND; // Default fallback
+}
+
+/**
+ * Update Device in DeviceStore with quaternion data from Bluetooth
+ */
+function updateDeviceWithQuaternion(deviceId: string, quaternion: number[], store: DeviceStore): void {
+  // Device must exist in store
+  const device = store['map'].get(deviceId);
+  if (!device) {
+    // Device not in store yet - might be connecting
+    return;
+  }
+
+  // Note: DeviceStore.handleRaw() checks playbackMode, but we're bypassing that
+  // We should respect playback mode here too. However, since we're updating directly,
+  // we'll let DeviceStore's internal logic handle it if needed.
+
+  // Parse quaternion: bytes are [w, x, y, z], but gl-matrix quat format is [x, y, z, w]
+  // Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
+  const q: quat = [quaternion[1], quaternion[2], quaternion[3], quaternion[0]]; // [x, y, z, w]
+
+  // Update quaternion
+  device.quat = q;
+
+  // Calculate derived vectors using centralized function
+  const { up, fwd } = quaternionToVectors(q);
+  device.up = up;
+  device.fwd = fwd;
+
+  // Update timestamp
+  device.lastSeen = performance.now();
+
+  // Dispatch update event
+  store.dispatchEvent(new CustomEvent('update', { detail: device }));
+}
+
 function initializeApp(root: HTMLElement) {
   /* ------------------------------------------------------------
    * 1. Inject canvas markup
@@ -156,21 +277,105 @@ function initializeApp(root: HTMLElement) {
   trackerManager = tracker;
   const solver = new ArmSolver(store);
 
+  // Create device connection state manager
+  const connectionStateManager = new DeviceConnectionStateManager();
+  deviceConnectionStateManager = connectionStateManager;
+  
+  // Expose to window for Sidebar access (temporary until we refactor to pass it properly)
+  (window as any).deviceConnectionStateManager = connectionStateManager;
+
   const { destroy } = initScene(canvas, store, solver);
   sceneDestroy = destroy;
 
   playbackManager = new PlaybackManager(store, solver);
-  controls = new Controls(playbackManager, tracker);
+  controls = new Controls(playbackManager, tracker, connectionStateManager);
   controls.mount(root);
 
   storeRef = store;
 
   /* ---------- Tracker → store pipeline ---------- */
-  tracker.addEventListener('quaternionData', e => {
-    const { deviceId, quaternion, timestamp } = (e as CustomEvent<{ deviceId: string; quaternion: number[]; timestamp: number }>).detail;
-    // TODO: Update DeviceStore to handle quaternion data from Bluetooth
-    console.log('Quaternion data received:', { deviceId, quaternion, timestamp });
-  });
+  // Handle device connections - create Device in DeviceStore
+  tracker.addEventListener('deviceConnected', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string; device: any }>;
+    const { deviceId, device: eidonDevice } = event.detail;
+    bridgeEidonDeviceToDeviceStore(eidonDevice, store);
+    
+    // Update connection state manager
+    // For child devices, add individually
+    if (eidonDevice.parentHub) {
+      connectionStateManager.addDeviceWithColor(
+        deviceId,
+        eidonDevice.name,
+        eidonDevice.role,
+        eidonDevice.color,
+        true // isChild
+      );
+    } else {
+      // For primary devices, do bulk update from all connected devices
+      const connectedDevices = tracker.getConnectedDevices();
+      connectionStateManager.updateConnectedDevices(connectedDevices);
+    }
+  }) as EventListener);
+
+  // Handle quaternion data updates
+  tracker.addEventListener('quaternionData', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string; quaternion: number[]; timestamp: number }>;
+    const { deviceId, quaternion } = event.detail;
+    updateDeviceWithQuaternion(deviceId, quaternion, store);
+  }) as EventListener);
+
+  // Handle device disconnections
+  tracker.addEventListener('deviceDisconnected', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string }>;
+    const { deviceId } = event.detail;
+    // Remove from store and dispatch event
+    store['map'].delete(deviceId);
+    document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id: deviceId } }));
+    
+    // Update connection state manager
+    connectionStateManager.removeDevice(deviceId);
+    
+    // Also sync bulk update to ensure consistency
+    const connectedDevices = tracker.getConnectedDevices();
+    connectionStateManager.updateConnectedDevices(connectedDevices);
+  }) as EventListener);
+
+  // Handle device info updates (including color updates from saved devices)
+  tracker.addEventListener('deviceInfoUpdated', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string; device: EidonDevice }>;
+    const { deviceId, device: eidonDevice } = event.detail;
+    // Update device color in DeviceStore if device exists
+    const storeDevice = store['map'].get(deviceId);
+    if (storeDevice && eidonDevice.color) {
+      const deviceColor = getDeviceColor(eidonDevice);
+      if (storeDevice.color !== deviceColor) {
+        storeDevice.color = deviceColor;
+        store.dispatchEvent(new CustomEvent('update', { detail: storeDevice }));
+      }
+    }
+    
+    // Update connection state manager if device is connected
+    if (eidonDevice.isConnected) {
+      const existingDevice = connectionStateManager.getDevice(deviceId);
+      if (existingDevice) {
+        connectionStateManager.addDeviceWithColor(
+          deviceId,
+          eidonDevice.name,
+          eidonDevice.role,
+          eidonDevice.color,
+          !!eidonDevice.parentHub // isChild
+        );
+      }
+    }
+  }) as EventListener);
+
+  // Periodic sync of connection state (handles edge cases)
+  setInterval(() => {
+    if (!store.isPlaybackMode()) {
+      const connectedDevices = tracker.getConnectedDevices();
+      connectionStateManager.updateConnectedDevices(connectedDevices);
+    }
+  }, 2000); // Sync every 2 seconds
 
   /* ------------------------------------------------------------
    * 4. Controls (navigation)
@@ -190,8 +395,8 @@ function initializeApp(root: HTMLElement) {
   /* ---- log update only for selected device ---- */
   store.addEventListener('update', e => {
     const s = (e as CustomEvent<any>).detail;
-    if (s.id === selectedId && logRef) {
-      logRef.textContent = JSON.stringify(s, null, 2);
+    if (s.id === selectedId) {
+      // Device selection logging removed - sidebar no longer has log element
     }
   });
 
@@ -208,18 +413,19 @@ function initializeApp(root: HTMLElement) {
   /* ------------ prefs ------------ */
   mountPrefs(root);
 
-  /* ------------ Device list ------------ */
-  // TODO: Update DeviceList to work with EidonTrackerManager
-  // mountDeviceList(sidebar, tracker, store);
-
   /* ------------ Sidebar ------------ */
   sidebar = new Sidebar();
-  sidebar.mount(root, solver);
-  logRef = sidebar.getLogElement();
+  sidebar.mount(root, solver, store, tracker);
 
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();
   iconOverlay.mount();
+
+  /* ------------ Initialize angle mode from preferences ------------ */
+  // Dispatch initial angle mode state so SkeletalRig loads with correct mode
+  document.dispatchEvent(new CustomEvent('angleModeChanged', {
+    detail: { useActuatorAngles: prefs.useActuatorAngles || false }
+  }));
 }
 
 // Cleanup function for proper resource management

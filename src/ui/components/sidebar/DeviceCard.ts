@@ -1,9 +1,10 @@
-import { ConnectedDevice } from '../../types/device';
-import { HidManager }  from '../../core/HidManager';
-import { DeviceStore } from '../../core/DeviceStore';
-import { eulerXYZ } from '../../core/mathUtils';
-import { setSelected } from '../App';
+import { Device, DeviceColor } from '../../../types/device';
+import { DeviceStore } from '../../../core/DeviceStore';
+import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
+import { eulerXYZ } from '../../../core/mathUtils';
+import { setSelected } from '../../App';
 import { vec3, quat } from 'gl-matrix';
+import { DEVICE_ROLE_NAMES } from '../../../core/constants';
 import styles from './styles/DeviceCard.module.css';
 
 function createDial(label: string) {
@@ -62,10 +63,37 @@ function createPrismIndicatorCanvas() {
   return { wrap, canvas };
 }
 
+// Helper to convert RGB string to hex (for color input compatibility)
+function rgbToHex(rgb: string): string {
+  // Check if already hex format
+  if (rgb.startsWith('#')) {
+    return rgb;
+  }
+  
+  // Parse rgb(r, g, b) format
+  const matches = rgb.match(/\d+/g);
+  if (matches && matches.length >= 3) {
+    const r = parseInt(matches[0]).toString(16).padStart(2, '0');
+    const g = parseInt(matches[1]).toString(16).padStart(2, '0');
+    const b = parseInt(matches[2]).toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
+  }
+  
+  // Fallback
+  return '#ffa500'; // Orange
+}
+
 // Helper to lighten dark colors for visibility
-function getVisibleColor(hex: string): string {
-  // Remove # if present
-  hex = hex.replace('#', '');
+function getVisibleColor(color: string): string {
+  // Handle both hex and RGB formats
+  let hex: string;
+  if (color.startsWith('#')) {
+    hex = color.replace('#', '');
+  } else {
+    // Convert RGB to hex first
+    hex = rgbToHex(color).replace('#', '');
+  }
+  
   // Parse r, g, b
   const r = parseInt(hex.substring(0, 2), 16) / 255;
   const g = parseInt(hex.substring(2, 4), 16) / 255;
@@ -404,7 +432,7 @@ function draw3DPrismIndicator(
   });
 }
 
-export function renderCard(state: ConnectedDevice, hid: HidManager, store: DeviceStore) {
+export function renderCard(state: Device, store: DeviceStore, trackerManager?: EidonTrackerManager) {
 
   const el = document.createElement('div');
   el.className = styles.card;
@@ -414,12 +442,13 @@ export function renderCard(state: ConnectedDevice, hid: HidManager, store: Devic
 
   const colorBox = document.createElement('input');
   colorBox.type  = 'color';
-  colorBox.value = state.color;
+  // Convert RGB to hex for color input (HTML color inputs only accept hex format)
+  colorBox.value = state.color.startsWith('#') ? state.color : rgbToHex(state.color);
   colorBox.className = styles.colorBox;
   topRow.appendChild(colorBox);
 
   const label = document.createElement('span');
-  label.textContent = `${state.kind} ${state.arm?.side ?? ''} ${state.arm?.level ?? ''}`;
+  label.textContent = `${state.name} (${DEVICE_ROLE_NAMES[state.position]})`;
   label.className = styles.label;
   topRow.appendChild(label);
 
@@ -437,16 +466,28 @@ export function renderCard(state: ConnectedDevice, hid: HidManager, store: Devic
 
   /* listeners */
   colorBox.oninput = () => {
-    const rgb = colorBox.value.match(/\w\w/g)!.map(x => parseInt(x, 16)) as [number, number, number];
-    const dev = hid['devices'].get(state.id);
-    if (dev) hid.setColor(dev, rgb);           // write feature report
-  
-    state.color = colorBox.value;              // update local snapshot
+    // TODO: Implement color setting via Bluetooth GATT when available
+    // Convert hex to DeviceColor enum (for now just use the string value)
+    state.color = colorBox.value as any as DeviceColor;
     /* 🔔 notify store so scene & other UI react */
     store.dispatchEvent(new CustomEvent('update', { detail: state }));
   };
 
-  btnX  .onclick = () => { hid.unpair(state.id); store['map'].delete(state.id); el.remove(); };
+  btnX.onclick = async () => {
+    // Disconnect from Bluetooth if trackerManager is available
+    if (trackerManager) {
+      try {
+        await trackerManager.disconnectDevice(state.id);
+      } catch (error) {
+        console.error('Failed to disconnect device:', error);
+        // Continue with removal even if disconnect fails
+      }
+    }
+    // Remove from store and UI
+    store['map'].delete(state.id);
+    document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id: state.id } }));
+    el.remove();
+  };
 
   btnInfo.onclick = ()=> {
     const now = btnInfo.classList.toggle(styles.highlighted);
@@ -469,67 +510,7 @@ export function renderCard(state: ConnectedDevice, hid: HidManager, store: Devic
     }
   });
 
-  // Finger bars
-  if(state.finger){
-    const container = document.createElement('div');
-    container.className = styles.fingerContainer;
-    
-    // Create rows with labels
-    const fingerLabels = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'];
-    const rows = fingerLabels.map((label, rowIndex) => {
-      const row = document.createElement('div');
-      row.className = styles.fingerRow;
-      
-      // Add label
-      const labelEl = document.createElement('span');
-      labelEl.textContent = label;
-      labelEl.className = styles.fingerLabel;
-      row.appendChild(labelEl);
-      
-      // Add bars container
-      const barsContainer = document.createElement('div');
-      barsContainer.className = styles.barsContainer;
-      
-      // Number of bars for this row (4 for thumb, 3 for others)
-      const numBars = rowIndex === 0 ? 4 : 3;
-      const startIdx = rowIndex === 0 ? 0 : (rowIndex - 1) * 3 + 4;
-      
-      for(let i = 0; i < numBars; i++) {
-        const bar = document.createElement('div');
-        bar.className = styles.bar;
-        bar.dataset['idx'] = String(startIdx + i);
-        
-        // Add inner bar for the filled portion
-        const innerBar = document.createElement('div');
-        innerBar.className = styles.innerBar;
-        bar.appendChild(innerBar);
-        
-        barsContainer.appendChild(bar);
-      }
-      
-      row.appendChild(barsContainer);
-      return row;
-    });
-    
-    rows.forEach(row => container.appendChild(row));
-    el.appendChild(container);
-  
-    /* update bars on store update */
-    store.addEventListener('update', ev=>{
-      const s = (ev as CustomEvent<DeviceState>).detail;
-      const norm = s.fingerSmooth ?? s.fingerNorm!;
-
-      if(s.id!==state.id||!s.fingerNorm) return;
-      
-      container.querySelectorAll('[data-idx]').forEach((bar)=>{
-        const idx = parseInt((bar as HTMLElement).dataset['idx']!);
-        const innerBar = bar.firstElementChild as HTMLElement;
-        innerBar.style.width = `${Math.round(norm[idx]*100)}%`;
-        innerBar.style.backgroundColor = state.color;
-        (bar as HTMLElement).style.backgroundColor = '#333'; // Darker background for empty portion
-      });
-    });
-  }
+  // TODO: Finger bars will be re-added when finger data is available in Device type
 
   /* ----- Euler dials ----- */
   const dialWrap = document.createElement('div');
@@ -550,25 +531,24 @@ export function renderCard(state: ConnectedDevice, hid: HidManager, store: Devic
   let lastCanvasUpdate = 0;
   const CANVAS_UPDATE_INTERVAL = 50; // 10fps max
 
-  const updateDials = (s: ConnectedDevice) =>{
+  const updateDials = (s: Device) =>{
     const now = performance.now();
     if (now - lastCanvasUpdate < CANVAS_UPDATE_INTERVAL) {
       return; // Skip update if too frequent
     }
     lastCanvasUpdate = now;
 
-    const [yaw,pit,rol] = eulerXYZ(s.quat);
+    // eulerXYZ returns [yaw, pitch, roll] in radians with all swaps and calibration correction applied
+    const [yaw, pitch, roll] = eulerXYZ(s.quat);
+    const [yawDeg, pitchDeg, rollDeg] = [yaw, pitch, roll].map(rad => rad * 180 / Math.PI);
     draw3DPrismIndicator(
       prism.canvas.getContext('2d')!,
       s.quat,       // pass the **quaternion**
       s.color
     );
-    const [yawDeg,pitDeg,rolDeg] = [yaw,pit,rol].map(rad=>rad*180/Math.PI);
-    // Adjust yaw so that facing north = 0° instead of 180°
-    const adjustedYaw = -yawDeg + (yawDeg < 0 ? -180 : 180);
-    drawDial(dYaw.canvas.getContext('2d')!, adjustedYaw, s.color);
-    drawDial(dPit.canvas.getContext('2d')!, pitDeg, s.color);
-    drawDial(dRol.canvas.getContext('2d')!, rolDeg, s.color);
+    drawDial(dYaw.canvas.getContext('2d')!, yawDeg, s.color);
+    drawDial(dPit.canvas.getContext('2d')!, pitchDeg, s.color);
+    drawDial(dRol.canvas.getContext('2d')!, rollDeg, s.color);
     drawForwardVector(fVec.canvas.getContext('2d')!, Array.from(s.fwd), s.color);
     drawUpVector(uVec.canvas.getContext('2d')!, Array.from(s.up), s.color);
   };
@@ -576,7 +556,7 @@ export function renderCard(state: ConnectedDevice, hid: HidManager, store: Devic
   /* run immediately and on every device update */
   updateDials(state);
   store.addEventListener('update', ev=>{
-    const s = (ev as CustomEvent<ConnectedDevice>).detail;
+    const s = (ev as CustomEvent<Device>).detail;
     if(s.id===state.id) updateDials(s);
   });
 

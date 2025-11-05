@@ -37,7 +37,9 @@ export function eulerYZX(q: quat): [number, number, number] {
   return [flex, twist, roll];
 }
 
-// Update quaternion to Euler conversion to match firmware implementation
+/**
+ * Update quaternion to Euler conversion to match firmware implementation
+ */
 export function eulerXYZ(q: quat): [number, number, number] {
   // const [x, y, z, w] = q;
   const x = q[0];
@@ -95,4 +97,48 @@ export function rollAroundForward(
   const axis = [qRel[0] / s, qRel[1] / s, qRel[2] / s] as vec3;
   const sign = vec3.dot(axis, fwdParent) >= 0 ? 1 : -1;
   return sign * angle * 180 / Math.PI;
+}
+
+
+/**
+ * Convert quaternion to forward and up vectors in scene space.
+ * This is the standard transformation used throughout the codebase.
+ * @param q - Quaternion in format [x, y, z, w]
+ * @returns Object with forward (fwd) and up vectors in scene space
+ */
+export function quaternionToVectors(q: quat): { up: vec3; fwd: vec3 } {
+  // Transform sensor unit vectors through quaternion
+  // Coordinate space conversion: Device [X, Y, Z] → Scene [X, Y, Z]
+  // - Device X [1, 0, 0] → Left/Right (Scene X)
+  // - Device Y [0, 1, 0] → Forward (Scene Z)
+  // - Device Z [0, 0, 1] → Up (Scene Y)
+  
+  const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);   // sensor Z
+  const up = [upZ[0], upZ[2], -upZ[1]] as vec3;                  // [x, z, y] conversion: Device X→Scene X, Device Z→Scene Y (up), Device Y→Scene Z
+  
+  const fwdY = vec3.transformQuat(vec3.create(), [0, 1, 0], q);  // sensor Y (forward)
+  const fwd = [fwdY[0], fwdY[2], -fwdY[1]] as vec3;             // [x, z, -y] conversion: Device Y→Scene Z (forward)
+
+  return { up, fwd };
+
+  //  // === Derived unit vectors ===
+  //  const upZ   = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
+  //  const up   = [upZ[0], upZ[2], -upZ[1]] as vec3;
+  //  const fwdZ = vec3.transformQuat(vec3.create(), [0, 1, 0], q); // sensor Y-fwd
+  //  const fwd  = [fwdZ[0], fwdZ[2], -fwdZ[1]] as vec3;            // swap Y/Z
+ 
+  //  state.up  = up;
+  //  state.fwd = fwd;
+}
+
+/**
+ * Format quaternion as a readable string.
+ * @param q - Quaternion in format [x, y, z, w] or number array
+ * @returns Formatted string like "(0.123, 0.456, 0.789, 0.987)"
+ */
+export function formatQuaternion(q: quat | number[]): string {
+  if (q.length !== 4) {
+    throw new Error('Quaternion must have 4 components');
+  }
+  return `(${q[0].toFixed(3)}, ${q[1].toFixed(3)}, ${q[2].toFixed(3)}, ${q[3].toFixed(3)})`;
 }

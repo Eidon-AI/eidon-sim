@@ -1,5 +1,4 @@
 import { quat, vec3, vec3 as v3 } from 'gl-matrix';
-import { parseTracker } from './reportParsers';
 import { Device, DeviceRole, DeviceColor } from '../types/device';
 
 export class DeviceStore extends EventTarget {
@@ -24,21 +23,15 @@ export class DeviceStore extends EventTarget {
 
   private map = new Map<string, Device>();
 
-  /** Subscribe to HidManager.report */
-  handleRaw(id: string, view: DataView) {
-    // Ignore live input during playback
-    if (this.playbackMode) return;
-    
-    const state = this.map.get(id) ?? this.newState(id, view);
-    this.parseInto(state, view);
-    this.map.set(id, state);
-    this.dispatchEvent(new CustomEvent('update', { detail: state }));
-  }
-
   /** Enable/disable playback mode */
   setPlaybackMode(enabled: boolean) {
     this.playbackMode = enabled;
     console.log('DeviceStore playback mode:', enabled ? 'ON' : 'OFF');
+  }
+
+  /** Check if playback mode is enabled */
+  isPlaybackMode(): boolean {
+    return this.playbackMode;
   }
 
   /** Update device state during playback (bypasses live input blocking) */
@@ -57,7 +50,7 @@ export class DeviceStore extends EventTarget {
   }
 
   /* ---------- internal helpers ------------------------------- */
-  private newState(id: string, view: DataView): Device {
+  private newState(id: string): Device {
     return {
       id,
       name: `Device ${id}`,
@@ -72,13 +65,20 @@ export class DeviceStore extends EventTarget {
     };
   }
 
-  private parseInto(state: Device, view: DataView) {
-    parseTracker(state, view);
-    state.lastSeen = performance.now();
-  }
-
   /** Convenience: fetch device by specific position */
   getByPosition(position: DeviceRole): Device | undefined {
+    // During playback mode, prioritize playback devices over live devices
+    if (this.playbackMode) {
+      // First try to find a playback device
+      const playbackDevice = [...this.map.values()].find(
+        s => s.position === position && s.userId === 'playback'
+      );
+      if (playbackDevice) {
+        return playbackDevice;
+      }
+    }
+    
+    // Fallback to any device with that position (for live mode or if no playback device found)
     return [...this.map.values()].find(
       s => s.position === position
     );

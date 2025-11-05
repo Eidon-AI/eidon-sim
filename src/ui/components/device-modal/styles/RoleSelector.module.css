@@ -1,0 +1,22 @@
+/* Role Selector Styles */
+
+.roleSelector {
+  background-color: rgba(64, 64, 64, 0.5);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  color: white;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.roleSelector:hover {
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+.roleSelector:focus {
+  outline: none;
+  border-color: rgb(96, 165, 250);
+}
+

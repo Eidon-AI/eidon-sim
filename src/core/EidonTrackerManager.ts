@@ -11,6 +11,11 @@ import {
   DEVICE_ROLE_NAMES
 } from './constants';
 
+// Types for child devices (no longer using ChildDeviceConnectionManager)
+export type ChildDeviceId = string;
+export type ChildDeviceType = 'hand' | 'forearm';
+export type ChildDeviceRole = 'left_hand' | 'right_hand' | 'left_forearm' | 'right_forearm';
+
 export type DeviceId = string;
 
 export interface EidonDevice {
@@ -53,26 +58,225 @@ export class EidonTrackerManager extends EventTarget {
 
   /**
    * Start BLE device discovery
+   * 
+   * Scans for Eidon Bluetooth devices using Web Bluetooth API.
+   * 
+   * Filtering logic (matching Flutter app):
+   * - Name contains 'eidon', 'tracker', or '6FDF' (case insensitive)
+   * - Checks already connected devices first
+   * - Uses name-based filtering as primary method (devices may not advertise service UUID in scan)
+   * 
+   * Standard Web Bluetooth flow: Shows browser popup for user to select a device.
    */
   async startDiscovery(): Promise<EidonDevice[]> {
+    // If discovery is already in progress, cancel it first
     if (this.isScanning) {
-      console.log('Discovery already in progress');
-      return [];
+      console.log('[EidonTrackerManager] Discovery already in progress, cancelling and starting new discovery');
+      this.stopDiscovery();
+    }
+
+    const bluetooth = (navigator as any).bluetooth;
+    if (!bluetooth) {
+      throw new Error('Bluetooth not supported in this browser');
     }
 
     this.isScanning = true;
-    this.scanAbortController = new AbortController();
+
+    const discoveredDevices: EidonDevice[] = [];
 
     try {
-      const devices = await this.scanForDevices();
-      this.dispatchEvent(new CustomEvent('devicesDiscovered', { detail: devices }));
-      return devices;
+      // Start device scanning with name-based filters
+      const bluetoothDevice = await this.scanForDevicesWithNameFilter(bluetooth);
+      
+      if (bluetoothDevice) {
+        const device = await this.processScannedDevice(bluetoothDevice);
+        if (device) {
+          discoveredDevices.push(device);
+          
+          // Automatically connect immediately after discovery/pairing
+          // This will show the connection popup back-to-back with the pairing popup
+          // Both happen within the same user gesture (Scan button click)
+          // Pass the bluetoothDevice directly to avoid needing to call requestDevice() again
+          try {
+            const connected = await this.connectToDeviceWithBluetoothDevice(device.id, bluetoothDevice);
+            if (connected) {
+              device.isConnected = true;
+            } else {
+              console.warn(`[EidonTrackerManager] Auto-connection failed for ${device.name}`);
+            }
+          } catch (connectError) {
+            console.error(`[EidonTrackerManager] Auto-connection error for ${device.name}:`, connectError);
+            // Don't fail discovery if connection fails - device is still discovered
+          }
+        }
+      }
+      this.dispatchEvent(new CustomEvent('devicesDiscovered', { detail: discoveredDevices }));
+      return discoveredDevices;
     } catch (error) {
-      console.error('Device discovery failed:', error);
-      this.dispatchEvent(new CustomEvent('discoveryError', { detail: error }));
-      return [];
-    } finally {
       this.isScanning = false;
+      console.error('[EidonTrackerManager] Device discovery failed:', error);
+      
+      if (error instanceof Error) {
+        if (error.name === 'NotFoundError') {
+          console.log('[EidonTrackerManager] User cancelled device selection');
+          return []; // Not an error - user just cancelled
+        }
+        if (error.name === 'SecurityError') {
+          console.error('[EidonTrackerManager] Security error - ensure page is served over HTTPS');
+        }
+      }
+      
+      this.dispatchEvent(new CustomEvent('discoveryError', { detail: error }));
+      throw error; // Re-throw so caller can handle it
+    }
+  }
+
+
+
+  /**
+   * Check if device is likely an Eidon device based on name patterns (matching Flutter logic)
+   */
+  private isLikelyEidonDevice(deviceName: string, rawName: string): boolean {
+    const nameLower = deviceName.toLowerCase();
+    const rawNameLower = rawName.toLowerCase();
+    
+    return nameLower.includes('eidon') ||
+           nameLower.includes('tracker') ||
+           nameLower.includes('6fdf') ||
+           rawNameLower.includes('eidon') ||
+           rawNameLower.includes('tracker') ||
+           rawNameLower.includes('6fdf');
+  }
+
+  /**
+   * Get device name (matching Flutter _getDeviceName logic)
+   */
+  private getDeviceName(bluetoothDevice: any): string {
+    return (bluetoothDevice.name || '').trim();
+  }
+
+  /**
+   * Scan for devices using strict Eidon filtering
+   * Uses name-based OR UUID filters simultaneously
+   * Filters: Service UUID OR name prefix "Eidon"/"eidon"/"EIDON"
+   * Name check: If "Eidon" not in name, device is rejected
+   */
+  private async scanForDevicesWithNameFilter(bluetooth: any): Promise<any | null> {
+    try {
+      // Use both filters simultaneously (OR logic - matches either name OR service UUID)
+      const device = await bluetooth.requestDevice({
+        filters: [
+          // Service UUID filter
+          { services: [EIDON_SERVICE_UUID] },
+          // Name prefix filters (OR logic - any of these)
+          { namePrefix: 'Eidon' },
+          { namePrefix: 'eidon' },
+          { namePrefix: 'EIDON' }
+        ],
+        optionalServices: [
+          EIDON_SERVICE_UUID,
+          ROLE_CONFIG_SERVICE_UUID
+        ]
+      });
+      
+      // Check name first - if "Eidon" not in name, skip/reject
+      const deviceName = (device.name || '').trim();
+      const deviceNameLower = deviceName.toLowerCase();
+      
+      if (!deviceNameLower.includes('eidon')) {
+        console.warn(`[EidonTrackerManager] Device "${deviceName}" does not contain "Eidon" in name - rejecting`);
+        // Return null to reject the device
+        return null;
+      }
+      
+      return device;
+      
+    } catch (error: any) {
+      if (error.name === 'NotFoundError') {
+        // User cancelled or no devices found
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Add a device to trackerManager from a paired BluetoothDevice (from getDevices())
+   * This allows pre-registering saved devices that are already paired
+   * @param bluetoothDevice - The paired Bluetooth device
+   * @returns The EidonDevice if successfully added, null otherwise
+   */
+  public async addDeviceFromPairedBluetoothDevice(bluetoothDevice: any): Promise<EidonDevice | null> {
+    // Use processScannedDevice with skipNameCheck=true since this is a paired/trusted device
+    return this.processScannedDevice(bluetoothDevice, true);
+  }
+
+  /**
+   * Process a scanned Bluetooth device and create EidonDevice entry
+   * @param bluetoothDevice - The Bluetooth device to process
+   * @param skipNameCheck - If true, skip the Eidon name check (for paired devices that may have been verified already)
+   */
+  private async processScannedDevice(bluetoothDevice: any, skipNameCheck: boolean = false): Promise<EidonDevice | null> {
+    // First verify it's an Eidon device by name (unless skipNameCheck is true)
+    if (!skipNameCheck) {
+      const deviceName = this.getDeviceName(bluetoothDevice);
+      const rawName = (bluetoothDevice.name || '').trim();
+      
+      if (!this.isLikelyEidonDevice(deviceName, rawName)) {
+        console.warn(`[EidonTrackerManager] Rejecting non-Eidon device: "${deviceName}"`);
+        return null;
+      }
+    }
+
+    // Check if device is already known
+    const existingDevice = this.findDeviceByBluetoothDevice(bluetoothDevice);
+    if (existingDevice) {
+      console.log(`[EidonTrackerManager] Device already known: ${existingDevice.name}`);
+      return existingDevice;
+    }
+
+    // Create new device entry
+    const device = await this.createDeviceFromBluetoothDevice(bluetoothDevice);
+    if (device) {
+      this.devices.set(device.id, device);
+      
+      // Verify device has our services (matching Flutter verifyConnectedDevice)
+      // Don't fail if verification fails - paired devices might not be connected yet
+      await this.verifyDeviceServices(device, bluetoothDevice).catch(err => {
+        console.warn(`[EidonTrackerManager] Service verification failed for ${device.name} (this is OK for paired but disconnected devices):`, err);
+      });
+      
+      return device;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Verify device has required services (matching Flutter verifyConnectedDevice)
+   */
+  private async verifyDeviceServices(device: EidonDevice, bluetoothDevice: any): Promise<void> {
+    try {
+      if (!bluetoothDevice.gatt) {
+        // For paired devices from getDevices(), gatt might not be available immediately
+        // This is fine - we'll verify on actual connection
+        return;
+      }
+
+      const gattServer = await bluetoothDevice.gatt.connect();
+      const services = await gattServer.getPrimaryServices();
+      const serviceUuids = services.map((s: any) => s.uuid);
+      
+      const hasEidonService = serviceUuids.includes(EIDON_SERVICE_UUID.toLowerCase());
+      if (!hasEidonService) {
+        console.warn(`[EidonTrackerManager] Device ${device.name} does not have required Eidon service!`);
+      }
+      
+      gattServer.disconnect();
+    } catch (error) {
+      // Don't fail device creation if service verification fails - just log a warning
+      // This is especially important for paired devices that might not be connected yet
+      console.warn(`[EidonTrackerManager] Could not verify services for ${device.name}:`, error);
     }
   }
 
@@ -85,12 +289,202 @@ export class EidonTrackerManager extends EventTarget {
       this.scanAbortController = undefined;
     }
     this.isScanning = false;
+    
+    // Dispatch event to notify that discovery was cancelled
+    this.dispatchEvent(new CustomEvent('discoveryCancelled'));
   }
 
   /**
    * Connect to a specific device
    */
   async connectToDevice(deviceId: DeviceId): Promise<boolean> {
+    return this.connectToDeviceWithBluetoothDevice(deviceId, undefined);
+  }
+
+  /**
+   * Find device in trackerManager by connectionId (Bluetooth device identifier)
+   * @param connectionId - The Bluetooth device connectionId
+   * @returns The EidonDevice if found, undefined otherwise
+   */
+  getDeviceByConnectionId(connectionId: string): EidonDevice | undefined {
+    const allDevices = this.getAllDevices();
+    return allDevices.find(d => 
+      d.connectionId === connectionId || 
+      d.macAddress === connectionId
+    );
+  }
+
+  /**
+   * Register a device by discovering it via name, then registering it in trackerManager
+   * Also stores the BluetoothDevice in connectionState for immediate connection
+   * @param deviceName - The name of the device to discover
+   * @param expectedConnectionId - The expected connectionId to verify we got the right device
+   * @returns The registered EidonDevice if successful, null otherwise
+   */
+  async registerDeviceByName(deviceName: string, expectedConnectionId?: string): Promise<EidonDevice | null> {
+    const bluetooth = (navigator as any).bluetooth;
+    if (!bluetooth) {
+      throw new Error('Bluetooth not supported in this browser');
+    }
+
+    try {
+      // Discover device by name
+      const bluetoothDevice = await bluetooth.requestDevice({
+        filters: [
+          { services: [EIDON_SERVICE_UUID] },
+          { name: deviceName.trim() }
+        ],
+        optionalServices: [
+          EIDON_SERVICE_UUID,
+          ROLE_CONFIG_SERVICE_UUID
+        ]
+      });
+
+      // Verify it's the right device
+      const deviceNameLower = (bluetoothDevice.name || '').trim().toLowerCase();
+      const expectedNameLower = deviceName.trim().toLowerCase();
+      
+      if (deviceNameLower !== expectedNameLower && !deviceNameLower.includes('eidon')) {
+        console.warn(`[EidonTrackerManager] Device name mismatch: expected "${deviceName}", got "${bluetoothDevice.name}"`);
+        return null;
+      }
+
+      // Verify connectionId if provided
+      if (expectedConnectionId && bluetoothDevice.id !== expectedConnectionId) {
+        console.warn(`[EidonTrackerManager] ConnectionId mismatch: expected ${expectedConnectionId}, got ${bluetoothDevice.id}`);
+        // Still proceed - the user selected it, so it might be correct
+      }
+
+      // Register the device in trackerManager
+      const device = await this.processScannedDevice(bluetoothDevice, true);
+      
+      if (!device) {
+        console.error(`[EidonTrackerManager] Failed to register device: ${bluetoothDevice.name}`);
+        return null;
+      }
+
+      // Store the BluetoothDevice in connectionState so it can be reused for connection
+      // without requiring another user gesture
+      let connectionState = this.connectionStates.get(device.id);
+      if (!connectionState) {
+        connectionState = {
+          device,
+          isConnecting: false,
+          connectionAttempts: 0,
+          services: new Map(),
+          characteristics: new Map()
+        };
+        this.connectionStates.set(device.id, connectionState);
+      }
+      connectionState.bluetoothDevice = bluetoothDevice;
+
+      return device;
+    } catch (error: any) {
+      if (error.name === 'NotFoundError') {
+        console.log(`[EidonTrackerManager] User cancelled device selection for "${deviceName}"`);
+        return null;
+      }
+      console.error(`[EidonTrackerManager] Failed to register device by name "${deviceName}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Connect to a device by connectionId (Bluetooth device identifier)
+   * First checks if device exists in trackerManager, if not returns null
+   * @param connectionId - The Bluetooth device connectionId
+   * @returns The connected EidonDevice if successful, null otherwise
+   */
+  async connectToDeviceByConnectionId(connectionId: string): Promise<EidonDevice | null> {
+    const existingDevice = this.getDeviceByConnectionId(connectionId);
+    
+    if (!existingDevice) {
+      // Device not found - needs to be registered first
+      console.log(`[EidonTrackerManager] Device not found by connectionId: ${connectionId}`);
+      return null;
+    }
+
+    // Device exists, connect to it
+    console.log(`[EidonTrackerManager] Found existing device by connectionId: ${existingDevice.name} (${existingDevice.id})`);
+    const connected = await this.connectToDevice(existingDevice.id);
+    if (connected) {
+      return existingDevice;
+    }
+    return null;
+  }
+
+  /**
+   * Connect to a device by name using targeted requestDevice() call
+   * This discovers, registers, and connects in one operation
+   * Used as fallback when connectionId-based connection fails
+   * @param deviceName - The name of the device to connect to
+   * @param expectedConnectionId - Optional expected connectionId for verification
+   * @returns The connected EidonDevice if successful, null otherwise
+   */
+  async connectToDeviceByName(deviceName: string, expectedConnectionId?: string): Promise<EidonDevice | null> {
+    const bluetooth = (navigator as any).bluetooth;
+    if (!bluetooth) {
+      throw new Error('Bluetooth not supported in this browser');
+    }
+
+    try {
+      // Use targeted requestDevice with name filter
+      const normalizedName = deviceName.trim();
+      const bluetoothDevice = await bluetooth.requestDevice({
+        filters: [
+          { services: [EIDON_SERVICE_UUID] },
+          { name: normalizedName }
+        ],
+        optionalServices: [
+          EIDON_SERVICE_UUID,
+          ROLE_CONFIG_SERVICE_UUID
+        ]
+      });
+
+      // Verify it's the right device by name
+      const pairedName = (bluetoothDevice.name || '').trim().toLowerCase();
+      const targetName = deviceName.trim().toLowerCase();
+      
+      if (pairedName !== targetName && !pairedName.includes('eidon')) {
+        console.warn(`[EidonTrackerManager] Device name mismatch: expected "${deviceName}", got "${bluetoothDevice.name}"`);
+        return null;
+      }
+
+      // Verify connectionId if provided
+      if (expectedConnectionId && bluetoothDevice.id !== expectedConnectionId) {
+        console.warn(`[EidonTrackerManager] ConnectionId mismatch: expected ${expectedConnectionId}, got ${bluetoothDevice.id}`);
+      }
+
+      // Process the device and add it to trackerManager if not already present
+      let device = await this.processScannedDevice(bluetoothDevice, true);
+      
+      if (!device) {
+        console.error(`[EidonTrackerManager] Failed to process device: ${bluetoothDevice.name}`);
+        return null;
+      }
+
+      // Connect to the device
+      const connected = await this.connectToDeviceWithBluetoothDevice(device.id, bluetoothDevice);
+      
+      if (connected) {
+        return device;
+      }
+      
+      return null;
+    } catch (error: any) {
+      if (error.name === 'NotFoundError') {
+        console.log(`[EidonTrackerManager] User cancelled device selection for "${deviceName}"`);
+        return null;
+      }
+      console.error(`[EidonTrackerManager] Failed to connect to device by name "${deviceName}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Connect to a device, optionally using a provided BluetoothDevice (from discovery)
+   */
+  private async connectToDeviceWithBluetoothDevice(deviceId: DeviceId, bluetoothDevice?: any): Promise<boolean> {
     const device = this.devices.get(deviceId);
     if (!device) {
       console.error('Device not found:', deviceId);
@@ -98,21 +492,36 @@ export class EidonTrackerManager extends EventTarget {
     }
 
     const connectionState = this.connectionStates.get(deviceId);
-    if (connectionState?.isConnecting) {
-      console.log('Connection already in progress for:', deviceId);
-      return false;
-    }
-
-    if (connectionState?.isConnected) {
+    
+    // If already connected, don't reconnect
+    if (device.isConnected) {
       console.log('Device already connected:', deviceId);
       return true;
     }
 
+    // If connection is already in progress, wait a bit and check again
+    // This handles the case where auto-connection is still in progress
+    if (connectionState?.isConnecting) {
+      // Wait a short time and check if it completed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (device.isConnected) {
+        return true;
+      }
+      // If still connecting after wait, allow retry (clear the flag)
+      console.log('Clearing stale isConnecting flag for:', deviceId);
+      connectionState.isConnecting = false;
+    }
+
     try {
-      await this.performConnection(deviceId);
+      await this.performConnection(deviceId, bluetoothDevice);
       return true;
     } catch (error) {
       console.error('Connection failed for device:', deviceId, error);
+      // Ensure flag is cleared on error
+      const state = this.connectionStates.get(deviceId);
+      if (state) {
+        state.isConnecting = false;
+      }
       return false;
     }
   }
@@ -144,14 +553,19 @@ export class EidonTrackerManager extends EventTarget {
     }
 
     try {
-      // Disconnect child devices if this is a hub
+      // Remove child devices if this is a hub
       const device = this.devices.get(deviceId);
       if (device?.isHub) {
+        // Remove child devices from devices map
         const childDevices = Array.from(this.devices.values()).filter(
           d => d.parentHub === deviceId
         );
         for (const child of childDevices) {
-          await this.disconnectDevice(child.id);
+          // Dispatch disconnection event for each child
+          this.dispatchEvent(new CustomEvent('deviceDisconnected', { detail: { deviceId: child.id } }));
+          // Remove from devices map
+          this.devices.delete(child.id);
+          this.connectionStates.delete(child.id);
         }
       }
 
@@ -189,18 +603,25 @@ export class EidonTrackerManager extends EventTarget {
   }
 
   /**
-   * Send calibration command to a device
+   * Send calibration command to a device by connectionId
    */
-  async calibrateDevice(deviceId: DeviceId): Promise<void> {
-    const connectionState = this.connectionStates.get(deviceId);
-    if (!connectionState?.isConnected) {
-      console.error('Device not connected for calibration:', deviceId);
+  async calibrateDevice(connectionId: string): Promise<void> {
+    // Find device by connectionId
+    const device = this.getDeviceByConnectionId(connectionId);
+    if (!device) {
+      console.error('Device not found for calibration by connectionId:', connectionId);
+      return;
+    }
+
+    const connectionState = this.connectionStates.get(device.id);
+    if (!connectionState?.device?.isConnected) {
+      console.error('Device not connected for calibration:', connectionId);
       return;
     }
 
     const calibrationChar = connectionState.characteristics.get(CALIBRATION_CHAR_UUID);
     if (!calibrationChar) {
-      console.error('Calibration characteristic not found for device:', deviceId);
+      console.error('Calibration characteristic not found for device:', connectionId);
       return;
     }
 
@@ -208,11 +629,12 @@ export class EidonTrackerManager extends EventTarget {
       // Send calibration command (0x01)
       const calibrationData = new Uint8Array([0x01]);
       await calibrationChar.writeValue(calibrationData);
-      console.log('Calibration command sent to device:', deviceId);
+      console.log('Calibration command sent to device:', connectionId);
     } catch (error) {
-      console.error('Calibration failed for device:', deviceId, error);
+      console.error('Calibration failed for device:', connectionId, error);
     }
   }
+
 
   /**
    * Get all devices
@@ -237,55 +659,12 @@ export class EidonTrackerManager extends EventTarget {
 
   /* ---------------- Private Methods ---------------- */
 
-  private async scanForDevices(): Promise<EidonDevice[]> {
-    if (!navigator.bluetooth) {
-      throw new Error('Bluetooth not supported');
-    }
-
-    const discoveredDevices: EidonDevice[] = [];
-
-    try {
-      const bluetoothDevice = await navigator.bluetooth.requestDevice({
-        filters: [
-          { services: [EIDON_SERVICE_UUID] }
-        ],
-        optionalServices: [
-          EIDON_SERVICE_UUID,
-          ROLE_CONFIG_SERVICE_UUID
-        ]
-      });
-
-      // Check if device is already known
-      const existingDevice = this.findDeviceByBluetoothDevice(bluetoothDevice);
-      if (existingDevice) {
-        return [existingDevice];
-      }
-
-      // Create new device entry
-      const device = await this.createDeviceFromBluetoothDevice(bluetoothDevice);
-      if (device) {
-        this.devices.set(device.id, device);
-        discoveredDevices.push(device);
-      }
-
-    } catch (error) {
-      if (error.name !== 'NotFoundError') {
-        throw error;
-      }
-    }
-
-    return discoveredDevices;
-  }
 
   private async createDeviceFromBluetoothDevice(bluetoothDevice: BluetoothDevice): Promise<EidonDevice | null> {
     try {
       // Extract device information from manufacturer data
       const manufacturerData = this.extractManufacturerData(bluetoothDevice);
-      if (!manufacturerData) {
-        return null;
-      }
-
-      const role = manufacturerData.role;
+      const role = manufacturerData?.role ?? DeviceRole.UNKNOWN;
       const macAddress = this.extractMacAddress(bluetoothDevice);
 
       const device: EidonDevice = {
@@ -301,7 +680,7 @@ export class EidonTrackerManager extends EventTarget {
 
       return device;
     } catch (error) {
-      console.error('Failed to create device from Bluetooth device:', error);
+      console.error('[EidonTrackerManager] Failed to create device from Bluetooth device:', error);
       return null;
     }
   }
@@ -324,39 +703,152 @@ export class EidonTrackerManager extends EventTarget {
     ) || null;
   }
 
-  private async performConnection(deviceId: DeviceId): Promise<void> {
+  /**
+   * Connect to GATT server with retry logic to handle transient disconnections
+   */
+  private async connectGattWithRetry(bluetoothDevice: any, maxRetries: number = 3): Promise<BluetoothRemoteGATTServer> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // If GATT is already connected, verify it's still connected
+        if (bluetoothDevice.gatt?.connected) {
+          // Small delay to ensure connection is stable
+          await new Promise(resolve => setTimeout(resolve, 100));
+          if (bluetoothDevice.gatt.connected) {
+            return bluetoothDevice.gatt;
+          }
+        }
+
+        // Connect to GATT server
+        const gattServer = await bluetoothDevice.gatt!.connect();
+        
+        // Verify connection is actually established
+        if (!gattServer.connected) {
+          throw new Error('GATT server connect() returned but server is not connected');
+        }
+
+        // Small delay to ensure connection is stable before returning
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Verify again after delay
+        if (!gattServer.connected) {
+          throw new Error('GATT server disconnected immediately after connection');
+        }
+
+        return gattServer;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        if (attempt < maxRetries) {
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, attempt * 200));
+        }
+      }
+    }
+    
+    // Only warn if all retries failed
+    if (lastError) {
+      console.warn(`[EidonTrackerManager] Failed to connect to GATT server after ${maxRetries} attempts:`, lastError.message);
+    }
+    throw lastError || new Error('Failed to connect to GATT server after retries');
+  }
+
+  /**
+   * Ensure GATT server is connected, reconnect if necessary
+   */
+  private async ensureGattConnected(gattServer: BluetoothRemoteGATTServer, bluetoothDevice: any): Promise<BluetoothRemoteGATTServer> {
+    if (gattServer.connected) {
+      return gattServer;
+    }
+
+    console.log('[EidonTrackerManager] GATT server disconnected, reconnecting...');
+    return await this.connectGattWithRetry(bluetoothDevice);
+  }
+
+  private async performConnection(deviceId: DeviceId, providedBluetoothDevice?: any): Promise<void> {
     const device = this.devices.get(deviceId);
     if (!device) {
       throw new Error('Device not found');
     }
 
-    const connectionState: DeviceConnectionState = {
-      device,
-      isConnecting: true,
-      connectionAttempts: 0,
-      services: new Map(),
-      characteristics: new Map()
-    };
-
-    this.connectionStates.set(deviceId, connectionState);
+    // Get or create connection state
+    let connectionState = this.connectionStates.get(deviceId);
+    if (!connectionState) {
+      connectionState = {
+        device,
+        isConnecting: true,
+        connectionAttempts: 0,
+        services: new Map(),
+        characteristics: new Map()
+      };
+      this.connectionStates.set(deviceId, connectionState);
+    } else {
+      connectionState.isConnecting = true;
+    }
 
     try {
-      // Request Bluetooth device
-      const bluetoothDevice = await navigator.bluetooth.requestDevice({
-        filters: [
-          { services: [EIDON_SERVICE_UUID] }
-        ],
-        optionalServices: [
-          EIDON_SERVICE_UUID,
-          ROLE_CONFIG_SERVICE_UUID
-        ]
-      });
+      const bluetooth = (navigator as any).bluetooth;
+      let bluetoothDevice: any = null;
+
+      // Priority 1: Use provided BluetoothDevice (from discovery, still in user gesture context)
+      if (providedBluetoothDevice) {
+        bluetoothDevice = providedBluetoothDevice;
+      }
+      // Priority 2: Check existing connection state
+      else if (connectionState.bluetoothDevice) {
+        bluetoothDevice = connectionState.bluetoothDevice;
+      }
+      // Priority 3: Try to get from paired devices (no popup)
+      else if (bluetooth && typeof bluetooth.getDevices === 'function') {
+        try {
+          const pairedDevices = await bluetooth.getDevices();
+          bluetoothDevice = pairedDevices.find((d: any) => {
+            if (d.id === device.connectionId || d.id === device.macAddress) {
+              return true;
+            }
+            const dName = (d.name || '').trim().toLowerCase();
+            const deviceName = (device.name || '').trim().toLowerCase();
+            return dName === deviceName && dName.includes('eidon');
+          });
+          
+          if (bluetoothDevice) {
+            console.log(`[EidonTrackerManager] Found device ${device.name} in paired devices, reusing without popup`);
+            if (bluetoothDevice.id !== device.connectionId) {
+              device.connectionId = bluetoothDevice.id;
+              this.devices.set(deviceId, device);
+            }
+          }
+        } catch (getDevicesError) {
+          console.warn('[EidonTrackerManager] getDevices() failed:', getDevicesError);
+        }
+      }
+
+      // Priority 4: Request device again (will show popup #2 for connection)
+      // This works if we're still in user gesture context (from discovery)
+      if (!bluetoothDevice) {
+        console.log(`[EidonTrackerManager] Requesting device ${device.name} via popup for connection`);
+        bluetoothDevice = await bluetooth.requestDevice({
+          filters: [
+            { services: [EIDON_SERVICE_UUID] }
+          ],
+          optionalServices: [
+            EIDON_SERVICE_UUID,
+            ROLE_CONFIG_SERVICE_UUID
+          ]
+        });
+      }
 
       connectionState.bluetoothDevice = bluetoothDevice;
 
-      // Connect to GATT server
-      const gattServer = await bluetoothDevice.gatt!.connect();
+      // Connect to GATT server with retry logic
+      let gattServer = await this.connectGattWithRetry(bluetoothDevice);
       connectionState.gattServer = gattServer;
+
+      // Verify connection is stable before proceeding
+      if (!gattServer.connected) {
+        throw new Error('GATT server connection not established');
+      }
 
       // Discover services
       const services = await gattServer.getPrimaryServices();
@@ -367,11 +859,31 @@ export class EidonTrackerManager extends EventTarget {
       // Discover characteristics for main service
       const mainService = connectionState.services.get(EIDON_SERVICE_UUID);
       if (mainService) {
+        // Ensure connection is still stable before getting characteristics
+        gattServer = await this.ensureGattConnected(gattServer, bluetoothDevice);
+        connectionState.gattServer = gattServer;
+        
         const characteristics = await mainService.getCharacteristics();
         for (const char of characteristics) {
           connectionState.characteristics.set(char.uuid, char);
         }
       }
+
+      // Discover characteristics for role config service (if available)
+      const roleConfigService = connectionState.services.get(ROLE_CONFIG_SERVICE_UUID);
+      if (roleConfigService) {
+        // Ensure connection is still stable before getting characteristics
+        gattServer = await this.ensureGattConnected(gattServer, bluetoothDevice);
+        connectionState.gattServer = gattServer;
+        
+        const characteristics = await roleConfigService.getCharacteristics();
+        for (const char of characteristics) {
+          connectionState.characteristics.set(char.uuid, char);
+        }
+      }
+
+      // Fetch device info and role from the device
+      await this.fetchDeviceInfo(deviceId);
 
       // Subscribe to quaternion notifications
       await this.subscribeToQuaternionData(deviceId);
@@ -382,6 +894,15 @@ export class EidonTrackerManager extends EventTarget {
       this.devices.set(deviceId, device);
 
       connectionState.isConnecting = false;
+
+      // If this is a hub, create and subscribe to child devices
+      // Only setup if not already set up (check if child devices already exist)
+      if (device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB)) {
+        const existingChildren = Array.from(this.devices.values()).filter(d => d.parentHub === deviceId);
+        if (existingChildren.length === 0) {
+          await this.setupChildDevicesForHub(deviceId);
+        }
+      }
 
       this.dispatchEvent(new CustomEvent('deviceConnected', { detail: { deviceId, device } }));
 
@@ -414,6 +935,74 @@ export class EidonTrackerManager extends EventTarget {
     }
   }
 
+  /**
+   * Fetch device information (role, etc.) from the device
+   */
+  private async fetchDeviceInfo(deviceId: DeviceId): Promise<void> {
+    const connectionState = this.connectionStates.get(deviceId);
+    if (!connectionState) {
+      return;
+    }
+
+    const device = this.devices.get(deviceId);
+    if (!device) {
+      return;
+    }
+
+    try {
+      // Try to read role from ROLE_CONFIG characteristic
+      const roleChar = connectionState.characteristics.get(ROLE_CONFIG_CHAR_UUID);
+      if (roleChar) {
+        const roleData = await roleChar.readValue();
+        const roleValue = roleData.getUint8(0); // Role is typically a single byte
+        
+        // Map the role value to DeviceRole enum
+        if (roleValue >= 0 && roleValue <= 6) {
+          device.role = roleValue as DeviceRole;
+          
+          // Update isHub flag based on role
+          device.isHub = device.role === DeviceRole.LEFT_HUB || 
+                        device.role === DeviceRole.RIGHT_HUB || 
+                        device.role === DeviceRole.CHEST;
+          
+          this.devices.set(deviceId, device);
+          
+          // Dispatch event so UI can update with the new role
+          this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
+        }
+      }
+
+      // Try to read device info from DEVICE_INFO characteristic
+      const deviceInfoChar = connectionState.characteristics.get(DEVICE_INFO_CHAR_UUID);
+      if (deviceInfoChar) {
+        const infoData = await deviceInfoChar.readValue();
+        
+        // Parse device info - assuming it contains color info
+        // Structure depends on firmware - may need adjustment
+        // For now, check if there's color data (typically RGB bytes at some offset)
+        if (infoData.byteLength >= 3) {
+          // Example: first 3 bytes might be RGB color
+          // Adjust offset based on actual firmware structure
+          const r = infoData.getUint8(0);
+          const g = infoData.getUint8(1);
+          const b = infoData.getUint8(2);
+          
+          // Only update if color values are non-zero (assuming 0,0,0 is invalid/unset)
+          if (r > 0 || g > 0 || b > 0) {
+            device.color = `rgb(${r}, ${g}, ${b})`;
+            this.devices.set(deviceId, device);
+            
+            // Dispatch event for UI update
+            this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`[EidonTrackerManager] Failed to fetch device info for ${device.name}:`, error);
+      // Don't fail connection if info fetch fails
+    }
+  }
+
   private handleQuaternionData(deviceId: DeviceId, event: Event): void {
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
     const data = characteristic.value;
@@ -422,7 +1011,9 @@ export class EidonTrackerManager extends EventTarget {
       return;
     }
 
-    // Parse quaternion data (assuming 16 bytes: 4 floats for quaternion)
+    // Parse quaternion data (16 bytes: 4 floats)
+    // Byte order: Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
+    // Float32Array will read as [w, x, y, z] - will be reordered to [x, y, z, w] in App.ts
     const quaternion = new Float32Array(data.buffer, data.byteOffset, 4);
     
     this.dispatchEvent(new CustomEvent('quaternionData', {
@@ -432,6 +1023,184 @@ export class EidonTrackerManager extends EventTarget {
         timestamp: performance.now()
       }
     }));
+  }
+
+
+  /**
+   * Generate child device ID based on hub ID and device type
+   */
+  private generateChildDeviceId(hubId: DeviceId, type: ChildDeviceType): ChildDeviceId {
+    return `${hubId}_${type}`;
+  }
+
+  /**
+   * Determine child device role based on hub role and characteristic UUID
+   */
+  private getChildDeviceRole(hubRole: DeviceRole, characteristicUuid: string): ChildDeviceRole | null {
+    const isHand = characteristicUuid.toLowerCase() === HAND_QUATERNION_CHAR_UUID.toLowerCase();
+    const isForearm = characteristicUuid.toLowerCase() === FOREARM_QUATERNION_CHAR_UUID.toLowerCase();
+    
+    if (!isHand && !isForearm) {
+      return null;
+    }
+
+    if (hubRole === DeviceRole.LEFT_HUB) {
+      return isHand ? 'left_hand' : 'left_forearm';
+    } else if (hubRole === DeviceRole.RIGHT_HUB) {
+      return isHand ? 'right_hand' : 'right_forearm';
+    }
+
+    return null;
+  }
+
+  /**
+   * Map child device role to DeviceRole enum
+   */
+  private mapChildRoleToDeviceRole(childRole: ChildDeviceRole): DeviceRole {
+    switch (childRole) {
+      case 'left_hand':
+        return DeviceRole.LEFT_HAND;
+      case 'right_hand':
+        return DeviceRole.RIGHT_HAND;
+      case 'left_forearm':
+        return DeviceRole.LEFT_FOREARM;
+      case 'right_forearm':
+        return DeviceRole.RIGHT_FOREARM;
+      default:
+        return DeviceRole.UNKNOWN;
+    }
+  }
+
+  /**
+   * Create virtual child devices for a hub and subscribe to their characteristics
+   */
+  private async setupChildDevicesForHub(hubId: DeviceId): Promise<void> {
+    const hubDevice = this.devices.get(hubId);
+    const connectionState = this.connectionStates.get(hubId);
+    
+    if (!hubDevice || !connectionState || !hubDevice.isHub) {
+      return;
+    }
+
+    // Only handle LEFT_HUB and RIGHT_HUB (not CHEST)
+    if (hubDevice.role !== DeviceRole.LEFT_HUB && hubDevice.role !== DeviceRole.RIGHT_HUB) {
+      return;
+    }
+
+    const mainService = connectionState.services.get(EIDON_SERVICE_UUID);
+    if (!mainService) {
+      console.warn(`[EidonTrackerManager] Cannot setup child devices: main service not found for hub ${hubId}`);
+      return;
+    }
+
+    // Check if hub has child characteristics
+    const handChar = connectionState.characteristics.get(HAND_QUATERNION_CHAR_UUID);
+    const forearmChar = connectionState.characteristics.get(FOREARM_QUATERNION_CHAR_UUID);
+
+    if (!handChar && !forearmChar) {
+      console.log(`[EidonTrackerManager] Hub ${hubId} does not have child device characteristics - skipping child device setup`);
+      return;
+    }
+
+    // Create child devices
+    const childDevices: Array<{ id: ChildDeviceId; type: ChildDeviceType; role: ChildDeviceRole; char: BluetoothRemoteGATTCharacteristic }> = [];
+
+    if (handChar) {
+      const handId = this.generateChildDeviceId(hubId, 'hand');
+      const handRole = this.getChildDeviceRole(hubDevice.role, HAND_QUATERNION_CHAR_UUID);
+      if (handRole) {
+        childDevices.push({ id: handId, type: 'hand', role: handRole, char: handChar });
+      }
+    }
+
+    if (forearmChar) {
+      const forearmId = this.generateChildDeviceId(hubId, 'forearm');
+      const forearmRole = this.getChildDeviceRole(hubDevice.role, FOREARM_QUATERNION_CHAR_UUID);
+      if (forearmRole) {
+        childDevices.push({ id: forearmId, type: 'forearm', role: forearmRole, char: forearmChar });
+      }
+    }
+
+    // Create EidonDevice entries for each child and subscribe to characteristics
+    for (const child of childDevices) {
+      const childDevice: EidonDevice = {
+        id: child.id,
+        name: `${hubDevice.name} ${child.type === 'hand' ? 'Hand' : 'Forearm'}`,
+        role: this.mapChildRoleToDeviceRole(child.role),
+        macAddress: `${hubDevice.macAddress}_${child.type}`,
+        connectionId: hubDevice.connectionId, // Use parent hub's connectionId
+        isConnected: true, // Child devices are "connected" when hub is connected
+        isHub: false,
+        parentHub: hubId,
+        color: hubDevice.color, // Inherit color from parent
+        lastSeen: performance.now()
+      };
+
+      this.devices.set(child.id, childDevice);
+
+      // Dispatch deviceConnected event for child device
+      this.dispatchEvent(new CustomEvent('deviceConnected', { detail: { deviceId: child.id, device: childDevice } }));
+
+      // Subscribe to characteristic notifications
+      try {
+        await child.char.startNotifications();
+        
+        // Create event handler that routes data to child device ID
+        const eventHandler = (event: Event) => {
+          try {
+            this.handleChildQuaternionData(hubId, child.id, child.type, event);
+          } catch (error) {
+            console.error(`[EidonTrackerManager] Error in child quaternion event handler for ${child.id}:`, error);
+          }
+        };
+        
+        child.char.addEventListener('characteristicvaluechanged', eventHandler);
+      } catch (error) {
+        console.error(`[EidonTrackerManager] Failed to subscribe to ${child.type} quaternion data for hub ${hubId}:`, error);
+      }
+    }
+  }
+
+  /**
+   * Handle quaternion data from child device characteristics
+   */
+  private handleChildQuaternionData(
+    hubId: DeviceId,
+    childId: ChildDeviceId,
+    childType: ChildDeviceType,
+    event: Event
+  ): void {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const data = characteristic.value;
+    
+    if (!data) {
+      return;
+    }
+
+    try {
+      // Parse quaternion data (16 bytes: 4 floats)
+      // Byte order: Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
+      const quaternion = new Float32Array(data.buffer, data.byteOffset, 4);
+      
+      // Update child device lastSeen
+      const childDevice = this.devices.get(childId);
+      if (childDevice) {
+        childDevice.lastSeen = performance.now();
+        childDevice.isConnected = true; // Mark as connected when we receive data
+        this.devices.set(childId, childDevice);
+      }
+
+      // Dispatch quaternion data event with child device ID
+      this.dispatchEvent(new CustomEvent('quaternionData', {
+        detail: {
+          deviceId: childId, // Use child device ID, not hub ID
+          quaternion: Array.from(quaternion),
+          timestamp: performance.now()
+        }
+      }));
+    } catch (error) {
+      console.error(`[EidonTrackerManager] Error handling child quaternion data for ${childId}:`, error);
+    }
   }
 
   private async autoReconnect(): Promise<void> {

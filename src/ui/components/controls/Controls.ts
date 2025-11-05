@@ -4,7 +4,8 @@ import { AuthModal } from '../AuthModal';
 import { PaginatedRecordingsResponse, RecordingWithUrls, AdminRecording } from '../../../types/recording';
 import { SensorRecording } from '../../../types/sensorData';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
-import { DeviceModal } from '../DeviceModal';
+import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
+import { DeviceModal } from '../device-modal/DeviceModal';
 import { AuthManager } from '../../../core/AuthManager';
 import { UserApiManager } from '../../../core/UserApiManager';
 import { PlaybackView } from '../PlaybackView';
@@ -20,6 +21,7 @@ export class Controls {
   private playbackManager: PlaybackManager;
   private loginStateManager: LoginStateManager;
   private trackerManager: EidonTrackerManager;
+  private deviceConnectionStateManager: DeviceConnectionStateManager;
   private authModal: AuthModal | null = null;
   private deviceModal: DeviceModal | null = null;
   private recordingsModal: RecordingsModal | null = null;
@@ -30,9 +32,10 @@ export class Controls {
   private unsubscribe: (() => void) | null = null;
   private previousModal: string | null = null;
   
-  constructor(playbackManager: PlaybackManager, trackerManager: EidonTrackerManager) {
+  constructor(playbackManager: PlaybackManager, trackerManager: EidonTrackerManager, deviceConnectionStateManager: DeviceConnectionStateManager) {
     this.playbackManager = playbackManager;
     this.trackerManager = trackerManager;
+    this.deviceConnectionStateManager = deviceConnectionStateManager;
     this.loginStateManager = LoginStateManager.getInstance();
     this.container = this.createContainer();
     this.toolbar = this.createToolbar();
@@ -178,7 +181,7 @@ export class Controls {
   private constructDeviceModal(): void {
     if (this.deviceModal) return; // Already constructed
     
-    this.deviceModal = new DeviceModal(this.trackerManager);
+    this.deviceModal = new DeviceModal(this.trackerManager, this.deviceConnectionStateManager);
     this.deviceModal.mount(this.container.parentElement!);
     // Modal starts in closed state by default
   }

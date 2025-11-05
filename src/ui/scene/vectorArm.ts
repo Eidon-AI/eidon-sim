@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { vec3 } from 'gl-matrix';
+import { vec3, quat } from 'gl-matrix';
 import { DeviceStore } from '../../core/DeviceStore';
 import { HUM_LEN, RAD_LEN, HAND_LEN } from '../../core/constants';
-import { DeviceRole } from '../../types/device';
+import { DeviceRole, Device } from '../../types/device';
 
 export class VectorArm {
   private segs: THREE.Line[] = [];
@@ -17,6 +17,9 @@ export class VectorArm {
   private tubeGeometry: THREE.CylinderGeometry;
   private arrowGeometry: THREE.ConeGeometry;
   private materialPool: Map<string, THREE.MeshBasicMaterial> = new Map();
+  
+  // Timeout threshold for considering data stale (2 seconds)
+  private static readonly DATA_TIMEOUT_MS = 2000;
 
   constructor(
     private scene: THREE.Scene,
@@ -110,6 +113,44 @@ export class VectorArm {
     return new THREE.Mesh(this.arrowGeometry, material);
   }
 
+  /**
+   * Check if a device has active incoming data
+   * For child devices (forearm/hand), we require recent data (within DATA_TIMEOUT_MS)
+   * For hub devices, we're more lenient (they might be connected but children not yet)
+   */
+  private hasActiveData(device: Device | undefined, isChildDevice: boolean): boolean {
+    if (!device) {
+      return false;
+    }
+
+    // Check if device has valid vectors (not zero/default)
+    const hasValidVectors = vec3.length(device.fwd) > 0.001 && vec3.length(device.up) > 0.001;
+    
+    if (!hasValidVectors) {
+      return false;
+    }
+
+    // Check if quaternion is not identity (identity = [0, 0, 0, 1])
+    const isIdentity = Math.abs(device.quat[0]) < 0.001 && 
+                       Math.abs(device.quat[1]) < 0.001 && 
+                       Math.abs(device.quat[2]) < 0.001 && 
+                       Math.abs(device.quat[3] - 1.0) < 0.001;
+    
+    if (isIdentity) {
+      return false;
+    }
+
+    // For child devices, require recent data (within timeout window)
+    if (isChildDevice) {
+      const now = performance.now();
+      const timeSinceLastData = now - device.lastSeen;
+      return timeSinceLastData < VectorArm.DATA_TIMEOUT_MS;
+    }
+
+    // For hub devices, just check that data exists (more lenient)
+    return true;
+  }
+
   private refresh() {
     /* ---- gather devices by exact position ---- */
     const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
@@ -124,46 +165,39 @@ export class VectorArm {
     const forearm = this.side === 'left' ? leftForearm : rightForearm;
     const hand = this.side === 'left' ? leftHand : rightHand;
 
+    // For child devices (forearm/hand), only use them if they have active incoming data
+    // Hub devices can be used even without recent data (they're directly connected)
+    const useForearm = forearm && this.hasActiveData(forearm, true);
+    const useHand = hand && this.hasActiveData(hand, true);
+    const useHub = hub && this.hasActiveData(hub, false);
+
+    // Use validated devices for rendering
+    const validatedHub = useHub ? hub : undefined;
+    const validatedForearm = useForearm ? forearm : undefined;
+    const validatedHand = useHand ? hand : undefined;
+
     /* ---- shoulder anchor ---- */
+    // Swapped positions: left side renders on right, right side renders on left
+    // This fixes the issue where left devices were appearing on the right side
     const shoulder: vec3 = this.side === 'left'
-      ? [-0.3, 0,  0]
-      : [0.3, 0, 0];
+      ? [0.3, 0, 0]   // Left side renders at right position (positive X)
+      : [-0.3, 0, 0]; // Right side renders at left position (negative X)
 
-    // rotation that spins 90° about +Y
-    const rightYaw90Array = new Float32Array([
-      0, 0, 1,
-      0, 1, 0,
-      -1, 0, 0
-    ]);
-    const leftYaw90Array = new Float32Array([
-      0, 0, -1,
-      0, 1, 0,
-      1, 0, 0
-    ]);
-
-    /* helper to maybe rotate fwd for right arm */
-    const rotFwd = (v: vec3) =>
-      this.side === 'right'
-        ? vec3.transformMat3(vec3.create(), v, rightYaw90Array)
-        : vec3.transformMat3(vec3.create(), v, leftYaw90Array);
-
-    /* helper to maybe rotate up for right arm */
-    const rotUp = (v: vec3) =>
-      this.side === 'right'
-        ? vec3.transformMat3(vec3.create(), v, rightYaw90Array)
-        : vec3.transformMat3(vec3.create(), v, leftYaw90Array);
+    /* helper functions - no rotation applied (matches legacy RoArmController) */
+    const rotFwd = (v: vec3) => v;  // Passthrough - no rotation
+    const rotUp = (v: vec3) => v;  // Passthrough - no rotation
 
     /* ---- compute chain step-by-step ---- */
-    const upperEnd = hub
-      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(hub.fwd), HUM_LEN())
+    const upperEnd = validatedHub
+      ? vec3.scaleAndAdd(vec3.create(), shoulder, rotFwd(validatedHub.fwd), HUM_LEN())
       : vec3.clone(shoulder);
 
-    const lowerEnd = forearm
-      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(forearm.fwd), RAD_LEN())
+    const lowerEnd = validatedForearm
+      ? vec3.scaleAndAdd(vec3.create(), upperEnd, rotFwd(validatedForearm.fwd), RAD_LEN())
       : vec3.clone(upperEnd);
 
-    const handEnd  = hand
-      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(hand.fwd), HAND_LEN())
+    const handEnd  = validatedHand
+      ? vec3.scaleAndAdd(vec3.create(), lowerEnd, rotFwd(validatedHand.fwd), HAND_LEN())
       : vec3.clone(lowerEnd);
 
     /* ---- update three line segments (forward vectors) ---- */
@@ -172,7 +206,7 @@ export class VectorArm {
     pts.forEach((p, idx) => {
       if (idx === 3) return;                       // no segment after hand
       
-      const dev = idx === 0 ? hub : idx === 1 ? forearm : hand;
+      const dev = idx === 0 ? validatedHub : idx === 1 ? validatedForearm : validatedHand;
       const tube = this.tubeSegs[idx];
       const tip = this.arrowTips[idx];
       
@@ -237,7 +271,7 @@ export class VectorArm {
     });
 
     /* ---- update up vector segments ---- */
-    const devices = [hub, forearm, hand];
+    const devices = [validatedHub, validatedForearm, validatedHand];
     const startPoints = [shoulder, upperEnd, lowerEnd];
     
     startPoints.forEach((startPt, idx) => {
