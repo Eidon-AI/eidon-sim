@@ -214,11 +214,8 @@ export class SkeletalRig {
     // Prevent updates after destruction
     if (this.isDestroyed) return;
     
-    if (this.useActuatorAngles) {
-      this.applySideActuatorAngles(side);
-    } else {
-      this.applySideQuaternion(side);
-    }
+    // Always use actuator angles for the physical device
+    this.applySideActuatorAngles(side);
 
     /* ----- Fingers mapping (disabled - finger data removed from Device interface) ----- */
     // const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
@@ -360,13 +357,13 @@ export class SkeletalRig {
     const fwdZ = chest.fwd[1];  // Z component
     
     // Calculate yaw angle from chest forward vector projection
-    // The model is consistently 90° off, so we swap atan2 arguments
-    // atan2(x, z) instead of atan2(z, x) to compensate:
+    // The model is consistently 180° off, so we add π radians to compensate
+    // atan2(x, z) gives us the angle in the horizontal plane:
     // - atan2(0, 1) = 0° = +Z (forward) 
     // - atan2(1, 0) = 90° = +X (right)
     // - atan2(0, -1) = 180° = -Z (backward)
-    // This accounts for Three.js rotation convention vs vector direction
-    const yawRad = Math.atan2(fwdX, fwdZ);
+    // Adding π rotates the model 180° to face the correct direction
+    const yawRad = Math.atan2(fwdX, fwdZ) + Math.PI;
     
     // Apply rotation to model root
     // Model should face in the forward direction of the chest tracker
@@ -386,10 +383,6 @@ export class SkeletalRig {
     if (upperDevice && this.hasActiveData(upperDevice, false)) {
       const deviceQuat = upperDevice.quat;
       
-      // Devices are calibrated in forward-extended pose (same as initial pose)
-      // When device is in calibration pose, its quaternion should produce the initial pose
-      // We need to compute relative rotation from calibration pose to current pose
-      
       // Use eulerXYZ() which matches legacy firmware implementation
       // Returns [yaw, roll, pitch] in radians (note: pitch and roll are swapped in return)
       const [yawRad, rollRad, pitchRad] = eulerXYZ(deviceQuat);
@@ -400,22 +393,13 @@ export class SkeletalRig {
       const correctedPitch = pitchRad;  // pitch (no negation)
       const correctedYaw = -yawRad;     // yaw (negated)
       
-      // Convert to THREE.js Euler angles (XYZ order) to get current device orientation in bone space
+      // Convert to THREE.js Euler angles (XYZ order) and apply directly
       const correctedEuler = new THREE.Euler(correctedRoll, correctedPitch, correctedYaw, 'XYZ');
       const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
       
-      // Compute relative rotation from calibration pose (initial pose) to current pose
-      // Q_relative = Q_calibration^-1 * Q_current
-      // Since calibration = initial pose: Q_relative = Q_initial^-1 * Q_current
-      const initialQuatInv = new THREE.Quaternion().copy(this.initialPoseQuat[side]).invert();
-      const relativeQuat = new THREE.Quaternion().multiplyQuaternions(initialQuatInv, correctedQuat);
-      
-      // Apply relative rotation to initial pose: Q_bone = Q_initial * Q_relative
-      const finalQuat = new THREE.Quaternion().multiplyQuaternions(this.initialPoseQuat[side], relativeQuat);
-      
-      // Reset Euler rotation and use quaternion
+      // Apply quaternion directly (no relative rotation math)
       arm.shoulder.rotation.set(0, 0, 0);
-      arm.shoulder.quaternion.copy(finalQuat);
+      arm.shoulder.quaternion.copy(correctedQuat);
     } else {
       // Fallback: when no device, use initial pose
       arm.shoulder.quaternion.copy(this.initialPoseQuat[side]);
@@ -516,27 +500,23 @@ export class SkeletalRig {
     const arm = this.armBones[side];
     const sgn = side === 'left' ? 1 : -1;      // mirroring sign
 
-    /* Shoulder: Use calculated actuator angles */
-    // Actuator angles are calculated from device quaternions
-    // Devices are calibrated in forward-extended pose (same as initial pose)
-    // We need to apply actuator angles relative to the initial pose (calibration pose)
+    /* Shoulder: Apply actuator angles with offset to forward pose */
+    // Define forward pose offsets (in degrees) - these represent the forward pose when actuator angles are 0
+    // Forward pose rotations: Left (-180°, -180°, -90°), Right (180°, -180°, 90°)
+    const forwardPoseOffsets = {
+      left: { roll: -180, pitch: -180, yaw: 90 },
+      right: { roll: 180, pitch: -180, yaw: -90 }
+    };
+    const offsets = forwardPoseOffsets[side];
     
-    // Convert actuator angles to quaternion (these represent absolute device orientation)
-    const actuatorEuler = new THREE.Euler(-a.shRoll*d2r, a.shPitch*d2r, -a.shYaw*d2r, 'XYZ');
-    const actuatorQuat = new THREE.Quaternion().setFromEuler(actuatorEuler);
-    
-    // Compute relative rotation from calibration pose (initial pose) to current pose
-    // Q_relative = Q_calibration^-1 * Q_current
-    // Since calibration = initial pose: Q_relative = Q_initial^-1 * Q_actuator
-    const initialQuatInv = new THREE.Quaternion().copy(this.initialPoseQuat[side]).invert();
-    const relativeQuat = new THREE.Quaternion().multiplyQuaternions(initialQuatInv, actuatorQuat);
-    
-    // Apply relative rotation to initial pose: Q_bone = Q_initial * Q_relative
-    const finalQuat = new THREE.Quaternion().multiplyQuaternions(this.initialPoseQuat[side], relativeQuat);
-    
-    // Apply the quaternion
-    arm.shoulder.quaternion.copy(finalQuat);
-    arm.shoulder.rotation.set(0, 0, 0); // Reset Euler rotation
+    // Apply actuator angles with offsets: rotation = offset + actuator_angle
+    // Note: signs match the original mapping: -roll, +pitch, -yaw
+    arm.shoulder.quaternion.set(0, 0, 0, 1); // Reset quaternion
+    arm.shoulder.rotation.set(
+      -(offsets.roll + a.shRoll) * d2r,
+      (offsets.pitch + a.shPitch) * d2r,
+      -(offsets.yaw + a.shYaw) * d2r
+    );
 
     /* Elbow: Use calculated actuator angle */
     arm.elbow.quaternion.set(0, 0, 0, 1); // Reset quaternion
