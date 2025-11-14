@@ -5,6 +5,7 @@ import {
   FOREARM_QUATERNION_CHAR_UUID,
   DEVICE_INFO_CHAR_UUID,
   CALIBRATION_CHAR_UUID,
+  FINGER_SENSOR_CHAR_UUID,
   ROLE_CONFIG_SERVICE_UUID,
   ROLE_CONFIG_CHAR_UUID,
   DeviceRole,
@@ -888,6 +889,11 @@ export class EidonTrackerManager extends EventTarget {
       // Subscribe to quaternion notifications
       await this.subscribeToQuaternionData(deviceId);
 
+      // Subscribe to finger sensor notifications (if glove device)
+      if (device.role === DeviceRole.LEFT_GLOVE || device.role === DeviceRole.RIGHT_GLOVE) {
+        await this.subscribeToFingerData(deviceId);
+      }
+
       // Update device state
       device.isConnected = true;
       device.lastSeen = performance.now();
@@ -1006,7 +1012,7 @@ export class EidonTrackerManager extends EventTarget {
   private handleQuaternionData(deviceId: DeviceId, event: Event): void {
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
     const data = characteristic.value;
-    
+
     if (!data) {
       return;
     }
@@ -1015,11 +1021,63 @@ export class EidonTrackerManager extends EventTarget {
     // Byte order: Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
     // Float32Array will read as [w, x, y, z] - will be reordered to [x, y, z, w] in App.ts
     const quaternion = new Float32Array(data.buffer, data.byteOffset, 4);
-    
+
     this.dispatchEvent(new CustomEvent('quaternionData', {
       detail: {
         deviceId,
         quaternion: Array.from(quaternion),
+        timestamp: performance.now()
+      }
+    }));
+  }
+
+  private async subscribeToFingerData(deviceId: DeviceId): Promise<void> {
+    const connectionState = this.connectionStates.get(deviceId);
+    if (!connectionState) {
+      return;
+    }
+
+    const fingerChar = connectionState.characteristics.get(FINGER_SENSOR_CHAR_UUID);
+    if (!fingerChar) {
+      console.warn('Finger sensor characteristic not found for device:', deviceId);
+      return;
+    }
+
+    try {
+      await fingerChar.startNotifications();
+      fingerChar.addEventListener('characteristicvaluechanged', (event) => {
+        this.handleFingerData(deviceId, event);
+      });
+      console.log(`[EidonTrackerManager] Subscribed to finger sensor data for ${deviceId}`);
+    } catch (error) {
+      console.error('Failed to subscribe to finger sensor data for device:', deviceId, error);
+    }
+  }
+
+  private handleFingerData(deviceId: DeviceId, event: Event): void {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const data = characteristic.value;
+
+    if (!data) {
+      return;
+    }
+
+    // Parse finger sensor data (32 bytes: 16 uint16 values)
+    // Each uint16 is encoded as: (normalized_value * 2 - 1 + 1) * 32767.5
+    // Decode: normalized_value = (uint16 / 32767.5 - 1 + 1) / 2 = uint16 / 65535
+    const fingerValues: number[] = [];
+    const uint16Array = new Uint16Array(data.buffer, data.byteOffset, 16);
+
+    for (let i = 0; i < 16; i++) {
+      // Decode from uint16 back to 0.0-1.0 range
+      const normalized = uint16Array[i] / 65535.0;
+      fingerValues.push(normalized);
+    }
+
+    this.dispatchEvent(new CustomEvent('fingerData', {
+      detail: {
+        deviceId,
+        fingerValues,
         timestamp: performance.now()
       }
     }));
