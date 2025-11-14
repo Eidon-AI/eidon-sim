@@ -1,10 +1,11 @@
-import { Device, DeviceColor } from '../../../types/device';
+import { Device, DeviceColor, DeviceRole } from '../../../types/device';
 import { DeviceStore } from '../../../core/DeviceStore';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
 import { eulerXYZ } from '../../../core/mathUtils';
 import { setSelected } from '../../App';
 import { vec3, quat } from 'gl-matrix';
 import { DEVICE_ROLE_NAMES } from '../../../core/constants';
+import { FingerSensorPanel } from './FingerSensorPanel';
 import styles from './styles/DeviceCard.module.css';
 
 function createDial(label: string) {
@@ -474,6 +475,11 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
   };
 
   btnX.onclick = async () => {
+    // Unmount finger panel if it exists
+    if (fingerPanel) {
+      fingerPanel.unmount();
+    }
+
     // Disconnect from Bluetooth if trackerManager is available
     if (trackerManager) {
       try {
@@ -504,13 +510,22 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
     if(id === state.id) colorBox.value = hex;
   });
 
+  // Add finger sensor panel for glove devices (declare before event listeners)
+  let fingerPanel: FingerSensorPanel | null = null;
+
   document.addEventListener('deviceRemoved', e => {
     if ((e as CustomEvent<{id:string}>).detail.id === state.id) {
+      // Unmount finger panel if it exists
+      if (fingerPanel) {
+        fingerPanel.unmount();
+      }
       el.remove();
     }
   });
-
-  // TODO: Finger bars will be re-added when finger data is available in Device type
+  if (state.position === DeviceRole.ROLE_LEFT_GLOVE || state.position === DeviceRole.ROLE_RIGHT_GLOVE) {
+    fingerPanel = new FingerSensorPanel(state.id);
+    fingerPanel.mount(el);
+  }
 
   /* ----- Euler dials ----- */
   const dialWrap = document.createElement('div');
