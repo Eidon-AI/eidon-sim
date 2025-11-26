@@ -69,11 +69,15 @@ export class Controls {
 
   private render(): void {
     this.toolbar.innerHTML = `
+      <button id="userInfo" class="${styles.navButton} ${styles.userInfo}" style="display: none;" title="User Profile">
+        <img id="userAvatar" class="${styles.userAvatar}" src="" alt="User Avatar" />
+        <span id="userName" class="${styles.userName}"></span>
+        <span id="adminBadge" class="${styles.adminBadge}" style="display: none;"><i class="fas fa-shield-alt"></i> Admin</span>
+      </button>
       <button id="navConnect" class="${styles.navButton}" title="Devices">
         <i class="fas fa-microchip"></i>
         <span>Devices</span>
       </button>
-      <div id="navSeparator" class="${styles.navSeparator}" style="display: none;"></div>
       <button id="navRecordings" class="${styles.navButton} ${styles.navRecordings}" title="Recordings (Login Required)" style="display: none;">
         <i class="fas fa-folder-open"></i>
         <span>Recordings</span>
@@ -82,11 +86,7 @@ export class Controls {
         <i class="fas fa-shield-alt"></i>
         <span>System Recordings</span>
       </button>
-      <button id="userInfo" class="${styles.navButton} ${styles.userInfo}" style="display: none;" title="User Profile">
-        <img id="userAvatar" class="${styles.userAvatar}" src="" alt="User Avatar" />
-        <span id="userName" class="${styles.userName}"></span>
-        <span id="adminBadge" class="${styles.adminBadge}" style="display: none;"><i class="fas fa-shield-alt"></i> Admin</span>
-      </button>
+      <div id="navSeparator" class="${styles.navSeparator}" style="display: none;"></div>
       <button id="navLogin" class="${styles.navButton} ${styles.navLogin}" title="Login">
         <i class="fas fa-sign-in-alt"></i>
         <span>Login</span>

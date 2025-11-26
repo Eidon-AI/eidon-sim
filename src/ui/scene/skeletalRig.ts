@@ -442,7 +442,9 @@ export class SkeletalRig {
 
     /* Wrist: Use relative quaternion between hand and forearm if both devices available */
     const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
-    const handDeviceRaw = this.store.getByPosition(handRole);
+    const gloveRole = side === 'left' ? DeviceRole.ROLE_LEFT_GLOVE : DeviceRole.ROLE_RIGHT_GLOVE;
+    // Try hand first, fall back to glove (both represent hand position)
+    const handDeviceRaw = this.store.getByPosition(handRole) || this.store.getByPosition(gloveRole);
     const handDevice = handDeviceRaw && this.hasActiveData(handDeviceRaw, true) ? handDeviceRaw : undefined;
     if (handDevice && lowerDevice) {
       // Calculate relative rotation between forearm and hand
