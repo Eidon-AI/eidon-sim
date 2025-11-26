@@ -208,16 +208,30 @@ export class DeviceModal {
       }
     });
 
-    // Listen for device info updates (e.g., role changes)
+    // Listen for device info updates (e.g., role changes, battery level)
     this.trackerManager.addEventListener('deviceInfoUpdated', (e: any) => {
       const { deviceId, device } = e.detail;
+      console.log('[DeviceModal] deviceInfoUpdated:', deviceId, 'battery:', device.batteryLevel);
+
       // Update the device in our lists and re-render
-      const savedDevice = this.savedDevices.find(d => d.id === deviceId);
+      // Try matching by ID first, then by connectionId/macAddress
+      let savedDevice = this.savedDevices.find(d => d.id === deviceId);
+      if (!savedDevice && device.connectionId) {
+        savedDevice = this.savedDevices.find(d =>
+          d.connectionId === device.connectionId || d.macAddress === device.connectionId
+        );
+      }
       if (savedDevice) {
         Object.assign(savedDevice, device);
         this.renderSavedDevices();
       }
-      const discoveredDevice = this.discoveredDevices.find(d => d.id === deviceId);
+
+      let discoveredDevice = this.discoveredDevices.find(d => d.id === deviceId);
+      if (!discoveredDevice && device.connectionId) {
+        discoveredDevice = this.discoveredDevices.find(d =>
+          d.connectionId === device.connectionId || d.macAddress === device.connectionId
+        );
+      }
       if (discoveredDevice) {
         Object.assign(discoveredDevice, device);
         this.renderDiscoveredDevices();

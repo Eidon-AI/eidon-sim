@@ -982,26 +982,32 @@ export class EidonTrackerManager extends EventTarget {
       const deviceInfoChar = connectionState.characteristics.get(DEVICE_INFO_CHAR_UUID);
       if (deviceInfoChar) {
         const infoData = await deviceInfoChar.readValue();
-        
-        // Parse device info - assuming it contains color info
-        // Structure depends on firmware - may need adjustment
-        // For now, check if there's color data (typically RGB bytes at some offset)
-        if (infoData.byteLength >= 3) {
-          // Example: first 3 bytes might be RGB color
-          // Adjust offset based on actual firmware structure
-          const r = infoData.getUint8(0);
-          const g = infoData.getUint8(1);
-          const b = infoData.getUint8(2);
-          
-          // Only update if color values are non-zero (assuming 0,0,0 is invalid/unset)
-          if (r > 0 || g > 0 || b > 0) {
-            device.color = `rgb(${r}, ${g}, ${b})`;
-            this.devices.set(deviceId, device);
-            
-            // Dispatch event for UI update
-            this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
-          }
+
+        // Parse device info from firmware structure:
+        // Bytes 0-1: Device ID
+        // Bytes 2-3: Firmware version (major.minor)
+        // Byte 4: Battery percentage (0-100)
+        // Byte 5: Device role
+        // Bytes 6-11: MAC address
+        console.log(`[EidonTrackerManager] Device info bytes: ${infoData.byteLength}`,
+          Array.from(new Uint8Array(infoData.buffer, infoData.byteOffset, infoData.byteLength)));
+
+        if (infoData.byteLength >= 5) {
+          const firmwareMajor = infoData.getUint8(2);
+          const firmwareMinor = infoData.getUint8(3);
+          const batteryLevel = infoData.getUint8(4);
+
+          console.log(`[EidonTrackerManager] Parsed device info - firmware: ${firmwareMajor}.${firmwareMinor}, battery: ${batteryLevel}%`);
+
+          device.firmwareVersion = `${firmwareMajor}.${firmwareMinor}`;
+          device.batteryLevel = batteryLevel;
+          this.devices.set(deviceId, device);
+
+          // Dispatch event for UI update
+          this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
         }
+      } else {
+        console.log(`[EidonTrackerManager] DEVICE_INFO characteristic not found`);
       }
     } catch (error) {
       console.warn(`[EidonTrackerManager] Failed to fetch device info for ${device.name}:`, error);
