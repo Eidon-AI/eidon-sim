@@ -39,6 +39,8 @@ export interface DeviceConnectionState {
     ROLE_LEFT_HUB = 4,       // Left hub/upper arm
     ROLE_RIGHT_HUB = 5,      // Right hub/upper arm
     ROLE_CHEST = 6,          // Chest
+    ROLE_LEFT_GLOVE = 8,     // Left glove (with finger sensors)
+    ROLE_RIGHT_GLOVE = 9,    // Right glove (with finger sensors)
   }
   
   // TODO: Define these based on Eidon Tracker Colors
@@ -65,6 +67,8 @@ export interface DeviceConnectionState {
       [DeviceRole.ROLE_LEFT_HUB]: 'left_hub',
       [DeviceRole.ROLE_RIGHT_HUB]: 'right_hub',
       [DeviceRole.ROLE_CHEST]: 'chest',
+      [DeviceRole.ROLE_LEFT_GLOVE]: 'left_glove',
+      [DeviceRole.ROLE_RIGHT_GLOVE]: 'right_glove',
     };
     return roleMap[role];
   };
@@ -79,6 +83,8 @@ export interface DeviceConnectionState {
       'left_hub': DeviceRole.ROLE_LEFT_HUB,
       'right_hub': DeviceRole.ROLE_RIGHT_HUB,
       'chest': DeviceRole.ROLE_CHEST,
+      'left_glove': DeviceRole.ROLE_LEFT_GLOVE,
+      'right_glove': DeviceRole.ROLE_RIGHT_GLOVE,
     };
     return stringMap[roleString];
   };

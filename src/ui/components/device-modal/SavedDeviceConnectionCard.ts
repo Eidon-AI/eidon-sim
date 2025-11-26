@@ -453,7 +453,16 @@ export function createDeviceConnectionCard(
   // Check if this is a hub and get child device count
   const isHub = device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB);
   const childCountText = isHub ? getConnectedChildCount(device, allDevices) : '';
-  
+
+  // Battery indicator
+  const batteryHtml = device.batteryLevel !== undefined ? `
+    <div class="${styles.batteryIndicator}" data-device-id="${device.id}">
+      <i class="fas fa-battery-${device.batteryLevel > 75 ? 'full' : device.batteryLevel > 50 ? 'three-quarters' : device.batteryLevel > 25 ? 'half' : device.batteryLevel > 10 ? 'quarter' : 'empty'}"
+         style="color: ${device.batteryLevel > 20 ? '#10b981' : '#ef4444'}"></i>
+      <span>${device.batteryLevel}%</span>
+    </div>
+  ` : '';
+
   let cardHtml = `
     <div class="${styles.deviceCard} ${deviceTypeClass}" data-device-id="${device.id}">
       <div class="${styles.cardTop}">
@@ -463,6 +472,7 @@ export function createDeviceConnectionCard(
             <div class="${styles.deviceName}">${device.name}</div>
           </div>
         </div>
+        ${batteryHtml}
       </div>
       <div class="${styles.cardMiddle}">
         <div class="${styles.leftColumn}">

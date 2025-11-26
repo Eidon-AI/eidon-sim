@@ -33,6 +33,9 @@ let loginStateManager: LoginStateManager | null = null;
 let sidebar: Sidebar | null = null;
 let isAuthenticated = false;
 
+// Store for finger sensor data (deviceId -> fingerValues array)
+const fingerDataStore = new Map<string, number[]>();
+
 /* export so DeviceCard can import it */
 export function setSelected(id: string | null) {
   selectedId = id;
@@ -217,6 +220,8 @@ function mapDeviceRole(role: import('../core/constants').DeviceRole): DeviceRole
     [4]: DeviceRole.ROLE_LEFT_HUB,
     [5]: DeviceRole.ROLE_RIGHT_HUB,
     [6]: DeviceRole.ROLE_CHEST,
+    [8]: DeviceRole.ROLE_LEFT_GLOVE,
+    [9]: DeviceRole.ROLE_RIGHT_GLOVE,
   };
   return roleMap[role] ?? DeviceRole.ROLE_LEFT_HAND; // Default fallback
 }
@@ -322,6 +327,20 @@ function initializeApp(root: HTMLElement) {
     const event = e as CustomEvent<{ deviceId: string; quaternion: number[]; timestamp: number }>;
     const { deviceId, quaternion } = event.detail;
     updateDeviceWithQuaternion(deviceId, quaternion, store);
+  }) as EventListener);
+
+  // Handle finger sensor data updates
+  tracker.addEventListener('fingerData', ((e: Event) => {
+    const event = e as CustomEvent<{ deviceId: string; fingerValues: number[]; timestamp: number }>;
+    const { deviceId, fingerValues } = event.detail;
+
+    // Store finger data
+    fingerDataStore.set(deviceId, fingerValues);
+
+    // Dispatch custom event for finger visualization components
+    document.dispatchEvent(new CustomEvent('fingerDataUpdate', {
+      detail: { deviceId, fingerValues }
+    }));
   }) as EventListener);
 
   // Handle device disconnections

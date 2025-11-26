@@ -5,6 +5,7 @@ import {
   FOREARM_QUATERNION_CHAR_UUID,
   DEVICE_INFO_CHAR_UUID,
   CALIBRATION_CHAR_UUID,
+  FINGER_SENSOR_CHAR_UUID,
   ROLE_CONFIG_SERVICE_UUID,
   ROLE_CONFIG_CHAR_UUID,
   DeviceRole,
@@ -888,6 +889,11 @@ export class EidonTrackerManager extends EventTarget {
       // Subscribe to quaternion notifications
       await this.subscribeToQuaternionData(deviceId);
 
+      // Subscribe to finger sensor notifications (if glove device)
+      if (device.role === DeviceRole.LEFT_GLOVE || device.role === DeviceRole.RIGHT_GLOVE) {
+        await this.subscribeToFingerData(deviceId);
+      }
+
       // Update device state
       device.isConnected = true;
       device.lastSeen = performance.now();
@@ -955,18 +961,20 @@ export class EidonTrackerManager extends EventTarget {
       if (roleChar) {
         const roleData = await roleChar.readValue();
         const roleValue = roleData.getUint8(0); // Role is typically a single byte
-        
+
         // Map the role value to DeviceRole enum
-        if (roleValue >= 0 && roleValue <= 6) {
+        // Valid roles: 0-6 (tracker roles) and 8-9 (glove roles)
+        const isValidRole = (roleValue >= 0 && roleValue <= 6) || roleValue === 8 || roleValue === 9;
+        if (isValidRole) {
           device.role = roleValue as DeviceRole;
-          
+
           // Update isHub flag based on role
-          device.isHub = device.role === DeviceRole.LEFT_HUB || 
-                        device.role === DeviceRole.RIGHT_HUB || 
+          device.isHub = device.role === DeviceRole.LEFT_HUB ||
+                        device.role === DeviceRole.RIGHT_HUB ||
                         device.role === DeviceRole.CHEST;
-          
+
           this.devices.set(deviceId, device);
-          
+
           // Dispatch event so UI can update with the new role
           this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
         }
@@ -976,26 +984,43 @@ export class EidonTrackerManager extends EventTarget {
       const deviceInfoChar = connectionState.characteristics.get(DEVICE_INFO_CHAR_UUID);
       if (deviceInfoChar) {
         const infoData = await deviceInfoChar.readValue();
-        
-        // Parse device info - assuming it contains color info
-        // Structure depends on firmware - may need adjustment
-        // For now, check if there's color data (typically RGB bytes at some offset)
-        if (infoData.byteLength >= 3) {
-          // Example: first 3 bytes might be RGB color
-          // Adjust offset based on actual firmware structure
-          const r = infoData.getUint8(0);
-          const g = infoData.getUint8(1);
-          const b = infoData.getUint8(2);
-          
-          // Only update if color values are non-zero (assuming 0,0,0 is invalid/unset)
-          if (r > 0 || g > 0 || b > 0) {
-            device.color = `rgb(${r}, ${g}, ${b})`;
-            this.devices.set(deviceId, device);
-            
-            // Dispatch event for UI update
-            this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
+
+        // Parse device info from firmware structure:
+        // Bytes 0-1: Device ID
+        // Bytes 2-3: Firmware version (major.minor)
+        // Byte 4: Battery percentage (0-100)
+        // Byte 5: Device role
+        // Bytes 6-11: MAC address
+        console.log(`[EidonTrackerManager] Device info bytes: ${infoData.byteLength}`,
+          Array.from(new Uint8Array(infoData.buffer, infoData.byteOffset, infoData.byteLength)));
+
+        if (infoData.byteLength >= 6) {
+          const firmwareMajor = infoData.getUint8(2);
+          const firmwareMinor = infoData.getUint8(3);
+          const batteryLevel = infoData.getUint8(4);
+          const roleFromInfo = infoData.getUint8(5);
+
+          console.log(`[EidonTrackerManager] Parsed device info - firmware: ${firmwareMajor}.${firmwareMinor}, battery: ${batteryLevel}%, role: ${roleFromInfo}`);
+
+          device.firmwareVersion = `${firmwareMajor}.${firmwareMinor}`;
+          device.batteryLevel = batteryLevel;
+
+          // Also update role from DEVICE_INFO if valid (backup in case ROLE_CONFIG didn't work)
+          const isValidRole = (roleFromInfo >= 0 && roleFromInfo <= 6) || roleFromInfo === 8 || roleFromInfo === 9;
+          if (isValidRole && device.role === DeviceRole.UNKNOWN) {
+            device.role = roleFromInfo as DeviceRole;
+            device.isHub = device.role === DeviceRole.LEFT_HUB ||
+                          device.role === DeviceRole.RIGHT_HUB ||
+                          device.role === DeviceRole.CHEST;
           }
+
+          this.devices.set(deviceId, device);
+
+          // Dispatch event for UI update
+          this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
         }
+      } else {
+        console.log(`[EidonTrackerManager] DEVICE_INFO characteristic not found`);
       }
     } catch (error) {
       console.warn(`[EidonTrackerManager] Failed to fetch device info for ${device.name}:`, error);
@@ -1006,7 +1031,7 @@ export class EidonTrackerManager extends EventTarget {
   private handleQuaternionData(deviceId: DeviceId, event: Event): void {
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
     const data = characteristic.value;
-    
+
     if (!data) {
       return;
     }
@@ -1015,11 +1040,63 @@ export class EidonTrackerManager extends EventTarget {
     // Byte order: Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
     // Float32Array will read as [w, x, y, z] - will be reordered to [x, y, z, w] in App.ts
     const quaternion = new Float32Array(data.buffer, data.byteOffset, 4);
-    
+
     this.dispatchEvent(new CustomEvent('quaternionData', {
       detail: {
         deviceId,
         quaternion: Array.from(quaternion),
+        timestamp: performance.now()
+      }
+    }));
+  }
+
+  private async subscribeToFingerData(deviceId: DeviceId): Promise<void> {
+    const connectionState = this.connectionStates.get(deviceId);
+    if (!connectionState) {
+      return;
+    }
+
+    const fingerChar = connectionState.characteristics.get(FINGER_SENSOR_CHAR_UUID);
+    if (!fingerChar) {
+      console.warn('Finger sensor characteristic not found for device:', deviceId);
+      return;
+    }
+
+    try {
+      await fingerChar.startNotifications();
+      fingerChar.addEventListener('characteristicvaluechanged', (event) => {
+        this.handleFingerData(deviceId, event);
+      });
+      console.log(`[EidonTrackerManager] Subscribed to finger sensor data for ${deviceId}`);
+    } catch (error) {
+      console.error('Failed to subscribe to finger sensor data for device:', deviceId, error);
+    }
+  }
+
+  private handleFingerData(deviceId: DeviceId, event: Event): void {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const data = characteristic.value;
+
+    if (!data) {
+      return;
+    }
+
+    // Parse finger sensor data (32 bytes: 16 uint16 values)
+    // Each uint16 is encoded as: (normalized_value * 2 - 1 + 1) * 32767.5
+    // Decode: normalized_value = (uint16 / 32767.5 - 1 + 1) / 2 = uint16 / 65535
+    const fingerValues: number[] = [];
+    const uint16Array = new Uint16Array(data.buffer, data.byteOffset, 16);
+
+    for (let i = 0; i < 16; i++) {
+      // Decode from uint16 back to 0.0-1.0 range
+      const normalized = uint16Array[i] / 65535.0;
+      fingerValues.push(normalized);
+    }
+
+    this.dispatchEvent(new CustomEvent('fingerData', {
+      detail: {
+        deviceId,
+        fingerValues,
         timestamp: performance.now()
       }
     }));
@@ -1204,10 +1281,213 @@ export class EidonTrackerManager extends EventTarget {
   }
 
   private async autoReconnect(): Promise<void> {
-    // TODO: Implement auto-reconnection to saved devices
-    // This would load saved device information from backend/localStorage
-    // and attempt to reconnect to them
-    console.log('Auto-reconnect not yet implemented');
+    // Use navigator.bluetooth.getDevices() to get previously paired devices
+    // This API requires the "bluetooth" permission and only works with devices
+    // that the user has previously granted access to
+    try {
+      if (!navigator.bluetooth || !navigator.bluetooth.getDevices) {
+        console.log('[EidonTrackerManager] getDevices() not supported');
+        return;
+      }
+
+      const devices = await navigator.bluetooth.getDevices();
+      console.log(`[EidonTrackerManager] Found ${devices.length} previously paired device(s)`);
+
+      for (const bluetoothDevice of devices) {
+        // Filter for Eidon devices by name
+        const name = bluetoothDevice.name?.toLowerCase() || '';
+        if (!name.includes('eidon') && !name.includes('tracker') && !name.includes('6fdf')) {
+          continue;
+        }
+
+        console.log(`[EidonTrackerManager] Attempting auto-reconnect to: ${bluetoothDevice.name}`);
+
+        // Set up disconnect listener
+        bluetoothDevice.addEventListener('gattserverdisconnected', () => {
+          console.log(`[EidonTrackerManager] Device disconnected: ${bluetoothDevice.name}`);
+          const deviceId = bluetoothDevice.id;
+          const device = this.devices.get(deviceId);
+          if (device) {
+            device.isConnected = false;
+            this.devices.set(deviceId, device);
+            this.dispatchEvent(new CustomEvent('deviceDisconnected', { detail: { deviceId, device } }));
+          }
+        });
+
+        // Use watchAdvertisements to wait for the device to be seen
+        if ((bluetoothDevice as any).watchAdvertisements) {
+          try {
+            let connected = false;
+
+            // Set up listener for when we see an advertisement
+            const connectOnAdvertisement = async (event: any) => {
+              if (connected) return;
+              connected = true;
+              console.log(`[EidonTrackerManager] Received advertisement from: ${bluetoothDevice.name}`);
+              bluetoothDevice.removeEventListener('advertisementreceived', connectOnAdvertisement);
+
+              try {
+                const gattServer = await bluetoothDevice.gatt?.connect();
+                if (gattServer) {
+                  await this.setupConnectedDevice(bluetoothDevice, gattServer);
+                  console.log(`[EidonTrackerManager] Auto-reconnected to: ${bluetoothDevice.name}`);
+                }
+              } catch (connectError) {
+                console.log(`[EidonTrackerManager] Failed to connect after advertisement:`, connectError);
+              }
+            };
+
+            bluetoothDevice.addEventListener('advertisementreceived', connectOnAdvertisement);
+            await (bluetoothDevice as any).watchAdvertisements();
+            console.log(`[EidonTrackerManager] Watching for advertisements from: ${bluetoothDevice.name}`);
+
+            // Also set up periodic retries - try direct connect every 5 seconds
+            const retryInterval = setInterval(async () => {
+              if (connected) {
+                clearInterval(retryInterval);
+                return;
+              }
+              console.log(`[EidonTrackerManager] Retrying direct connect: ${bluetoothDevice.name}`);
+
+              try {
+                const gattServer = await bluetoothDevice.gatt?.connect();
+                if (gattServer) {
+                  connected = true;
+                  clearInterval(retryInterval);
+                  bluetoothDevice.removeEventListener('advertisementreceived', connectOnAdvertisement);
+                  await this.setupConnectedDevice(bluetoothDevice, gattServer);
+                  console.log(`[EidonTrackerManager] Auto-reconnected to: ${bluetoothDevice.name}`);
+                }
+              } catch (error) {
+                // Will retry on next interval
+                console.log(`[EidonTrackerManager] Retry failed for ${bluetoothDevice.name}, will retry...`);
+              }
+            }, 5000);
+
+          } catch (watchError) {
+            console.log(`[EidonTrackerManager] watchAdvertisements failed, trying direct connect:`, watchError);
+            // Fall back to direct connect attempt
+            try {
+              const gattServer = await bluetoothDevice.gatt?.connect();
+              if (gattServer) {
+                await this.setupConnectedDevice(bluetoothDevice, gattServer);
+                console.log(`[EidonTrackerManager] Auto-reconnected to: ${bluetoothDevice.name}`);
+              }
+            } catch (error) {
+              console.log(`[EidonTrackerManager] Could not auto-reconnect to ${bluetoothDevice.name}:`, error);
+            }
+          }
+        } else {
+          // No watchAdvertisements support, try direct connect
+          try {
+            const gattServer = await bluetoothDevice.gatt?.connect();
+            if (gattServer) {
+              await this.setupConnectedDevice(bluetoothDevice, gattServer);
+              console.log(`[EidonTrackerManager] Auto-reconnected to: ${bluetoothDevice.name}`);
+            }
+          } catch (error) {
+            console.log(`[EidonTrackerManager] Could not auto-reconnect to ${bluetoothDevice.name}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[EidonTrackerManager] Auto-reconnect failed:', error);
+    }
+  }
+
+  /**
+   * Set up a device that is already connected via GATT
+   * Used for auto-reconnect when we already have the BluetoothDevice and gattServer
+   */
+  private async setupConnectedDevice(bluetoothDevice: BluetoothDevice, gattServer: BluetoothRemoteGATTServer): Promise<void> {
+    const deviceId = bluetoothDevice.id;
+
+    // Create or update device entry
+    let device = this.devices.get(deviceId);
+    if (!device) {
+      device = {
+        id: deviceId,
+        name: bluetoothDevice.name || 'Unknown Device',
+        role: DeviceRole.UNKNOWN,
+        macAddress: deviceId,
+        connectionId: deviceId,
+        isConnected: false,
+        isHub: false,
+        lastSeen: performance.now()
+      };
+      this.devices.set(deviceId, device);
+    }
+
+    // Create connection state
+    const connectionState: DeviceConnectionState = {
+      device,
+      bluetoothDevice,
+      gattServer,
+      isConnecting: true,
+      connectionAttempts: 0,
+      services: new Map(),
+      characteristics: new Map()
+    };
+    this.connectionStates.set(deviceId, connectionState);
+
+    try {
+      // Discover services
+      const services = await gattServer.getPrimaryServices();
+      for (const service of services) {
+        connectionState.services.set(service.uuid, service);
+      }
+
+      // Discover characteristics for main service
+      const mainService = connectionState.services.get(EIDON_SERVICE_UUID);
+      if (mainService) {
+        const characteristics = await mainService.getCharacteristics();
+        for (const char of characteristics) {
+          connectionState.characteristics.set(char.uuid, char);
+        }
+      }
+
+      // Discover characteristics for role config service (if available)
+      const roleConfigService = connectionState.services.get(ROLE_CONFIG_SERVICE_UUID);
+      if (roleConfigService) {
+        const characteristics = await roleConfigService.getCharacteristics();
+        for (const char of characteristics) {
+          connectionState.characteristics.set(char.uuid, char);
+        }
+      }
+
+      // Fetch device info and role
+      await this.fetchDeviceInfo(deviceId);
+
+      // Subscribe to quaternion notifications
+      await this.subscribeToQuaternionData(deviceId);
+
+      // Subscribe to finger sensor notifications (if glove device)
+      if (device.role === DeviceRole.LEFT_GLOVE || device.role === DeviceRole.RIGHT_GLOVE) {
+        await this.subscribeToFingerData(deviceId);
+      }
+
+      // Update device state
+      device.isConnected = true;
+      device.lastSeen = performance.now();
+      this.devices.set(deviceId, device);
+
+      connectionState.isConnecting = false;
+
+      // If this is a hub, set up child devices
+      if (device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB)) {
+        const existingChildren = Array.from(this.devices.values()).filter(d => d.parentHub === deviceId);
+        if (existingChildren.length === 0) {
+          await this.setupChildDevicesForHub(deviceId);
+        }
+      }
+
+      this.dispatchEvent(new CustomEvent('deviceConnected', { detail: { deviceId, device } }));
+
+    } catch (error) {
+      connectionState.isConnecting = false;
+      this.connectionStates.delete(deviceId);
+      throw error;
+    }
   }
 
   public destroy(): void {

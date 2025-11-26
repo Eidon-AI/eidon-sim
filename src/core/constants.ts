@@ -20,12 +20,15 @@ export const DEVICE_INFO_CHAR_UUID = 'e1d00005-8b5a-3e5b-9e23-4f9b5c91bbde';
 export const HAND_QUATERNION_CHAR_UUID = 'e1d00008-8b5a-3e5b-9e23-4f9b5c91bbde';
 export const FOREARM_QUATERNION_CHAR_UUID = 'e1d00009-8b5a-3e5b-9e23-4f9b5c91bbde';
 
+// Glove-specific characteristics
+export const FINGER_SENSOR_CHAR_UUID = 'e1d0000a-8b5a-3e5b-9e23-4f9b5c91bbde';
+
 // Role configuration service
 export const ROLE_CONFIG_SERVICE_UUID = 'e1d00006-8b5a-3e5b-9e23-4f9b5c91bbde';
 export const ROLE_CONFIG_CHAR_UUID = 'e1d00007-8b5a-3e5b-9e23-4f9b5c91bbde';
 
 /* ------------------------------------------------------------------
- * Device Roles (0-6)
+ * Device Roles (0-6, 8-9)
  * ---------------------------------------------------------------- */
 export enum DeviceRole {
   LEFT_HAND = 0,
@@ -35,7 +38,9 @@ export enum DeviceRole {
   LEFT_HUB = 4,
   RIGHT_HUB = 5,
   CHEST = 6,
-  UNKNOWN = 7
+  UNKNOWN = 7,
+  LEFT_GLOVE = 8,
+  RIGHT_GLOVE = 9
 }
 
 export const DEVICE_ROLE_NAMES = {
@@ -46,7 +51,9 @@ export const DEVICE_ROLE_NAMES = {
   [DeviceRole.LEFT_HUB]: 'Left Hub',
   [DeviceRole.RIGHT_HUB]: 'Right Hub',
   [DeviceRole.CHEST]: 'Chest',
-  [DeviceRole.UNKNOWN]: 'Unknown'
+  [DeviceRole.UNKNOWN]: 'Unknown',
+  [DeviceRole.LEFT_GLOVE]: 'Left Glove',
+  [DeviceRole.RIGHT_GLOVE]: 'Right Glove'
 };
 
 // segment lengths (metres) – user-editable later

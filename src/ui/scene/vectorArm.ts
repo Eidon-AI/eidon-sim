@@ -159,11 +159,15 @@ export class VectorArm {
     const rightForearm = this.store.getByPosition(DeviceRole.ROLE_RIGHT_FOREARM);
     const leftHand = this.store.getByPosition(DeviceRole.ROLE_LEFT_HAND);
     const rightHand = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HAND);
+    // Also check for glove roles as alternative to hand roles
+    const leftGlove = this.store.getByPosition(DeviceRole.ROLE_LEFT_GLOVE);
+    const rightGlove = this.store.getByPosition(DeviceRole.ROLE_RIGHT_GLOVE);
 
     // Map to arm-specific devices based on side
     const hub = this.side === 'left' ? leftHub : rightHub;
     const forearm = this.side === 'left' ? leftForearm : rightForearm;
-    const hand = this.side === 'left' ? leftHand : rightHand;
+    // Use hand if available, otherwise fall back to glove (both represent hand position)
+    const hand = this.side === 'left' ? (leftHand || leftGlove) : (rightHand || rightGlove);
 
     // For child devices (forearm/hand), only use them if they have active incoming data
     // Hub devices can be used even without recent data (they're directly connected)

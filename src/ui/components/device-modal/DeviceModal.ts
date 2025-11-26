@@ -140,27 +140,35 @@ export class DeviceModal {
     // Tracker manager events
     this.trackerManager.addEventListener('deviceConnected', (e: any) => {
       const { deviceId, device } = e.detail;
-      
+      console.log('[DeviceModal] deviceConnected:', deviceId, device?.name, 'connectionId:', device?.connectionId);
+
       // Don't add child devices to any lists - they're handled by DeviceConnectionStateManager
       // Just update connection status for the device itself
-      
+
       // Update by trackerManager deviceId (for non-child devices or after child is added)
       this.updateDeviceConnectionStatus(deviceId, true);
-      
-      // Also update saved/discovered devices by connectionId if they match
-      if (device && device.connectionId) {
-        const savedDevice = this.savedDevices.find(d => 
-          d.connectionId === device.connectionId || 
+
+      // Also update saved/discovered devices by connectionId, macAddress, or name if they match
+      if (device) {
+        let savedDevice = this.savedDevices.find(d =>
+          d.connectionId === device.connectionId ||
           d.macAddress === device.connectionId ||
           d.connectionId === device.macAddress ||
           d.macAddress === device.macAddress
         );
+
+        // Also try matching by name (for auto-reconnect where connectionId might differ)
+        if (!savedDevice && device.name) {
+          savedDevice = this.savedDevices.find(d => d.name === device.name);
+        }
+
         if (savedDevice && savedDevice.id !== deviceId) {
+          console.log('[DeviceModal] Matched saved device:', savedDevice.id, savedDevice.name);
           savedDevice.isConnected = true;
           // Update connection info to match trackerManager device
           savedDevice.connectionId = device.connectionId;
           savedDevice.macAddress = device.macAddress || device.connectionId;
-          
+
           // IMPORTANT: Update EidonDevice.color with saved database color
           // This ensures the color is available when bridging to DeviceStore
           // Prioritize saved database color over any existing color
@@ -171,14 +179,14 @@ export class DeviceModal {
             if (trackerDevice) {
               trackerDevice.color = savedDevice.color;
               // Dispatch deviceInfoUpdated event so App.ts can sync to DeviceStore
-              this.trackerManager.dispatchEvent(new CustomEvent('deviceInfoUpdated', { 
-                detail: { deviceId, device: trackerDevice } 
+              this.trackerManager.dispatchEvent(new CustomEvent('deviceInfoUpdated', {
+                detail: { deviceId, device: trackerDevice }
               }));
             }
           }
-          
+
           this.updateDeviceConnectionStatus(savedDevice.id, true);
-          
+
           // Sync any existing quaternion data from trackerManager deviceId to saved device ID
           const quatData = this.deviceQuaternionData.get(deviceId);
           if (quatData) {
@@ -208,16 +216,30 @@ export class DeviceModal {
       }
     });
 
-    // Listen for device info updates (e.g., role changes)
+    // Listen for device info updates (e.g., role changes, battery level)
     this.trackerManager.addEventListener('deviceInfoUpdated', (e: any) => {
       const { deviceId, device } = e.detail;
+      console.log('[DeviceModal] deviceInfoUpdated:', deviceId, 'battery:', device.batteryLevel);
+
       // Update the device in our lists and re-render
-      const savedDevice = this.savedDevices.find(d => d.id === deviceId);
+      // Try matching by ID first, then by connectionId/macAddress
+      let savedDevice = this.savedDevices.find(d => d.id === deviceId);
+      if (!savedDevice && device.connectionId) {
+        savedDevice = this.savedDevices.find(d =>
+          d.connectionId === device.connectionId || d.macAddress === device.connectionId
+        );
+      }
       if (savedDevice) {
         Object.assign(savedDevice, device);
         this.renderSavedDevices();
       }
-      const discoveredDevice = this.discoveredDevices.find(d => d.id === deviceId);
+
+      let discoveredDevice = this.discoveredDevices.find(d => d.id === deviceId);
+      if (!discoveredDevice && device.connectionId) {
+        discoveredDevice = this.discoveredDevices.find(d =>
+          d.connectionId === device.connectionId || d.macAddress === device.connectionId
+        );
+      }
       if (discoveredDevice) {
         Object.assign(discoveredDevice, device);
         this.renderDiscoveredDevices();
@@ -485,6 +507,8 @@ export class DeviceModal {
       case 4: return DeviceRole.LEFT_HUB;
       case 5: return DeviceRole.RIGHT_HUB;
       case 6: return DeviceRole.CHEST;
+      case 8: return DeviceRole.LEFT_GLOVE;
+      case 9: return DeviceRole.RIGHT_GLOVE;
       default: return DeviceRole.UNKNOWN;
     }
   }
