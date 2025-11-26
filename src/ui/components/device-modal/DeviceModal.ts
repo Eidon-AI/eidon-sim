@@ -485,6 +485,8 @@ export class DeviceModal {
       case 4: return DeviceRole.LEFT_HUB;
       case 5: return DeviceRole.RIGHT_HUB;
       case 6: return DeviceRole.CHEST;
+      case 8: return DeviceRole.LEFT_GLOVE;
+      case 9: return DeviceRole.RIGHT_GLOVE;
       default: return DeviceRole.UNKNOWN;
     }
   }
