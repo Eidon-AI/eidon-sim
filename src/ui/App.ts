@@ -334,8 +334,16 @@ function initializeApp(root: HTMLElement) {
     const event = e as CustomEvent<{ deviceId: string; fingerValues: number[]; timestamp: number }>;
     const { deviceId, fingerValues } = event.detail;
 
-    // Store finger data
+    // Store finger data in the local map (for UI components)
     fingerDataStore.set(deviceId, fingerValues);
+
+    // Update device in DeviceStore with finger values (for 3D model animation)
+    const device = store['map'].get(deviceId);
+    if (device) {
+      device.fingerValues = fingerValues;
+      device.lastSeen = performance.now();
+      store.dispatchEvent(new CustomEvent('update', { detail: device }));
+    }
 
     // Dispatch custom event for finger visualization components
     document.dispatchEvent(new CustomEvent('fingerDataUpdate', {

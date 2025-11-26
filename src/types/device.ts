@@ -18,6 +18,7 @@ export interface Device extends DeviceData {
   updatedAt?: Date;      // Optional for live devices
   lastDataUpdate?: number; // Optional for playback devices
   firmwareVersion?: string; // Optional
+  fingerValues?: number[]; // 16 finger sensor values (0.0-1.0 normalized) for glove devices
 }
 
 export interface DeviceConnectionState {

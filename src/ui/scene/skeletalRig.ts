@@ -218,51 +218,65 @@ export class SkeletalRig {
     // Always use actuator angles for the physical device
     this.applySideActuatorAngles(side);
 
-    /* ----- Fingers mapping (disabled - finger data removed from Device interface) ----- */
-    // const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
-    // const glove = this.store.getByPosition(handRole);
-    // const src = glove?.fingerSmooth ?? glove?.fingerNorm;
+    /* ----- Fingers mapping from glove device ----- */
+    // Get glove device for this side (gloves have finger sensor data)
+    const gloveRole = side === 'left' ? DeviceRole.ROLE_LEFT_GLOVE : DeviceRole.ROLE_RIGHT_GLOVE;
+    const glove = this.store.getByPosition(gloveRole);
+    const src = glove?.fingerValues;
 
-    // if (src) {
-    //   const bones = this.fingerMap[side];
-    //   const sgnYaw = side === 'left' ? 1 : -1;   // outward fan
+    if (src && src.length === 16) {
+      const bones = this.fingerMap[side];
+      const sgnYaw = side === 'left' ? 1 : -1;   // outward fan for abduction
 
-    //   src.forEach((v: number, idx: number) => {
-    //     const bend = v * 90 * d2r;
+      // Sensor layout from firmware:
+      // 0: Thumb CMC Flex, 1: Thumb CMC Abd, 2: Thumb PIP, 3: Thumb DIP
+      // 4: Index Abd, 5: Index MCP, 6: Index PIP
+      // 7: Middle Abd, 8: Middle MCP, 9: Middle PIP
+      // 10: Ring Abd, 11: Ring MCP, 12: Ring PIP
+      // 13: Pinky Abd, 14: Pinky MCP, 15: Pinky PIP
 
-    //     switch (idx) {
-    //       /* Thumb first joint */
-    //       case 0:  
-    //         bones[0].rotation.y = -bend;
-    //         break;                // flex
-    //       case 1:  
-    //         bones[1].rotation.z = (v - 45) * 90 * d2r;
-    //         break;       // yaw
-    //       case 2:  
-    //         bones[2].rotation.z = bend;
-    //         break;                // Thumb2
-    //       case 3:  
-    //         bones[3].rotation.z = bend;
-    //         break;                // Thumb3
-    //       default: {
-    //         const f = Math.floor((idx-4) / 3);   // digit 0..3 (Index..Pinky)
-    //         const base = 4 + f*3;                // start idx for that digit
-    //         const bFlex = bones[4 + f*3];        // MCP flex
-    //         const bYaw  = bones[4 + f*3 + 1];    // MCP yaw
-    //         const bPIP  = bones[4 + f*3 + 2];    // PIP
+      src.forEach((v: number, idx: number) => {
+        const bend = v * 90 * d2r;
 
-    //         if (idx === base)        bFlex.rotation.z = bend - 25*d2r;
-    //         else if (idx === base+1) bYaw.rotation.x  =  sgnYaw * -bend;
-    //         else if (idx === base+2) {
-    //           bPIP.rotation.x = bend;           // PIP
-    //           /* estimate DIP (third) as half PIP bend */
-    //           const dipBone = this.mapFinger(side,['Index','Middle','Ring','Pinky'][f],3);
-    //           dipBone.rotation.x = bend * 0.5;
-    //         }
-    //       }
-    //     }
-    //   });
-    // }
+        switch (idx) {
+          /* Thumb joints */
+          case 0:  // Thumb CMC Flex
+            bones[0].rotation.y = -bend;
+            break;
+          case 1:  // Thumb CMC Abduction
+            bones[1].rotation.z = (v - 0.5) * 90 * d2r;  // Center around 0.5 for neutral
+            break;
+          case 2:  // Thumb PIP (Thumb2 bone)
+            bones[2].rotation.z = bend;
+            break;
+          case 3:  // Thumb DIP (Thumb3 bone)
+            bones[3].rotation.z = bend;
+            break;
+          default: {
+            // Fingers: Index (4-6), Middle (7-9), Ring (10-12), Pinky (13-15)
+            const f = Math.floor((idx - 4) / 3);   // digit 0..3 (Index..Pinky)
+            const localIdx = (idx - 4) % 3;        // 0=Abd, 1=MCP, 2=PIP
+            const bFlex = bones[4 + f * 3];        // MCP flex bone
+            const bYaw  = bones[4 + f * 3 + 1];    // MCP yaw/abd bone (same bone, different axis)
+            const bPIP  = bones[4 + f * 3 + 2];    // PIP bone
+
+            if (localIdx === 0) {
+              // Abduction (yaw)
+              bYaw.rotation.x = sgnYaw * -(v - 0.5) * 45 * d2r;  // Center around 0.5, ±22.5° range
+            } else if (localIdx === 1) {
+              // MCP Flexion
+              bFlex.rotation.z = bend - 25 * d2r;  // Slight offset for natural pose
+            } else if (localIdx === 2) {
+              // PIP Flexion
+              bPIP.rotation.x = bend;
+              // Estimate DIP as half of PIP bend
+              const dipBone = this.mapFinger(side, ['Index', 'Middle', 'Ring', 'Pinky'][f], 3);
+              if (dipBone) dipBone.rotation.x = bend * 0.5;
+            }
+          }
+        }
+      });
+    }
   }
 
   /* ------------ Update model yaw based on chest UP vector (negated) ----- */
