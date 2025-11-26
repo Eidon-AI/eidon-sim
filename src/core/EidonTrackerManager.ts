@@ -961,18 +961,20 @@ export class EidonTrackerManager extends EventTarget {
       if (roleChar) {
         const roleData = await roleChar.readValue();
         const roleValue = roleData.getUint8(0); // Role is typically a single byte
-        
+
         // Map the role value to DeviceRole enum
-        if (roleValue >= 0 && roleValue <= 6) {
+        // Valid roles: 0-6 (tracker roles) and 8-9 (glove roles)
+        const isValidRole = (roleValue >= 0 && roleValue <= 6) || roleValue === 8 || roleValue === 9;
+        if (isValidRole) {
           device.role = roleValue as DeviceRole;
-          
+
           // Update isHub flag based on role
-          device.isHub = device.role === DeviceRole.LEFT_HUB || 
-                        device.role === DeviceRole.RIGHT_HUB || 
+          device.isHub = device.role === DeviceRole.LEFT_HUB ||
+                        device.role === DeviceRole.RIGHT_HUB ||
                         device.role === DeviceRole.CHEST;
-          
+
           this.devices.set(deviceId, device);
-          
+
           // Dispatch event so UI can update with the new role
           this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
         }
@@ -992,15 +994,26 @@ export class EidonTrackerManager extends EventTarget {
         console.log(`[EidonTrackerManager] Device info bytes: ${infoData.byteLength}`,
           Array.from(new Uint8Array(infoData.buffer, infoData.byteOffset, infoData.byteLength)));
 
-        if (infoData.byteLength >= 5) {
+        if (infoData.byteLength >= 6) {
           const firmwareMajor = infoData.getUint8(2);
           const firmwareMinor = infoData.getUint8(3);
           const batteryLevel = infoData.getUint8(4);
+          const roleFromInfo = infoData.getUint8(5);
 
-          console.log(`[EidonTrackerManager] Parsed device info - firmware: ${firmwareMajor}.${firmwareMinor}, battery: ${batteryLevel}%`);
+          console.log(`[EidonTrackerManager] Parsed device info - firmware: ${firmwareMajor}.${firmwareMinor}, battery: ${batteryLevel}%, role: ${roleFromInfo}`);
 
           device.firmwareVersion = `${firmwareMajor}.${firmwareMinor}`;
           device.batteryLevel = batteryLevel;
+
+          // Also update role from DEVICE_INFO if valid (backup in case ROLE_CONFIG didn't work)
+          const isValidRole = (roleFromInfo >= 0 && roleFromInfo <= 6) || roleFromInfo === 8 || roleFromInfo === 9;
+          if (isValidRole && device.role === DeviceRole.UNKNOWN) {
+            device.role = roleFromInfo as DeviceRole;
+            device.isHub = device.role === DeviceRole.LEFT_HUB ||
+                          device.role === DeviceRole.RIGHT_HUB ||
+                          device.role === DeviceRole.CHEST;
+          }
+
           this.devices.set(deviceId, device);
 
           // Dispatch event for UI update
