@@ -321,7 +321,7 @@
 
 .recordingDetailsList {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
@@ -334,6 +334,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   transition: all 0.2s ease;
+  min-width: 0;
 }
 
 .recordingDetailItem:hover {
@@ -346,23 +347,30 @@
   font-weight: 600;
   color: white;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .recordingDetailStats {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
+  white-space: nowrap;
 }
 
 .recordingDetailCount {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
 }
 
 .recordingDetailTime {
   font-size: 14px;
   font-weight: 600;
   color: rgba(255, 193, 7, 0.9);
+  white-space: nowrap;
 }
 
 @keyframes slideInFromTop {
