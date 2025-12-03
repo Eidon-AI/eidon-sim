@@ -282,6 +282,89 @@
   margin: 0;
 }
 
+.recordingDetailsButton {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 6px;
+  color: rgba(255, 193, 7, 0.9);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recordingDetailsButton:hover {
+  background: rgba(255, 193, 7, 0.15);
+  border-color: rgba(255, 193, 7, 0.5);
+  color: rgba(255, 193, 7, 1);
+}
+
+.recordingDetailsButton i {
+  font-size: 11px;
+  transition: transform 0.2s ease;
+}
+
+.recordingDetailsContainer {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 193, 7, 0.2);
+  border-radius: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.recordingDetailsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recordingDetailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.recordingDetailItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
+.recordingDetailTaskType {
+  font-size: 15px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+}
+
+.recordingDetailStats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.recordingDetailCount {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.recordingDetailTime {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 193, 7, 0.9);
+}
+
 @keyframes slideInFromTop {
   0% {
     transform: translateY(-10px);

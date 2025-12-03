@@ -16,6 +16,9 @@ export class AdminRecordingsModal {
   private callbacks: AdminRecordingsModalCallbacks;
   private currentRecordings: AdminRecording[] = [];
   private pagination: any = null;
+  private recordingDetails: Record<string, { time: number; total: number }> | null = null;
+  private detailsLoading: boolean = false;
+  private detailsExpanded: boolean = false;
 
   constructor(parent: HTMLElement, toolbar: HTMLElement, callbacks: AdminRecordingsModalCallbacks) {
     this.parent = parent;
@@ -133,6 +136,129 @@ export class AdminRecordingsModal {
     }
   }
 
+  private async fetchRecordingDetails(): Promise<void> {
+    if (this.detailsLoading) {
+      return; // Already loading
+    }
+    
+    if (this.recordingDetails) {
+      // Already loaded, just render it
+      this.renderRecordingDetails();
+      return;
+    }
+
+    const state = this.loginStateManager.getState();
+    const tokens = state.tokens;
+    
+    if (!tokens?.token) {
+      throw new Error('No access token available');
+    }
+
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl) {
+      throw new Error('VITE_API_URL environment variable is not set');
+    }
+
+    this.detailsLoading = true;
+    this.updateDetailsButton();
+
+    try {
+      const response = await fetch(`${apiUrl}/recordings/admin/recording-details`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${tokens.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        
+        if (response.status === 401) {
+          console.log('Unauthorized response received, logging out user');
+          this.loginStateManager.logout();
+          throw new Error('Session expired. Please log in again.');
+        }
+        
+        throw new Error(`Failed to fetch recording details: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Recording details API response:', data);
+      
+      this.recordingDetails = data;
+      this.detailsLoading = false;
+      this.renderRecordingDetails();
+    } catch (error) {
+      console.error('Failed to fetch recording details:', error);
+      this.detailsLoading = false;
+      this.updateDetailsButton();
+      // Show error in the details area
+      this.renderRecordingDetailsError(error instanceof Error ? error.message : 'Failed to load recording details');
+    }
+  }
+
+  private updateDetailsButton(): void {
+    if (!this.modal) return;
+    
+    const detailsButton = this.modal.querySelector(`.${styles.recordingDetailsButton}`) as HTMLElement;
+    if (detailsButton) {
+      if (this.detailsLoading) {
+        detailsButton.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Loading...`;
+        detailsButton.style.pointerEvents = 'none';
+        detailsButton.style.opacity = '0.6';
+      } else {
+        const icon = this.detailsExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
+        detailsButton.innerHTML = `See recording details <i class="fas ${icon}"></i>`;
+        detailsButton.style.pointerEvents = 'auto';
+        detailsButton.style.opacity = '1';
+      }
+    }
+  }
+
+  private renderRecordingDetails(): void {
+    if (!this.modal || !this.recordingDetails) return;
+
+    const detailsContainer = this.modal.querySelector(`.${styles.recordingDetailsContainer}`);
+    if (!detailsContainer) return;
+
+    const formatTaskType = (taskType: string): string => {
+      if (!taskType) return 'No task type';
+      return taskType.split('_').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+    };
+
+    const entries = Object.entries(this.recordingDetails).sort((a, b) => b[1].total - a[1].total);
+    
+    const detailsHTML = entries.map(([taskType, data]) => `
+      <div class="${styles.recordingDetailItem}">
+        <div class="${styles.recordingDetailTaskType}">${formatTaskType(taskType)}</div>
+        <div class="${styles.recordingDetailStats}">
+          <span class="${styles.recordingDetailCount}">${data.total} recording${data.total !== 1 ? 's' : ''}</span>
+          <span class="${styles.recordingDetailTime}">${this.formatDuration(data.time)}</span>
+        </div>
+      </div>
+    `).join('');
+
+    detailsContainer.innerHTML = `
+      <div class="${styles.recordingDetailsList}">
+        ${detailsHTML}
+      </div>
+    `;
+  }
+
+  private renderRecordingDetailsError(errorMessage: string): void {
+    if (!this.modal) return;
+
+    const detailsContainer = this.modal.querySelector(`.${styles.recordingDetailsContainer}`);
+    if (detailsContainer) {
+      detailsContainer.innerHTML = `
+        <div class="${styles.errorMessage}">${errorMessage}</div>
+      `;
+    }
+  }
+
   private updateModal(recordings: any, errorMessage?: string): void {
     if (!this.modal) return;
 
@@ -175,6 +301,18 @@ export class AdminRecordingsModal {
     
     modalBody.innerHTML = this.createAdminRecordingsGrid(recordingsList, pagination);
     this.attachEventListeners();
+    
+    // Update button state to reflect current expanded state
+    this.updateDetailsButton();
+    
+    // If details were already loaded and expanded, re-render them
+    if (this.detailsExpanded && this.recordingDetails) {
+      const detailsContainer = this.modal.querySelector(`.${styles.recordingDetailsContainer}`) as HTMLElement;
+      if (detailsContainer) {
+        detailsContainer.style.display = 'block';
+        this.renderRecordingDetails();
+      }
+    }
   }
 
   private formatDuration(seconds: number): string {
@@ -252,6 +390,10 @@ export class AdminRecordingsModal {
           <div class="${styles.headerLeft}">
             <h3>System Recordings (${totalRecordings})</h3>
             ${totalSecondsFormatted ? `<p class="${styles.recordingsSubtext}">Total recording time: ${totalSecondsFormatted}</p>` : ''}
+            <button class="${styles.recordingDetailsButton}">
+              See recording details <i class="fas fa-chevron-down"></i>
+            </button>
+            <div class="${styles.recordingDetailsContainer}" style="display: ${this.detailsExpanded ? 'block' : 'none'};"></div>
           </div>
           ${paginationHTML ? `<div class="${styles.headerRight}">${paginationHTML}</div>` : ''}
         </div>
@@ -365,6 +507,25 @@ export class AdminRecordingsModal {
         }
       });
     });
+
+    const detailsButton = this.modal.querySelector(`.${styles.recordingDetailsButton}`);
+    if (detailsButton) {
+      detailsButton.addEventListener('click', async () => {
+        this.detailsExpanded = !this.detailsExpanded;
+        const detailsContainer = this.modal?.querySelector(`.${styles.recordingDetailsContainer}`) as HTMLElement;
+        
+        if (detailsContainer) {
+          if (this.detailsExpanded) {
+            detailsContainer.style.display = 'block';
+            await this.fetchRecordingDetails();
+          } else {
+            detailsContainer.style.display = 'none';
+          }
+        }
+        
+        this.updateDetailsButton();
+      });
+    }
   }
 
   private async loadAdminRecordingsPage(page: number): Promise<void> {
