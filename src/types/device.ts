@@ -1,4 +1,5 @@
 import { quat, vec3 } from 'gl-matrix';
+import { DeviceColor } from './deviceColors';
 
 export interface DeviceData {
   quat: quat;                 // gl-matrix order [x,y,z,w]
@@ -43,19 +44,8 @@ export interface DeviceConnectionState {
     ROLE_RIGHT_GLOVE = 9,    // Right glove (with finger sensors)
   }
   
-  // TODO: Define these based on Eidon Tracker Colors
-  export enum DeviceColor {
-    RED = 'rgb(255, 0, 0)',
-    GREEN = 'rgb(0, 128, 0)',
-    BLUE = 'rgb(0, 0, 255)',
-    YELLOW = 'rgb(255, 255, 0)',
-    PURPLE = 'rgb(128, 0, 128)',
-    ORANGE = 'rgb(255, 165, 0)',
-    PINK = 'rgb(255, 192, 203)',
-    CYAN = 'rgb(0, 255, 255)',
-    WHITE = 'rgb(255, 255, 255)',
-    BLACK = 'rgb(40, 40, 40)', // Dark gray instead of true black
-  }
+  // Re-export DeviceColor from deviceColors.ts for backward compatibility
+  export { DeviceColor } from './deviceColors';
   
   // Mapping number to role string
   export const deviceRoleToString = (role: DeviceRole): string => {

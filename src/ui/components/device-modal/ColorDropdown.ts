@@ -1,20 +1,5 @@
 import styles from './styles/ColorDropdown.module.css';
-
-/**
- * Color option data
- */
-export const COLOR_OPTIONS = [
-  { value: 'rgb(255, 0, 0)', label: 'Red', color: 'rgb(255, 0, 0)' },
-  { value: 'rgb(0, 128, 0)', label: 'Green', color: 'rgb(0, 128, 0)' },
-  { value: 'rgb(0, 0, 255)', label: 'Blue', color: 'rgb(0, 0, 255)' },
-  { value: 'rgb(255, 255, 0)', label: 'Yellow', color: 'rgb(255, 255, 0)' },
-  { value: 'rgb(128, 0, 128)', label: 'Purple', color: 'rgb(128, 0, 128)' },
-  { value: 'rgb(255, 165, 0)', label: 'Orange', color: 'rgb(255, 165, 0)' },
-  { value: 'rgb(255, 192, 203)', label: 'Pink', color: 'rgb(255, 192, 203)' },
-  { value: 'rgb(0, 255, 255)', label: 'Cyan', color: 'rgb(0, 255, 255)' },
-  { value: 'rgb(255, 255, 255)', label: 'White', color: 'rgb(255, 255, 255)' },
-  { value: 'rgb(40, 40, 40)', label: 'Black', color: 'rgb(40, 40, 40)' }
-];
+import { COLOR_OPTIONS } from '../../../types/deviceColors';
 
 /**
  * Render color dropdown HTML
