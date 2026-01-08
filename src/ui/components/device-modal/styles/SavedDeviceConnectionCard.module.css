@@ -506,3 +506,71 @@
   color: rgba(255, 255, 255, 1);
 }
 
+.rawDataSection {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(64, 64, 64, 0.3);
+}
+
+.rawDataToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.5rem 0;
+  transition: color 0.2s;
+}
+
+.rawDataToggle:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.rawDataToggleIcon {
+  transition: transform 0.2s;
+  font-size: 0.75rem;
+}
+
+.rawDataContent {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.rawDataGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rawDataGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.rawDataLabel {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.rawDataRow {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.rawDataValue {
+  font-family: monospace;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+

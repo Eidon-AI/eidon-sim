@@ -1,8 +1,9 @@
-import { EidonTrackerManager, EidonDevice } from '../../../core/EidonTrackerManager';
+import { EidonTrackerManager, EidonDevice, RawMotionData } from '../../../core/EidonTrackerManager';
 import { DeviceRole } from '../../../core/constants';
 import { LoginStateManager } from '../../../core/LoginStateManager';
 import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
 import { LatestVersionManager } from '../../../core/LatestVersionManager';
+import { checkAndSyncVersion } from '../../../core/DeviceVersionSync';
 import { createDeviceConnectionCard as createNewDeviceCard, setDeviceCardStyles as setNewDeviceCardStyles, cardStyles as newCardStyles } from './NewDeviceConnectionCard';
 import { createDeviceConnectionCard as createSavedDeviceCard, setDeviceCardStyles as setSavedDeviceCardStyles, cardStyles as savedCardStyles } from './SavedDeviceConnectionCard';
 import colorDropdownStyles from './styles/ColorDropdown.module.css';
@@ -20,6 +21,7 @@ export class DeviceModal {
   private discoveredDevices: EidonDevice[] = [];
   private deviceConfigs = new Map<string, { selectedColor?: string; selectedRole?: DeviceRole }>();
   private deviceQuaternionData = new Map<string, { quaternion: number[]; timestamp: number }>();
+  private deviceRawData = new Map<string, RawMotionData>(); // Key format: ${deviceId}_${type} (hub/hand/forearm)
   private deviceEditStates = new Map<string, boolean>(); // Track which devices have config section visible
   private deviceDataViewStates = new Map<string, boolean>(); // Track which devices have data stream visible
   private deviceDisconnecting = new Set<string>(); // Track devices currently disconnecting to prevent reconnection attempts
@@ -139,10 +141,13 @@ export class DeviceModal {
     const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
     scanBtn.addEventListener('click', () => this.handleScan());
 
-    // Tracker manager events
-    this.trackerManager.addEventListener('deviceConnected', (e: any) => {
-      const { deviceId, device } = e.detail;
-      console.log('[DeviceModal] deviceConnected:', deviceId, device?.name, 'connectionId:', device?.connectionId);
+      // Tracker manager events
+      this.trackerManager.addEventListener('deviceConnected', (e: any) => {
+        const { deviceId, device } = e.detail;
+        console.log('[DeviceModal] deviceConnected:', deviceId, device?.name, 'connectionId:', device?.connectionId);
+        
+        // Note: setupRawDataStreams will be called after deviceInfoUpdated
+        // to ensure device role is available
 
       // Don't add child devices to any lists - they're handled by DeviceConnectionStateManager
       // Just update connection status for the device itself
@@ -200,6 +205,11 @@ export class DeviceModal {
 
     this.trackerManager.addEventListener('deviceDisconnected', (e: any) => {
       const { deviceId } = e.detail;
+      
+      // Clean up raw data for disconnected device
+      this.deviceRawData.delete(`${deviceId}_hub`);
+      this.deviceRawData.delete(`${deviceId}_hand`);
+      this.deviceRawData.delete(`${deviceId}_forearm`);
       // Update by trackerManager deviceId
       this.updateDeviceConnectionStatus(deviceId, false);
       // Also find and update by connectionId
@@ -221,8 +231,13 @@ export class DeviceModal {
     // Listen for device info updates (e.g., role changes, battery level)
     this.trackerManager.addEventListener('deviceInfoUpdated', (e: any) => {
       const { deviceId, device } = e.detail;
-      console.log('[DeviceModal] deviceInfoUpdated:', deviceId, 'battery:', device.batteryLevel);
-
+      console.log('[DeviceModal] deviceInfoUpdated:', deviceId, 'battery:', device.batteryLevel, 'role:', device.role, 'isHub:', device.isHub);
+      
+      // Setup raw data stream readers after device info is available (so we know the role)
+      if (device.isConnected) {
+        this.setupRawDataStreams(deviceId);
+      }
+      
       // Update the device in our lists and re-render
       // Try matching by ID first, then by connectionId/macAddress
       let savedDevice = this.savedDevices.find(d => d.id === deviceId);
@@ -230,6 +245,13 @@ export class DeviceModal {
         savedDevice = this.savedDevices.find(d =>
           d.connectionId === device.connectionId || d.macAddress === device.connectionId
         );
+      }
+      
+      // Auto-sync version if device version is newer than API stored version
+      if (device.firmwareVersion && savedDevice) {
+        checkAndSyncVersion(deviceId, device.firmwareVersion, savedDevice.firmwareVersion).catch(() => {
+          // Fail silently - background operation
+        });
       }
       if (savedDevice) {
         Object.assign(savedDevice, device);
@@ -579,7 +601,7 @@ export class DeviceModal {
     const html = this.savedDevices.map(device => {
       const config = this.deviceConfigs.get(device.id);
       const hasChanges = this.hasDeviceChanges(device, config);
-      return createSavedDeviceCard(device, allTrackerDevices, config?.selectedColor, config?.selectedRole, hasChanges, this.deviceQuaternionData);
+      return createSavedDeviceCard(device, allTrackerDevices, config?.selectedColor, config?.selectedRole, hasChanges, this.deviceQuaternionData, this.deviceRawData);
     }).join('');
 
     container.innerHTML = html;
@@ -811,6 +833,17 @@ export class DeviceModal {
         }
       });
     });
+
+    // Raw data toggle buttons (saved devices only)
+    this.modal.querySelectorAll(`.${savedCardStyles.rawDataToggle}`).forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const button = (e.target as HTMLElement).closest(`.${savedCardStyles.rawDataToggle}`) as HTMLElement;
+        const rawDataId = button?.getAttribute('data-raw-data-id');
+        if (rawDataId) {
+          this.toggleRawDataView(rawDataId);
+        }
+      });
+    });
   }
 
   private toggleDataView(deviceId: string): void {
@@ -833,6 +866,18 @@ export class DeviceModal {
     
     // Track the data view state to preserve across re-renders
     this.deviceDataViewStates.set(deviceId, isHidden);
+  }
+
+  private toggleRawDataView(rawDataId: string): void {
+    const toggleBtn = this.modal.querySelector(`.${savedCardStyles.rawDataToggle}[data-raw-data-id="${rawDataId}"]`) as HTMLElement;
+    const rawDataContent = this.modal.querySelector(`.${savedCardStyles.rawDataContent}[data-raw-data-id="${rawDataId}"]`) as HTMLElement;
+    const icon = toggleBtn?.querySelector(`.${savedCardStyles.rawDataToggleIcon}`) as HTMLElement;
+    
+    if (!rawDataContent || !toggleBtn || !icon) return;
+
+    const isHidden = rawDataContent.style.display === 'none';
+    rawDataContent.style.display = isHidden ? 'block' : 'none';
+    icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
   }
 
   private async updateDeviceDataView(deviceId: string): Promise<void> {
@@ -1524,6 +1569,180 @@ export class DeviceModal {
       console.error('Failed to delete device:', error);
       // Error is logged, UI will update automatically when device is removed
     }
+  }
+
+  private setupRawDataStreams(deviceId: string): void {
+    // Get device to determine its role
+    const device = this.trackerManager.getDevice(deviceId);
+    if (!device) {
+      console.warn(`[DeviceModal] setupRawDataStreams: Device not found for ${deviceId}`);
+      return;
+    }
+    
+    const isHub = device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB);
+    const isHand = device.role === DeviceRole.LEFT_HAND || device.role === DeviceRole.RIGHT_HAND;
+    const isForearm = device.role === DeviceRole.LEFT_FOREARM || device.role === DeviceRole.RIGHT_FOREARM;
+    
+    console.log(`[DeviceModal] setupRawDataStreams for ${deviceId}: role=${device.role}, isHub=${isHub}, isHand=${isHand}, isForearm=${isForearm}`);
+
+    // Setup hub raw data stream (HUB_RAW_DATA_CHAR_UUID)
+    // For hubs: this is their own data → store as 'hub'
+    // For hand devices: this is their own data → store as 'hand'
+    // For forearm devices: this is their own data → store as 'forearm'
+    const hubStream = this.trackerManager.getHubRawDataStream(deviceId);
+    if (hubStream) {
+      console.log(`[DeviceModal] Setting up hub raw data stream for ${deviceId}`);
+      const reader = hubStream.getReader();
+      const readHubData = () => {
+        reader.read().then(({ done, value }) => {
+          if (done) return;
+          if (value) {
+            // Determine storage key based on device type
+            let storageType: 'hub' | 'hand' | 'forearm';
+            if (isHand) {
+              storageType = 'hand';
+            } else if (isForearm) {
+              storageType = 'forearm';
+            } else {
+              storageType = 'hub';
+            }
+            this.deviceRawData.set(`${deviceId}_${storageType}`, value);
+            this.updateRawDataDisplay(deviceId, storageType, value);
+          }
+          readHubData();
+        }).catch((error) => {
+          console.warn(`[DeviceModal] Hub raw data stream error for ${deviceId}:`, error);
+          // Stream closed or error - stop reading
+        });
+      };
+      readHubData();
+    } else {
+      console.log(`[DeviceModal] No hub raw data stream available for ${deviceId}`);
+    }
+
+    // Setup hand raw data stream (HAND_RAW_DATA_CHAR_UUID)
+    // Only hubs have this characteristic - it reports child hand data
+    if (isHub) {
+      const handStream = this.trackerManager.getHandRawDataStream(deviceId);
+      if (handStream) {
+        console.log(`[DeviceModal] Setting up hand raw data stream for hub ${deviceId}`);
+        const reader = handStream.getReader();
+        const readHandData = () => {
+          reader.read().then(({ done, value }) => {
+            if (done) return;
+            if (value) {
+              console.log(`[DeviceModal] Received hand raw data for hub ${deviceId}`);
+              this.deviceRawData.set(`${deviceId}_hand`, value);
+              this.updateRawDataDisplay(deviceId, 'hand', value);
+            }
+            readHandData();
+          }).catch((error) => {
+            console.warn(`[DeviceModal] Hand raw data stream error for ${deviceId}:`, error);
+            // Stream closed or error - stop reading
+          });
+        };
+        readHandData();
+      } else {
+        console.log(`[DeviceModal] No hand raw data stream available for hub ${deviceId}`);
+      }
+    }
+
+    // Setup forearm raw data stream (FOREARM_RAW_DATA_CHAR_UUID)
+    // Only hubs have this characteristic - it reports child forearm data
+    if (isHub) {
+      const forearmStream = this.trackerManager.getForearmRawDataStream(deviceId);
+      if (forearmStream) {
+        console.log(`[DeviceModal] Setting up forearm raw data stream for hub ${deviceId}`);
+        const reader = forearmStream.getReader();
+        const readForearmData = () => {
+          reader.read().then(({ done, value }) => {
+            if (done) return;
+            if (value) {
+              console.log(`[DeviceModal] Received forearm raw data for hub ${deviceId}`);
+              this.deviceRawData.set(`${deviceId}_forearm`, value);
+              this.updateRawDataDisplay(deviceId, 'forearm', value);
+            }
+            readForearmData();
+          }).catch((error) => {
+            console.warn(`[DeviceModal] Forearm raw data stream error for ${deviceId}:`, error);
+            // Stream closed or error - stop reading
+          });
+        };
+        readForearmData();
+      } else {
+        console.log(`[DeviceModal] No forearm raw data stream available for hub ${deviceId}`);
+      }
+    }
+  }
+
+  private updateRawDataDisplay(deviceId: string, type: 'hub' | 'hand' | 'forearm', rawData: RawMotionData): void {
+    const dataId = `${deviceId}_${type}_raw`;
+    // Find the raw data content section (inside the collapsible section)
+    const rawDataContent = this.modal.querySelector(`.${savedCardStyles.rawDataContent}[data-raw-data-id="${dataId}"]`) as HTMLElement;
+    if (!rawDataContent) {
+      console.warn(`[DeviceModal] Raw data content not found for ${dataId}`);
+      return;
+    }
+
+    // Check if data attributes exist (data might have arrived before initial render)
+    const accelX = rawDataContent.querySelector(`[data-raw-accel-x]`) as HTMLElement;
+    
+    // If data attributes don't exist, we need to replace the "Waiting for data..." placeholder
+    if (!accelX) {
+      // Replace placeholder with actual data grid structure
+      rawDataContent.innerHTML = `
+        <div class="${savedCardStyles.rawDataGrid}">
+          <div class="${savedCardStyles.rawDataGroup}">
+            <div class="${savedCardStyles.rawDataLabel}" style="color: #ef4444;">Accelerometer (m/s²)</div>
+            <div class="${savedCardStyles.rawDataRow}">
+              <span>X: <span class="${savedCardStyles.rawDataValue}" data-raw-accel-x>${rawData.accelerometer.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${savedCardStyles.rawDataValue}" data-raw-accel-y>${rawData.accelerometer.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${savedCardStyles.rawDataValue}" data-raw-accel-z>${rawData.accelerometer.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+          <div class="${savedCardStyles.rawDataGroup}">
+            <div class="${savedCardStyles.rawDataLabel}" style="color: #10b981;">Gyroscope (rad/s)</div>
+            <div class="${savedCardStyles.rawDataRow}">
+              <span>X: <span class="${savedCardStyles.rawDataValue}" data-raw-gyro-x>${rawData.gyroscope.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${savedCardStyles.rawDataValue}" data-raw-gyro-y>${rawData.gyroscope.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${savedCardStyles.rawDataValue}" data-raw-gyro-z>${rawData.gyroscope.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+          <div class="${savedCardStyles.rawDataGroup}">
+            <div class="${savedCardStyles.rawDataLabel}" style="color: #3b82f6;">Magnetometer (µT)</div>
+            <div class="${savedCardStyles.rawDataRow}">
+              <span>X: <span class="${savedCardStyles.rawDataValue}" data-raw-mag-x>${rawData.magnetometer.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${savedCardStyles.rawDataValue}" data-raw-mag-y>${rawData.magnetometer.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${savedCardStyles.rawDataValue}" data-raw-mag-z>${rawData.magnetometer.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // Update accelerometer values
+    if (accelX) accelX.textContent = rawData.accelerometer.x.toFixed(3);
+    const accelY = rawDataContent.querySelector(`[data-raw-accel-y]`) as HTMLElement;
+    if (accelY) accelY.textContent = rawData.accelerometer.y.toFixed(3);
+    const accelZ = rawDataContent.querySelector(`[data-raw-accel-z]`) as HTMLElement;
+    if (accelZ) accelZ.textContent = rawData.accelerometer.z.toFixed(3);
+
+    // Update gyroscope values
+    const gyroX = rawDataContent.querySelector(`[data-raw-gyro-x]`) as HTMLElement;
+    const gyroY = rawDataContent.querySelector(`[data-raw-gyro-y]`) as HTMLElement;
+    const gyroZ = rawDataContent.querySelector(`[data-raw-gyro-z]`) as HTMLElement;
+    if (gyroX) gyroX.textContent = rawData.gyroscope.x.toFixed(3);
+    if (gyroY) gyroY.textContent = rawData.gyroscope.y.toFixed(3);
+    if (gyroZ) gyroZ.textContent = rawData.gyroscope.z.toFixed(3);
+
+    // Update magnetometer values
+    const magX = rawDataContent.querySelector(`[data-raw-mag-x]`) as HTMLElement;
+    const magY = rawDataContent.querySelector(`[data-raw-mag-y]`) as HTMLElement;
+    const magZ = rawDataContent.querySelector(`[data-raw-mag-z]`) as HTMLElement;
+    if (magX) magX.textContent = rawData.magnetometer.x.toFixed(3);
+    if (magY) magY.textContent = rawData.magnetometer.y.toFixed(3);
+    if (magZ) magZ.textContent = rawData.magnetometer.z.toFixed(3);
   }
 
   private updateVersionWarnings(): void {

@@ -51,6 +51,8 @@ export class UpdatePage {
   private versionInfoContainer: HTMLElement | null = null;
   private connectedDeviceCard: HTMLElement | null = null;
   private connectedDeviceTerminal: HTMLElement | null = null;
+  private connectedDeviceProgressBar: HTMLElement | null = null;
+  private connectedDeviceProgressContainer: HTMLElement | null = null;
   private connectedDeviceInfo: {
     chipType: string;
     macAddress: string;
@@ -85,6 +87,9 @@ export class UpdatePage {
   }
 
   public async mount(parent: HTMLElement): Promise<void> {
+    // Update SEO/OG metadata for update page
+    this.updateMetadata();
+    
     parent.innerHTML = ''; // Clear existing content (assuming full page takeover)
     parent.appendChild(this.container);
 
@@ -117,6 +122,9 @@ export class UpdatePage {
   }
 
   public unmount(): void {
+    // Restore default metadata
+    this.restoreDefaultMetadata();
+    
     if (this.authModal) {
       this.authModal.unmount();
       this.authModal = null;
@@ -126,6 +134,53 @@ export class UpdatePage {
       this.port.close();
     }
     this.container.remove();
+  }
+
+  private updateMetadata(): void {
+    // Update title
+    document.title = 'Update Tracker Firmware - Eidon Sym';
+    
+    // Update primary meta tags
+    this.setMetaTag('name', 'title', 'Update Tracker Firmware - Eidon Sym');
+    this.setMetaTag('name', 'description', 'Update your Eidon tracker firmware to the latest version. Keep your motion tracking devices up to date with the newest features and improvements.');
+    this.setMetaTag('name', 'keywords', 'firmware update, tracker update, device firmware, Eidon tracker, motion tracker update');
+    
+    // Update Open Graph tags
+    this.setMetaTag('property', 'og:title', 'Update Tracker Firmware - Eidon Sym');
+    this.setMetaTag('property', 'og:description', 'Update your Eidon tracker firmware to the latest version. Keep your motion tracking devices up to date with the newest features and improvements.');
+    this.setMetaTag('property', 'og:type', 'website');
+    
+    // Update Twitter tags
+    this.setMetaTag('name', 'twitter:title', 'Update Tracker Firmware - Eidon Sym');
+    this.setMetaTag('name', 'twitter:description', 'Update your Eidon tracker firmware to the latest version. Keep your motion tracking devices up to date with the newest features and improvements.');
+  }
+
+  private restoreDefaultMetadata(): void {
+    // Restore default title
+    document.title = 'Eidon Sym';
+    
+    // Restore default meta tags
+    this.setMetaTag('name', 'title', 'Eidon Sym');
+    this.setMetaTag('name', 'description', 'Visualize sensor recordings, analyze device data, and test connections with Eidon Sym. Real-time visualization and playback of sensor recordings.');
+    this.setMetaTag('name', 'keywords', 'sensor data, device testing, recording visualization, motion sensors, IMU, sensor playback');
+    
+    // Restore default Open Graph tags
+    this.setMetaTag('property', 'og:title', 'Eidon Sym ');
+    this.setMetaTag('property', 'og:description', 'Visualize sensor recordings, analyze device data, and test connections with Eidon Sym. Real-time visualization and playback of sensor recordings.');
+    
+    // Restore default Twitter tags
+    this.setMetaTag('name', 'twitter:title', 'Eidon Sym ');
+    this.setMetaTag('name', 'twitter:description', 'Visualize sensor recordings, analyze device data, and test connections with Eidon Sym. Real-time visualization and playback of sensor recordings.');
+  }
+
+  private setMetaTag(attribute: 'name' | 'property', key: string, value: string): void {
+    let meta = document.querySelector(`meta[${attribute}="${key}"]`) as HTMLMetaElement;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute(attribute, key);
+      document.head.appendChild(meta);
+    }
+    meta.content = value;
   }
 
   private showAuthModal(): void {
@@ -256,6 +311,45 @@ export class UpdatePage {
     listSection.appendChild(listTitle);
     listSection.appendChild(this.deviceListContainer);
     this.content.appendChild(listSection);
+    
+    // Instructions Dropdown Section
+    const instructionsSection = document.createElement('div');
+    instructionsSection.className = styles.section;
+    
+    const instructionsContent = document.createElement('div');
+    instructionsContent.className = styles.instructionsContent;
+    instructionsContent.style.display = 'none';
+    instructionsContent.innerHTML = `
+      <div class="${styles.instructionStep}">
+        <strong>1. Connect</strong> - Select your device from the serial port dialog
+      </div>
+      <div class="${styles.instructionStep}">
+        <strong>2. Auto-Detection</strong> - Device will be automatically matched if saved. If not found, you can manually select from your devices or create a new device.
+      </div>
+      <div class="${styles.instructionStep}">
+        <strong>3. Success</strong> - After flashing completes, the UI will update and you can close the connection.
+      </div>
+    `;
+    
+    const instructionsHeader = document.createElement('div');
+    instructionsHeader.className = styles.instructionsHeader;
+    instructionsHeader.innerHTML = `
+      <i class="fas fa-info-circle"></i>
+      <span>Instructions</span>
+      <i class="fas fa-chevron-down ${styles.instructionsChevron}"></i>
+    `;
+    instructionsHeader.onclick = () => {
+      const isOpen = instructionsContent.style.display !== 'none';
+      instructionsContent.style.display = isOpen ? 'none' : 'block';
+      const chevron = instructionsHeader.querySelector(`.${styles.instructionsChevron}`) as HTMLElement;
+      if (chevron) {
+        chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+      }
+    };
+    
+    instructionsSection.appendChild(instructionsHeader);
+    instructionsSection.appendChild(instructionsContent);
+    this.content.appendChild(instructionsSection);
   }
 
   private async fetchLatestVersion(): Promise<void> {
@@ -578,6 +672,8 @@ export class UpdatePage {
     // Remove existing card if present
     if (this.connectedDeviceCard) {
       this.connectedDeviceCard.remove();
+      this.connectedDeviceProgressBar = null;
+      this.connectedDeviceProgressContainer = null;
     }
     
     // Find the connection section to insert after it
@@ -905,6 +1001,14 @@ export class UpdatePage {
     terminalSection.appendChild(terminalTitle);
     terminalSection.appendChild(this.connectedDeviceTerminal);
     
+    // Progress Bar for firmware update
+    this.connectedDeviceProgressContainer = document.createElement('div');
+    this.connectedDeviceProgressContainer.className = styles.connectedDeviceProgressContainer;
+    this.connectedDeviceProgressBar = document.createElement('div');
+    this.connectedDeviceProgressBar.className = styles.connectedDeviceProgressBar;
+    this.connectedDeviceProgressContainer.appendChild(this.connectedDeviceProgressBar);
+    this.connectedDeviceProgressContainer.style.display = 'none';
+    
     // Update Button (only show if device is saved)
     let updateButton: HTMLButtonElement | null = null;
     if (isSaved) {
@@ -925,6 +1029,7 @@ export class UpdatePage {
     }
     this.connectedDeviceCard.appendChild(infoContainer);
     this.connectedDeviceCard.appendChild(terminalSection);
+    this.connectedDeviceCard.appendChild(this.connectedDeviceProgressContainer);
     if (updateButton) {
       this.connectedDeviceCard.appendChild(updateButton);
     }
@@ -988,6 +1093,8 @@ export class UpdatePage {
       this.connectedDeviceCard.remove();
       this.connectedDeviceCard = null;
       this.connectedDeviceTerminal = null;
+      this.connectedDeviceProgressBar = null;
+      this.connectedDeviceProgressContainer = null;
     }
     
     // Clear device info
@@ -1187,6 +1294,15 @@ export class UpdatePage {
     if (!this.deviceLoader || !this.transport) return;
     
     try {
+      // Reset and show progress bar in connected device card
+      if (this.connectedDeviceProgressBar) {
+        this.connectedDeviceProgressBar.style.width = '0%';
+      }
+      if (this.connectedDeviceProgressContainer) {
+        this.connectedDeviceProgressContainer.style.display = 'block';
+      }
+      // Also reset and show page-level progress bar
+      this.progressBar.style.width = '0%';
       this.progressBarContainer.style.display = 'block';
       this.log('Preparing files...');
       
@@ -1227,9 +1343,23 @@ export class UpdatePage {
       
       // Show success message on card
       this.showFlashSuccessMessage();
+      
+      // Hide progress bar after completion
+      if (this.connectedDeviceProgressContainer) {
+        // Keep it visible but at 100%
+        setTimeout(() => {
+          if (this.connectedDeviceProgressContainer) {
+            this.connectedDeviceProgressContainer.style.display = 'none';
+          }
+        }, 2000);
+      }
 
     } catch (e) {
       this.log('Flashing error: ' + e);
+      // Hide progress bar on error
+      if (this.connectedDeviceProgressContainer) {
+        this.connectedDeviceProgressContainer.style.display = 'none';
+      }
     } finally {
       // Don't close connection automatically - let user close it
       // Clean up only the loader/transport references, keep port open
@@ -1239,7 +1369,11 @@ export class UpdatePage {
   }
   
   private updateProgress(percent: number) {
+    // Update both progress bars
     this.progressBar.style.width = `${percent}%`;
+    if (this.connectedDeviceProgressBar) {
+      this.connectedDeviceProgressBar.style.width = `${percent}%`;
+    }
   }
 
   private showFlashSuccessMessage(): void {
@@ -1331,7 +1465,31 @@ export class UpdatePage {
              this.log('Backend record updated successfully.');
              await this.fetchSavedDevices(); // Refresh list to update UI
            } else {
-             this.log(`Failed to update backend: ${response.statusText}`);
+             // Try to get error details from response body
+             let errorMessage = response.statusText || 'Unknown error';
+             try {
+               const errorData = await response.json();
+               if (errorData.message) {
+                 errorMessage = errorData.message;
+               }
+             } catch (e) {
+               // If response is not JSON, use status text
+             }
+             
+             // Check if device is already up to date
+             if (response.status === 400 || response.status === 409) {
+               // Check if the error indicates the device is already at this version
+               if (device.version === this.latestVersion || 
+                   errorMessage.toLowerCase().includes('already') ||
+                   errorMessage.toLowerCase().includes('up to date') ||
+                   errorMessage.toLowerCase().includes('version')) {
+                 this.log(`Device is already up to date (version ${this.latestVersion}). Backend record is current.`);
+               } else {
+                 this.log(`Failed to update backend: ${errorMessage}`);
+               }
+             } else {
+               this.log(`Failed to update backend: ${errorMessage} (Status: ${response.status})`);
+             }
            }
          } catch (err) {
             this.log(`Error updating backend: ${err}`);

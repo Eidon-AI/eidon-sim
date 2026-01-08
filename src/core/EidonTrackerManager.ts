@@ -8,9 +8,14 @@ import {
   FINGER_SENSOR_CHAR_UUID,
   ROLE_CONFIG_SERVICE_UUID,
   ROLE_CONFIG_CHAR_UUID,
+  HUB_RAW_DATA_CHAR_UUID,
+  HAND_RAW_DATA_CHAR_UUID,
+  FOREARM_RAW_DATA_CHAR_UUID,
   DeviceRole,
   DEVICE_ROLE_NAMES
 } from './constants';
+import { checkAndSyncVersion } from './DeviceVersionSync';
+import { parseRawMotionData } from './rawMotionDataParser';
 
 // Types for child devices (no longer using ChildDeviceConnectionManager)
 export type ChildDeviceId = string;
@@ -18,6 +23,13 @@ export type ChildDeviceType = 'hand' | 'forearm';
 export type ChildDeviceRole = 'left_hand' | 'right_hand' | 'left_forearm' | 'right_forearm';
 
 export type DeviceId = string;
+
+export interface RawMotionData {
+  accelerometer: { x: number; y: number; z: number }; // m/s²
+  gyroscope: { x: number; y: number; z: number }; // rad/s
+  magnetometer: { x: number; y: number; z: number }; // µT
+  timestamp: number;
+}
 
 export interface EidonDevice {
   id: DeviceId;
@@ -48,6 +60,16 @@ export class EidonTrackerManager extends EventTarget {
   private devices = new Map<DeviceId, EidonDevice>();
   private connectionStates = new Map<DeviceId, DeviceConnectionState>();
   private isScanning = false;
+  
+  // Raw data streams - keyed by deviceId
+  private hubRawDataStreams = new Map<DeviceId, ReadableStream<RawMotionData>>();
+  private handRawDataStreams = new Map<DeviceId, ReadableStream<RawMotionData>>();
+  private forearmRawDataStreams = new Map<DeviceId, ReadableStream<RawMotionData>>();
+  
+  // Stream controllers for raw data
+  private hubRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
+  private handRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
+  private forearmRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
   private scanAbortController?: AbortController;
 
   constructor() {
@@ -548,6 +570,8 @@ export class EidonTrackerManager extends EventTarget {
    * Disconnect from a specific device
    */
   async disconnectDevice(deviceId: DeviceId): Promise<void> {
+    // Clean up raw data streams
+    this.cleanupRawDataStreams(deviceId);
     const connectionState = this.connectionStates.get(deviceId);
     if (!connectionState) {
       return;
@@ -910,6 +934,10 @@ export class EidonTrackerManager extends EventTarget {
         }
       }
 
+      // Subscribe to raw data characteristics for all devices (hub, hand, forearm)
+      // Each device will only have the characteristics it supports
+      await this.subscribeToRawData(deviceId);
+
       this.dispatchEvent(new CustomEvent('deviceConnected', { detail: { deviceId, device } }));
 
     } catch (error) {
@@ -987,22 +1015,45 @@ export class EidonTrackerManager extends EventTarget {
 
         // Parse device info from firmware structure:
         // Bytes 0-1: Device ID
-        // Bytes 2-3: Firmware version (major.minor)
-        // Byte 4: Battery percentage (0-100)
-        // Byte 5: Device role
-        // Bytes 6-11: MAC address
+        // Byte 2: Firmware version Major
+        // Byte 3: Firmware version Minor
+        // Byte 4: Firmware version Patch
+        // Byte 5: Battery percentage (0-100)
+        // Byte 6: Device role
+        // Bytes 7-12: MAC address
         console.log(`[EidonTrackerManager] Device info bytes: ${infoData.byteLength}`,
           Array.from(new Uint8Array(infoData.buffer, infoData.byteOffset, infoData.byteLength)));
 
-        if (infoData.byteLength >= 6) {
+        if (infoData.byteLength >= 7) {
+          const firmwareMajor = infoData.getUint8(2);
+          const firmwareMinor = infoData.getUint8(3);
+          const firmwarePatch = infoData.getUint8(4);
+          const batteryLevel = infoData.getUint8(5);
+          const roleFromInfo = infoData.getUint8(6);
+
+          console.log(`[EidonTrackerManager] Parsed device info - firmware: ${firmwareMajor}.${firmwareMinor}.${firmwarePatch}, battery: ${batteryLevel}%, role: ${roleFromInfo}`);
+
+          device.firmwareVersion = `${firmwareMajor}.${firmwareMinor}.${firmwarePatch}`;
+          device.batteryLevel = batteryLevel;
+
+          // Also update role from DEVICE_INFO if valid (backup in case ROLE_CONFIG didn't work)
+          const isValidRole = (roleFromInfo >= 0 && roleFromInfo <= 6) || roleFromInfo === 8 || roleFromInfo === 9;
+          if (isValidRole && device.role === DeviceRole.UNKNOWN) {
+            device.role = roleFromInfo as DeviceRole;
+            device.isHub = device.role === DeviceRole.LEFT_HUB ||
+                          device.role === DeviceRole.RIGHT_HUB ||
+                          device.role === DeviceRole.CHEST;
+          }
+        } else if (infoData.byteLength >= 6) {
+          // Fallback for older firmware that doesn't have patch byte
           const firmwareMajor = infoData.getUint8(2);
           const firmwareMinor = infoData.getUint8(3);
           const batteryLevel = infoData.getUint8(4);
           const roleFromInfo = infoData.getUint8(5);
 
-          console.log(`[EidonTrackerManager] Parsed device info - firmware: ${firmwareMajor}.${firmwareMinor}, battery: ${batteryLevel}%, role: ${roleFromInfo}`);
+          console.log(`[EidonTrackerManager] Parsed device info (legacy) - firmware: ${firmwareMajor}.${firmwareMinor}, battery: ${batteryLevel}%, role: ${roleFromInfo}`);
 
-          device.firmwareVersion = `${firmwareMajor}.${firmwareMinor}`;
+          device.firmwareVersion = `${firmwareMajor}.${firmwareMinor}.0`; // Pad patch as 0 for legacy
           device.batteryLevel = batteryLevel;
 
           // Also update role from DEVICE_INFO if valid (backup in case ROLE_CONFIG didn't work)
@@ -1015,6 +1066,8 @@ export class EidonTrackerManager extends EventTarget {
           }
 
           this.devices.set(deviceId, device);
+
+          // Auto-sync version will be handled by DeviceModal which has access to saved devices
 
           // Dispatch event for UI update
           this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId, device } }));
@@ -1048,6 +1101,221 @@ export class EidonTrackerManager extends EventTarget {
         timestamp: performance.now()
       }
     }));
+  }
+
+  private async subscribeToRawData(deviceId: DeviceId): Promise<void> {
+    const connectionState = this.connectionStates.get(deviceId);
+    if (!connectionState) {
+      return;
+    }
+
+    // Create streams for raw data
+    this.createRawDataStreams(deviceId);
+
+    // Subscribe to hub raw data
+    const hubRawDataChar = connectionState.characteristics.get(HUB_RAW_DATA_CHAR_UUID);
+    if (hubRawDataChar) {
+      try {
+        await hubRawDataChar.startNotifications();
+        hubRawDataChar.addEventListener('characteristicvaluechanged', (event) => {
+          this.handleRawData(deviceId, 'hub', event);
+        });
+        console.log(`[EidonTrackerManager] Subscribed to hub raw data for ${deviceId}`);
+      } catch (error) {
+        console.warn(`[EidonTrackerManager] Failed to subscribe to hub raw data:`, error);
+      }
+    }
+
+    // Subscribe to hand raw data
+    const handRawDataChar = connectionState.characteristics.get(HAND_RAW_DATA_CHAR_UUID);
+    if (handRawDataChar) {
+      try {
+        await handRawDataChar.startNotifications();
+        handRawDataChar.addEventListener('characteristicvaluechanged', (event) => {
+          this.handleRawData(deviceId, 'hand', event);
+        });
+        console.log(`[EidonTrackerManager] Subscribed to hand raw data for ${deviceId}`);
+      } catch (error) {
+        console.warn(`[EidonTrackerManager] Failed to subscribe to hand raw data:`, error);
+      }
+    }
+
+    // Subscribe to forearm raw data
+    const forearmRawDataChar = connectionState.characteristics.get(FOREARM_RAW_DATA_CHAR_UUID);
+    if (forearmRawDataChar) {
+      try {
+        await forearmRawDataChar.startNotifications();
+        forearmRawDataChar.addEventListener('characteristicvaluechanged', (event) => {
+          this.handleRawData(deviceId, 'forearm', event);
+        });
+        console.log(`[EidonTrackerManager] Subscribed to forearm raw data for ${deviceId}`);
+      } catch (error) {
+        console.warn(`[EidonTrackerManager] Failed to subscribe to forearm raw data:`, error);
+      }
+    }
+  }
+
+  private createRawDataStreams(deviceId: DeviceId): void {
+    // Create hub raw data stream
+    if (!this.hubRawDataStreams.has(deviceId)) {
+      const hubStream = new ReadableStream<RawMotionData>({
+        start: (controller) => {
+          this.hubRawDataControllers.set(deviceId, controller);
+        }
+      });
+      this.hubRawDataStreams.set(deviceId, hubStream);
+    }
+
+    // Create hand raw data stream
+    if (!this.handRawDataStreams.has(deviceId)) {
+      const handStream = new ReadableStream<RawMotionData>({
+        start: (controller) => {
+          this.handRawDataControllers.set(deviceId, controller);
+        }
+      });
+      this.handRawDataStreams.set(deviceId, handStream);
+    }
+
+    // Create forearm raw data stream
+    if (!this.forearmRawDataStreams.has(deviceId)) {
+      const forearmStream = new ReadableStream<RawMotionData>({
+        start: (controller) => {
+          this.forearmRawDataControllers.set(deviceId, controller);
+        }
+      });
+      this.forearmRawDataStreams.set(deviceId, forearmStream);
+    }
+  }
+
+  private handleRawData(deviceId: DeviceId, type: 'hub' | 'hand' | 'forearm', event: Event): void {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const data = characteristic.value;
+
+    if (!data || data.byteLength < 36) {
+      console.warn(`[EidonTrackerManager] Invalid raw data: data=${!!data}, byteLength=${data?.byteLength}`);
+      return;
+    }
+
+    try {
+      const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+      const rawData = parseRawMotionData(dataView, performance.now());
+
+      if (!rawData) {
+        console.warn(`[EidonTrackerManager] Failed to parse raw data for ${deviceId}`);
+        return;
+      }
+
+      // For HUB_RAW_DATA_CHAR_UUID: route to the device's own hub stream
+      // - If deviceId is a child device (hand/forearm) connecting directly: route to child device's hub stream
+      // - If deviceId is a hub: route to hub's hub stream
+      // For HAND_RAW_DATA_CHAR_UUID and FOREARM_RAW_DATA_CHAR_UUID: route directly (only hubs have these)
+      // These are used when child devices connect via hub (ESP NOW), and hub reports child data
+      
+      let targetDeviceId = deviceId;
+      let streamType = type;
+      
+      // Check if this is a child device using HUB_RAW_DATA_CHAR_UUID (direct connection case)
+      if (type === 'hub') {
+        const device = this.devices.get(deviceId);
+        if (device) {
+          const isHand = device.role === DeviceRole.LEFT_HAND || device.role === DeviceRole.RIGHT_HAND;
+          const isForearm = device.role === DeviceRole.LEFT_FOREARM || device.role === DeviceRole.RIGHT_FOREARM;
+          
+          if (isHand || isForearm) {
+            // Child device connecting directly - using HUB_RAW_DATA_CHAR_UUID for its own data
+            // Route to child device's hub stream (DeviceModal will interpret based on device role)
+            targetDeviceId = deviceId; // Use child device's ID
+            streamType = 'hub'; // Still use 'hub' stream type, but for the child device
+          } else {
+            // Actual hub device - route to hub's hub stream
+            targetDeviceId = deviceId;
+            streamType = 'hub';
+          }
+        }
+      }
+
+      // Enqueue to appropriate stream based on characteristic type and device
+      const controller = streamType === 'hub' 
+        ? this.hubRawDataControllers.get(targetDeviceId)
+        : streamType === 'hand'
+        ? this.handRawDataControllers.get(targetDeviceId)
+        : this.forearmRawDataControllers.get(targetDeviceId);
+
+      if (controller) {
+        controller.enqueue(rawData);
+      } else {
+        console.warn(`[EidonTrackerManager] No ${streamType} stream controller found for ${targetDeviceId}`);
+      }
+    } catch (error) {
+      console.warn(`[EidonTrackerManager] Error handling raw data:`, error);
+    }
+  }
+
+  // Getters for raw data streams
+  getHubRawDataStream(deviceId: DeviceId): ReadableStream<RawMotionData> | undefined {
+    return this.hubRawDataStreams.get(deviceId);
+  }
+
+  getHandRawDataStream(deviceId: DeviceId): ReadableStream<RawMotionData> | undefined {
+    return this.handRawDataStreams.get(deviceId);
+  }
+
+  getForearmRawDataStream(deviceId: DeviceId): ReadableStream<RawMotionData> | undefined {
+    return this.forearmRawDataStreams.get(deviceId);
+  }
+
+  // Checkers for raw data availability
+  hasHubRawDataCharacteristic(deviceId: DeviceId): boolean {
+    const connectionState = this.connectionStates.get(deviceId);
+    return connectionState?.characteristics.has(HUB_RAW_DATA_CHAR_UUID) ?? false;
+  }
+
+  hasHandRawDataCharacteristic(deviceId: DeviceId): boolean {
+    const connectionState = this.connectionStates.get(deviceId);
+    return connectionState?.characteristics.has(HAND_RAW_DATA_CHAR_UUID) ?? false;
+  }
+
+  hasForearmRawDataCharacteristic(deviceId: DeviceId): boolean {
+    const connectionState = this.connectionStates.get(deviceId);
+    return connectionState?.characteristics.has(FOREARM_RAW_DATA_CHAR_UUID) ?? false;
+  }
+
+  private cleanupRawDataStreams(deviceId: DeviceId): void {
+    // Close and remove hub raw data stream
+    const hubController = this.hubRawDataControllers.get(deviceId);
+    if (hubController) {
+      try {
+        hubController.close();
+      } catch (error) {
+        // Ignore errors on close
+      }
+      this.hubRawDataControllers.delete(deviceId);
+    }
+    this.hubRawDataStreams.delete(deviceId);
+
+    // Close and remove hand raw data stream
+    const handController = this.handRawDataControllers.get(deviceId);
+    if (handController) {
+      try {
+        handController.close();
+      } catch (error) {
+        // Ignore errors on close
+      }
+      this.handRawDataControllers.delete(deviceId);
+    }
+    this.handRawDataStreams.delete(deviceId);
+
+    // Close and remove forearm raw data stream
+    const forearmController = this.forearmRawDataControllers.get(deviceId);
+    if (forearmController) {
+      try {
+        forearmController.close();
+      } catch (error) {
+        // Ignore errors on close
+      }
+      this.forearmRawDataControllers.delete(deviceId);
+    }
+    this.forearmRawDataStreams.delete(deviceId);
   }
 
   private async subscribeToFingerData(deviceId: DeviceId): Promise<void> {
