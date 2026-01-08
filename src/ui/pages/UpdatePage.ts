@@ -647,7 +647,7 @@ export class UpdatePage {
         <ul>
           <li><strong>Select an existing device:</strong> If this device is already saved, select it from the dropdown below.</li>
           <li><strong>Add a new device:</strong> If this is a new device, configure and save it first using the form below.</li>
-        </ul> 
+        </ul>
       `;
       deviceSelectionSection.appendChild(selectionDescription);
       
