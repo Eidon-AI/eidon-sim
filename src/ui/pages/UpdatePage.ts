@@ -87,6 +87,9 @@ export class UpdatePage {
   }
 
   public async mount(parent: HTMLElement): Promise<void> {
+    // Update SEO/OG metadata for update page
+    this.updateMetadata();
+    
     parent.innerHTML = ''; // Clear existing content (assuming full page takeover)
     parent.appendChild(this.container);
 
@@ -119,6 +122,9 @@ export class UpdatePage {
   }
 
   public unmount(): void {
+    // Restore default metadata
+    this.restoreDefaultMetadata();
+    
     if (this.authModal) {
       this.authModal.unmount();
       this.authModal = null;
@@ -128,6 +134,53 @@ export class UpdatePage {
       this.port.close();
     }
     this.container.remove();
+  }
+
+  private updateMetadata(): void {
+    // Update title
+    document.title = 'Update Tracker Firmware - Eidon Sym';
+    
+    // Update primary meta tags
+    this.setMetaTag('name', 'title', 'Update Tracker Firmware - Eidon Sym');
+    this.setMetaTag('name', 'description', 'Update your Eidon tracker firmware to the latest version. Keep your motion tracking devices up to date with the newest features and improvements.');
+    this.setMetaTag('name', 'keywords', 'firmware update, tracker update, device firmware, Eidon tracker, motion tracker update');
+    
+    // Update Open Graph tags
+    this.setMetaTag('property', 'og:title', 'Update Tracker Firmware - Eidon Sym');
+    this.setMetaTag('property', 'og:description', 'Update your Eidon tracker firmware to the latest version. Keep your motion tracking devices up to date with the newest features and improvements.');
+    this.setMetaTag('property', 'og:type', 'website');
+    
+    // Update Twitter tags
+    this.setMetaTag('name', 'twitter:title', 'Update Tracker Firmware - Eidon Sym');
+    this.setMetaTag('name', 'twitter:description', 'Update your Eidon tracker firmware to the latest version. Keep your motion tracking devices up to date with the newest features and improvements.');
+  }
+
+  private restoreDefaultMetadata(): void {
+    // Restore default title
+    document.title = 'Eidon Sym';
+    
+    // Restore default meta tags
+    this.setMetaTag('name', 'title', 'Eidon Sym');
+    this.setMetaTag('name', 'description', 'Visualize sensor recordings, analyze device data, and test connections with Eidon Sym. Real-time visualization and playback of sensor recordings.');
+    this.setMetaTag('name', 'keywords', 'sensor data, device testing, recording visualization, motion sensors, IMU, sensor playback');
+    
+    // Restore default Open Graph tags
+    this.setMetaTag('property', 'og:title', 'Eidon Sym ');
+    this.setMetaTag('property', 'og:description', 'Visualize sensor recordings, analyze device data, and test connections with Eidon Sym. Real-time visualization and playback of sensor recordings.');
+    
+    // Restore default Twitter tags
+    this.setMetaTag('name', 'twitter:title', 'Eidon Sym ');
+    this.setMetaTag('name', 'twitter:description', 'Visualize sensor recordings, analyze device data, and test connections with Eidon Sym. Real-time visualization and playback of sensor recordings.');
+  }
+
+  private setMetaTag(attribute: 'name' | 'property', key: string, value: string): void {
+    let meta = document.querySelector(`meta[${attribute}="${key}"]`) as HTMLMetaElement;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute(attribute, key);
+      document.head.appendChild(meta);
+    }
+    meta.content = value;
   }
 
   private showAuthModal(): void {

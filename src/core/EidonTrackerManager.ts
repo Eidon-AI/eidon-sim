@@ -1191,8 +1191,6 @@ export class EidonTrackerManager extends EventTarget {
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
     const data = characteristic.value;
 
-    console.log(`[EidonTrackerManager] handleRawData called for ${deviceId}, type=${type}, dataLength=${data?.byteLength}`);
-
     if (!data || data.byteLength < 36) {
       console.warn(`[EidonTrackerManager] Invalid raw data: data=${!!data}, byteLength=${data?.byteLength}`);
       return;
@@ -1207,23 +1205,46 @@ export class EidonTrackerManager extends EventTarget {
         return;
       }
 
-      // For HUB_RAW_DATA_CHAR_UUID: always route to hub stream (self data for all devices)
+      // For HUB_RAW_DATA_CHAR_UUID: route to the device's own hub stream
+      // - If deviceId is a child device (hand/forearm) connecting directly: route to child device's hub stream
+      // - If deviceId is a hub: route to hub's hub stream
       // For HAND_RAW_DATA_CHAR_UUID and FOREARM_RAW_DATA_CHAR_UUID: route directly (only hubs have these)
-      // Role-based routing happens in DeviceModal when displaying, not here
-      console.log(`[EidonTrackerManager] Routing raw data to ${type} stream for ${deviceId}`);
+      // These are used when child devices connect via hub (ESP NOW), and hub reports child data
+      
+      let targetDeviceId = deviceId;
+      let streamType = type;
+      
+      // Check if this is a child device using HUB_RAW_DATA_CHAR_UUID (direct connection case)
+      if (type === 'hub') {
+        const device = this.devices.get(deviceId);
+        if (device) {
+          const isHand = device.role === DeviceRole.LEFT_HAND || device.role === DeviceRole.RIGHT_HAND;
+          const isForearm = device.role === DeviceRole.LEFT_FOREARM || device.role === DeviceRole.RIGHT_FOREARM;
+          
+          if (isHand || isForearm) {
+            // Child device connecting directly - using HUB_RAW_DATA_CHAR_UUID for its own data
+            // Route to child device's hub stream (DeviceModal will interpret based on device role)
+            targetDeviceId = deviceId; // Use child device's ID
+            streamType = 'hub'; // Still use 'hub' stream type, but for the child device
+          } else {
+            // Actual hub device - route to hub's hub stream
+            targetDeviceId = deviceId;
+            streamType = 'hub';
+          }
+        }
+      }
 
-      // Enqueue to appropriate stream based on characteristic type
-      const controller = type === 'hub' 
-        ? this.hubRawDataControllers.get(deviceId)
-        : type === 'hand'
-        ? this.handRawDataControllers.get(deviceId)
-        : this.forearmRawDataControllers.get(deviceId);
+      // Enqueue to appropriate stream based on characteristic type and device
+      const controller = streamType === 'hub' 
+        ? this.hubRawDataControllers.get(targetDeviceId)
+        : streamType === 'hand'
+        ? this.handRawDataControllers.get(targetDeviceId)
+        : this.forearmRawDataControllers.get(targetDeviceId);
 
       if (controller) {
-        console.log(`[EidonTrackerManager] Enqueueing raw data to ${type} stream for ${deviceId}`);
         controller.enqueue(rawData);
       } else {
-        console.warn(`[EidonTrackerManager] No ${type} stream controller found for ${deviceId}`);
+        console.warn(`[EidonTrackerManager] No ${streamType} stream controller found for ${targetDeviceId}`);
       }
     } catch (error) {
       console.warn(`[EidonTrackerManager] Error handling raw data:`, error);

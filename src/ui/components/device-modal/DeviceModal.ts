@@ -1606,7 +1606,6 @@ export class DeviceModal {
             } else {
               storageType = 'hub';
             }
-            console.log(`[DeviceModal] Received hub raw data for ${deviceId}, storing as ${storageType}`);
             this.deviceRawData.set(`${deviceId}_${storageType}`, value);
             this.updateRawDataDisplay(deviceId, storageType, value);
           }
@@ -1680,14 +1679,53 @@ export class DeviceModal {
     const dataId = `${deviceId}_${type}_raw`;
     // Find the raw data content section (inside the collapsible section)
     const rawDataContent = this.modal.querySelector(`.${savedCardStyles.rawDataContent}[data-raw-data-id="${dataId}"]`) as HTMLElement;
-    if (!rawDataContent) return;
+    if (!rawDataContent) {
+      console.warn(`[DeviceModal] Raw data content not found for ${dataId}`);
+      return;
+    }
+
+    // Check if data attributes exist (data might have arrived before initial render)
+    const accelX = rawDataContent.querySelector(`[data-raw-accel-x]`) as HTMLElement;
+    
+    // If data attributes don't exist, we need to replace the "Waiting for data..." placeholder
+    if (!accelX) {
+      // Replace placeholder with actual data grid structure
+      rawDataContent.innerHTML = `
+        <div class="${savedCardStyles.rawDataGrid}">
+          <div class="${savedCardStyles.rawDataGroup}">
+            <div class="${savedCardStyles.rawDataLabel}" style="color: #ef4444;">Accelerometer (m/s²)</div>
+            <div class="${savedCardStyles.rawDataRow}">
+              <span>X: <span class="${savedCardStyles.rawDataValue}" data-raw-accel-x>${rawData.accelerometer.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${savedCardStyles.rawDataValue}" data-raw-accel-y>${rawData.accelerometer.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${savedCardStyles.rawDataValue}" data-raw-accel-z>${rawData.accelerometer.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+          <div class="${savedCardStyles.rawDataGroup}">
+            <div class="${savedCardStyles.rawDataLabel}" style="color: #10b981;">Gyroscope (rad/s)</div>
+            <div class="${savedCardStyles.rawDataRow}">
+              <span>X: <span class="${savedCardStyles.rawDataValue}" data-raw-gyro-x>${rawData.gyroscope.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${savedCardStyles.rawDataValue}" data-raw-gyro-y>${rawData.gyroscope.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${savedCardStyles.rawDataValue}" data-raw-gyro-z>${rawData.gyroscope.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+          <div class="${savedCardStyles.rawDataGroup}">
+            <div class="${savedCardStyles.rawDataLabel}" style="color: #3b82f6;">Magnetometer (µT)</div>
+            <div class="${savedCardStyles.rawDataRow}">
+              <span>X: <span class="${savedCardStyles.rawDataValue}" data-raw-mag-x>${rawData.magnetometer.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${savedCardStyles.rawDataValue}" data-raw-mag-y>${rawData.magnetometer.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${savedCardStyles.rawDataValue}" data-raw-mag-z>${rawData.magnetometer.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
 
     // Update accelerometer values
-    const accelX = rawDataContent.querySelector(`[data-raw-accel-x]`) as HTMLElement;
-    const accelY = rawDataContent.querySelector(`[data-raw-accel-y]`) as HTMLElement;
-    const accelZ = rawDataContent.querySelector(`[data-raw-accel-z]`) as HTMLElement;
     if (accelX) accelX.textContent = rawData.accelerometer.x.toFixed(3);
+    const accelY = rawDataContent.querySelector(`[data-raw-accel-y]`) as HTMLElement;
     if (accelY) accelY.textContent = rawData.accelerometer.y.toFixed(3);
+    const accelZ = rawDataContent.querySelector(`[data-raw-accel-z]`) as HTMLElement;
     if (accelZ) accelZ.textContent = rawData.accelerometer.z.toFixed(3);
 
     // Update gyroscope values
