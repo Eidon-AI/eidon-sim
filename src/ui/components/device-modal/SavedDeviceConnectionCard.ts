@@ -1,4 +1,4 @@
-import { EidonDevice } from '../../../core/EidonTrackerManager';
+import { EidonDevice, RawMotionData } from '../../../core/EidonTrackerManager';
 import { DeviceRole, DEVICE_ROLE_NAMES } from '../../../core/constants';
 import { eulerXYZ, formatQuaternion } from '../../../core/mathUtils';
 import { quat } from 'gl-matrix';
@@ -264,6 +264,60 @@ function renderSingleDeviceDataContent(
 }
 
 /**
+ * Render raw motion data display as a collapsible section
+ */
+function renderRawMotionData(
+  deviceId: string,
+  type: 'hub' | 'hand' | 'forearm',
+  deviceName: string,
+  rawData?: RawMotionData
+): string {
+  const typeLabel = type === 'hub' ? 'Hub' : type === 'hand' ? 'Hand' : 'Forearm';
+  const dataId = `${deviceId}_${type}_raw`;
+  
+  return `
+    <div class="${styles.rawDataSection}" data-raw-data-id="${dataId}">
+      <button class="${styles.rawDataToggle}" data-raw-data-id="${dataId}">
+        <i class="fas fa-chevron-down ${styles.rawDataToggleIcon}"></i>
+        <span>${typeLabel} Raw Data</span>
+      </button>
+      <div class="${styles.rawDataContent}" data-raw-data-id="${dataId}" style="display: none;">
+        ${rawData ? `
+        <div class="${styles.rawDataGrid}">
+          <div class="${styles.rawDataGroup}">
+            <div class="${styles.rawDataLabel}" style="color: #ef4444;">Accelerometer (m/s²)</div>
+            <div class="${styles.rawDataRow}">
+              <span>X: <span class="${styles.rawDataValue}" data-raw-accel-x>${rawData.accelerometer.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${styles.rawDataValue}" data-raw-accel-y>${rawData.accelerometer.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${styles.rawDataValue}" data-raw-accel-z>${rawData.accelerometer.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+          <div class="${styles.rawDataGroup}">
+            <div class="${styles.rawDataLabel}" style="color: #10b981;">Gyroscope (rad/s)</div>
+            <div class="${styles.rawDataRow}">
+              <span>X: <span class="${styles.rawDataValue}" data-raw-gyro-x>${rawData.gyroscope.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${styles.rawDataValue}" data-raw-gyro-y>${rawData.gyroscope.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${styles.rawDataValue}" data-raw-gyro-z>${rawData.gyroscope.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+          <div class="${styles.rawDataGroup}">
+            <div class="${styles.rawDataLabel}" style="color: #3b82f6;">Magnetometer (µT)</div>
+            <div class="${styles.rawDataRow}">
+              <span>X: <span class="${styles.rawDataValue}" data-raw-mag-x>${rawData.magnetometer.x.toFixed(3)}</span></span>
+              <span>Y: <span class="${styles.rawDataValue}" data-raw-mag-y>${rawData.magnetometer.y.toFixed(3)}</span></span>
+              <span>Z: <span class="${styles.rawDataValue}" data-raw-mag-z>${rawData.magnetometer.z.toFixed(3)}</span></span>
+            </div>
+          </div>
+        </div>
+        ` : `
+        <div class="${styles.noData}">Waiting for raw data...</div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+/**
  * Render data content HTML with canvas dials (supports hub with child devices)
  * Simple approach: Directly map quaternion data by deviceId pattern
  * Uses trackerManager device ID to ensure correct quaternion data lookup
@@ -271,12 +325,13 @@ function renderSingleDeviceDataContent(
 function renderDataContent(
   device: EidonDevice,
   allDevices?: EidonDevice[],
-  quaternionDataMap?: Map<string, { quaternion: number[]; timestamp: number }>
+  quaternionDataMap?: Map<string, { quaternion: number[]; timestamp: number }>,
+  rawDataMap?: Map<string, RawMotionData>
 ): string {
   const isHub = device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB);
   
   if (!isHub) {
-    // Non-hub device - render single device data
+    // Non-hub device - render single device data + self raw data
     // Try to find matching trackerManager device to get correct ID
     const trackerDevice = allDevices?.find(d => 
       d.id === device.id || 
@@ -286,7 +341,25 @@ function renderDataContent(
     );
     const deviceIdForData = trackerDevice?.id || device.id;
     const quatData = quaternionDataMap?.get(deviceIdForData);
-    return renderSingleDeviceDataContent(device.name, deviceIdForData, quatData);
+    
+    // Determine device type for raw data lookup
+    let rawDataType: 'hand' | 'forearm' | null = null;
+    if (device.role === DeviceRole.LEFT_HAND || device.role === DeviceRole.RIGHT_HAND) {
+      rawDataType = 'hand';
+    } else if (device.role === DeviceRole.LEFT_FOREARM || device.role === DeviceRole.RIGHT_FOREARM) {
+      rawDataType = 'forearm';
+    }
+    
+    let html = renderSingleDeviceDataContent(device.name, deviceIdForData, quatData);
+    
+    // Add raw data section if device type is hand or forearm
+    if (rawDataType) {
+      const rawData = rawDataMap?.get(`${deviceIdForData}_${rawDataType}`);
+      const roleName = DEVICE_ROLE_NAMES[device.role];
+      html += renderRawMotionData(deviceIdForData, rawDataType, roleName, rawData);
+    }
+    
+    return html;
   }
   
   // Hub device - render hub data + child device data streams
@@ -314,6 +387,10 @@ function renderDataContent(
   const hubRoleName = DEVICE_ROLE_NAMES[device.role];
   html += renderSingleDeviceDataContent(hubRoleName, hubIdForData, hubQuatData);
   
+  // Hub raw data (if available)
+  const hubRawData = rawDataMap?.get(`${hubIdForData}_hub`);
+  html += renderRawMotionData(hubIdForData, 'hub', hubRoleName, hubRawData);
+
   // Hand quaternion data (from HAND_QUATERNION_CHAR_UUID)
   // CRITICAL: Always render the full dial structure (with canvases) so updateDeviceDials can find them
   // even if data hasn't arrived yet
@@ -323,6 +400,10 @@ function renderDataContent(
   
   html += renderSingleDeviceDataContent(handRoleName, handId, handQuatData);
   
+  // Hand raw data (if available)
+  const handRawData = rawDataMap?.get(`${hubIdForData}_hand`);
+  html += renderRawMotionData(hubIdForData, 'hand', handRoleName, handRawData);
+
   // Forearm quaternion data (from FOREARM_QUATERNION_CHAR_UUID)
   // CRITICAL: Always render the full dial structure (with canvases) so updateDeviceDials can find them
   // even if data hasn't arrived yet
@@ -331,6 +412,10 @@ function renderDataContent(
     : DEVICE_ROLE_NAMES[DeviceRole.RIGHT_FOREARM];
   
   html += renderSingleDeviceDataContent(forearmRoleName, forearmId, forearmQuatData);
+  
+  // Forearm raw data (if available)
+  const forearmRawData = rawDataMap?.get(`${hubIdForData}_forearm`);
+  html += renderRawMotionData(hubIdForData, 'forearm', forearmRoleName, forearmRawData);
   
   return html;
 }
@@ -442,7 +527,8 @@ export function createDeviceConnectionCard(
   selectedColor?: string, 
   selectedRole?: DeviceRole, 
   hasChanges?: boolean,
-  quaternionDataMap?: Map<string, { quaternion: number[]; timestamp: number }>
+  quaternionDataMap?: Map<string, { quaternion: number[]; timestamp: number }>,
+  rawDataMap?: Map<string, RawMotionData>
 ): string {
   const status = getDeviceStatus(device, allDevices);
   const statusColor = getStatusColor(status);
@@ -542,7 +628,7 @@ export function createDeviceConnectionCard(
           <span>Data Stream</span>
         </button>
         <div class="${styles.dataContent}" data-device-id="${device.id}" style="display: none;">
-          ${renderDataContent(device, allDevices, quaternionDataMap)}
+          ${renderDataContent(device, allDevices, quaternionDataMap, rawDataMap)}
         </div>
       </div>
     `;

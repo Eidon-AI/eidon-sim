@@ -149,6 +149,56 @@
   box-shadow: none;
 }
 
+.instructionsHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  padding: 0.5rem 0;
+  transition: color 0.2s ease;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.instructionsHeader:hover {
+  color: white;
+}
+
+.instructionsHeader i:first-child {
+  color: rgb(var(--brand-rgb));
+}
+
+.instructionsChevron {
+  margin-left: auto;
+  transition: transform 0.3s ease;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.instructionsContent {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.instructionStep {
+  margin-bottom: 0.5rem;
+}
+
+.instructionStep:last-child {
+  margin-bottom: 0;
+}
+
+.instructionStep strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
 .deviceList {
   display: flex;
   flex-direction: column;
@@ -407,6 +457,24 @@
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.connectedDeviceProgressContainer {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  margin: 1rem 0;
+  overflow: hidden;
+  display: none;
+}
+
+.connectedDeviceProgressBar {
+  height: 100%;
+  background: linear-gradient(90deg, rgb(var(--brand-rgb)), rgb(var(--brand-sub-rgb)));
+  width: 0%;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(var(--brand-rgb), 0.5);
+  border-radius: 4px;
 }
 
 .deviceConfigSection {

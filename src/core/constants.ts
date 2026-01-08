@@ -20,6 +20,11 @@ export const DEVICE_INFO_CHAR_UUID = 'e1d00005-8b5a-3e5b-9e23-4f9b5c91bbde';
 export const HAND_QUATERNION_CHAR_UUID = 'e1d00008-8b5a-3e5b-9e23-4f9b5c91bbde';
 export const FOREARM_QUATERNION_CHAR_UUID = 'e1d00009-8b5a-3e5b-9e23-4f9b5c91bbde';
 
+// Raw data characteristics (for hub devices)
+export const HUB_RAW_DATA_CHAR_UUID = 'e1d0000b-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const HAND_RAW_DATA_CHAR_UUID = 'e1d0000c-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const FOREARM_RAW_DATA_CHAR_UUID = 'e1d0000d-8b5a-3e5b-9e23-4f9b5c91bbde';
+
 // Glove-specific characteristics
 export const FINGER_SENSOR_CHAR_UUID = 'e1d0000a-8b5a-3e5b-9e23-4f9b5c91bbde';
 
