@@ -6,6 +6,7 @@ import { setSelected } from '../../App';
 import { vec3, quat } from 'gl-matrix';
 import { DEVICE_ROLE_NAMES } from '../../../core/constants';
 import { FingerSensorPanel } from './FingerSensorPanel';
+import { LatestVersionManager } from '../../../core/LatestVersionManager';
 import styles from './styles/DeviceCard.module.css';
 
 function createDial(label: string) {
@@ -465,6 +466,53 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
 
   el.appendChild(topRow);
 
+  // Version chip and warning icon row
+  const versionRow = document.createElement('div');
+  versionRow.className = styles.versionRow;
+  
+  const versionChip = document.createElement('span');
+  versionChip.className = styles.versionChip;
+  versionChip.textContent = state.firmwareVersion ? `v${state.firmwareVersion}` : 'v?';
+  
+  const warningIcon = document.createElement('button');
+  warningIcon.className = styles.warningIcon;
+  warningIcon.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
+  warningIcon.title = 'Update available - click to go to update page';
+  warningIcon.style.display = 'none';
+  warningIcon.onclick = (e) => {
+    e.stopPropagation();
+    window.location.href = '/update';
+  };
+  
+  versionRow.appendChild(versionChip);
+  versionRow.appendChild(warningIcon);
+  el.appendChild(versionRow);
+
+  // Function to update version display and warning icon
+  const updateVersionDisplay = (latestVersion: string | null) => {
+    if (state.firmwareVersion) {
+      versionChip.textContent = `v${state.firmwareVersion}`;
+      
+      // Show warning if device version is less than latest version
+      if (latestVersion && state.firmwareVersion < latestVersion) {
+        warningIcon.style.display = 'inline-flex';
+      } else {
+        warningIcon.style.display = 'none';
+      }
+    } else {
+      versionChip.textContent = 'v?';
+      warningIcon.style.display = 'none';
+    }
+  };
+
+  // Listen to latest version changes
+  const unsubscribeLatestVersion = LatestVersionManager.getInstance().addListener((latestVersion) => {
+    updateVersionDisplay(latestVersion);
+  });
+
+  // Initial update
+  updateVersionDisplay(LatestVersionManager.getInstance().getLatestVersion());
+
   /* listeners */
   colorBox.oninput = () => {
     // TODO: Implement color setting via Bluetooth GATT when available
@@ -519,6 +567,8 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
       if (fingerPanel) {
         fingerPanel.unmount();
       }
+      // Clean up version listener
+      unsubscribeLatestVersion();
       el.remove();
     }
   });

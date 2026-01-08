@@ -1,6 +1,7 @@
 import { AuthManager, AuthUser, AuthTokens } from './AuthManager';
 import { CurrentUser } from '../types/user';
 import { prefs, savePrefs } from './preferences';
+import { LatestVersionManager } from './LatestVersionManager';
 
 export interface LoginState {
   isLoggedIn: boolean;
@@ -43,10 +44,11 @@ export class LoginStateManager {
     this.authManager.loadAuthState();
     this.updateState();
     
-    // If user is already logged in, fetch their profile
+    // If user is already logged in, fetch their profile and latest version
     // Use a flag to indicate this is initialization to handle errors differently
     if (this.state.isLoggedIn) {
       await this.fetchUserProfile(true);
+      await LatestVersionManager.getInstance().fetchLatestVersion();
     }
   }
 
@@ -103,6 +105,9 @@ export class LoginStateManager {
       
       // Fetch user profile after successful login
       await this.fetchUserProfile();
+      
+      // Fetch latest firmware version after successful login
+      await LatestVersionManager.getInstance().fetchLatestVersion();
     } catch (error) {
       console.error('Login failed:', error);
       throw error;

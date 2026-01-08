@@ -2,6 +2,7 @@ import { EidonTrackerManager, EidonDevice } from '../../../core/EidonTrackerMana
 import { DeviceRole } from '../../../core/constants';
 import { LoginStateManager } from '../../../core/LoginStateManager';
 import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
+import { LatestVersionManager } from '../../../core/LatestVersionManager';
 import { createDeviceConnectionCard as createNewDeviceCard, setDeviceCardStyles as setNewDeviceCardStyles, cardStyles as newCardStyles } from './NewDeviceConnectionCard';
 import { createDeviceConnectionCard as createSavedDeviceCard, setDeviceCardStyles as setSavedDeviceCardStyles, cardStyles as savedCardStyles } from './SavedDeviceConnectionCard';
 import colorDropdownStyles from './styles/ColorDropdown.module.css';
@@ -24,6 +25,7 @@ export class DeviceModal {
   private deviceDisconnecting = new Set<string>(); // Track devices currently disconnecting to prevent reconnection attempts
   private connectionCountIndicator: HTMLElement | null = null;
   private calibrateAllBtn: HTMLButtonElement | null = null;
+  private versionWarningUnsubscribe: (() => void) | null = null;
 
   constructor(trackerManager: EidonTrackerManager, deviceConnectionStateManager: DeviceConnectionStateManager) {
     this.trackerManager = trackerManager;
@@ -492,7 +494,7 @@ export class DeviceModal {
       parentHub: this.getParentHub(device, apiDevices),
       color: this.mapApiColorToHex(device.color),
       batteryLevel: device.batteryLevel,
-      firmwareVersion: device.firmwareVersion,
+      firmwareVersion: device.version || device.firmwareVersion, // API returns 'version', fallback to 'firmwareVersion'
       lastSeen: performance.now()
     }));
   }
@@ -583,6 +585,7 @@ export class DeviceModal {
     container.innerHTML = html;
     setSavedDeviceCardStyles(container);
     this.attachDeviceEventListeners();
+    this.updateVersionWarnings();
     
     // Update dials for devices with quaternion data (HTML is already rendered, just update canvases)
     import('./SavedDeviceConnectionCard').then(({ updateDeviceDials }) => {
@@ -642,12 +645,36 @@ export class DeviceModal {
       }
     });
 
-    // Delete buttons (saved devices only)
+    // Delete buttons (saved devices only) - show confirmation
     this.modal.querySelectorAll(`.${savedCardStyles.deleteBtn}`).forEach(btn => {
+      const deviceId = btn.getAttribute('data-device-id');
+      if (deviceId) {
+        btn.addEventListener('click', () => this.showDeleteConfirmation(deviceId));
+      }
+    });
+
+    // Delete confirmation buttons
+    this.modal.querySelectorAll(`.${savedCardStyles.deleteConfirmBtn}`).forEach(btn => {
       const deviceId = btn.getAttribute('data-device-id');
       if (deviceId) {
         btn.addEventListener('click', () => this.handleDeviceDelete(deviceId));
       }
+    });
+
+    // Delete cancel buttons
+    this.modal.querySelectorAll(`.${savedCardStyles.deleteCancelBtn}`).forEach(btn => {
+      const deviceId = btn.getAttribute('data-device-id');
+      if (deviceId) {
+        btn.addEventListener('click', () => this.hideDeleteConfirmation(deviceId));
+      }
+    });
+
+    // Warning icon buttons (saved devices only)
+    this.modal.querySelectorAll(`.${savedCardStyles.warningIcon}`).forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.location.href = '/update';
+      });
     });
 
     // Color dropdown triggers (both lists) - using shared styles
@@ -1416,36 +1443,120 @@ export class DeviceModal {
   }
 
   private handleDeviceEdit(deviceId: string): void {
+    const device = this.savedDevices.find(d => d.id === deviceId);
+    if (!device) return;
+
     // Toggle visibility of config section (color dropdown, role selector, save button)
+    // This works for both connected and disconnected devices
     const configSection = this.modal.querySelector(`.${savedCardStyles.configSection}[data-device-id="${deviceId}"]`) as HTMLElement;
     const editBtn = this.modal.querySelector(`.${savedCardStyles.editBtn}[data-device-id="${deviceId}"]`) as HTMLElement;
     
-    if (!configSection || !editBtn) {
-      // Config section might not exist if device is not connected - that's okay
-      return;
-    }
-    
-    const isHidden = configSection.style.display === 'none' || configSection.style.display === '';
-    configSection.style.display = isHidden ? 'block' : 'none';
-    
-    // Update edit state map to preserve state across re-renders
-    this.deviceEditStates.set(deviceId, isHidden);
-    
-    // Update edit button icon to indicate state (optional visual feedback)
-    const icon = editBtn.querySelector('i');
-    if (icon) {
-      if (isHidden) {
-        // Config is now visible - could change icon to indicate "done" or "editing"
-        // Keep edit icon for now, but could change to fa-check or similar
-      } else {
-        // Config is now hidden - keep edit icon
-      }
+    if (configSection && editBtn) {
+      const isHidden = configSection.style.display === 'none' || configSection.style.display === '';
+      configSection.style.display = isHidden ? 'block' : 'none';
+      
+      // Update edit state map to preserve state across re-renders
+      this.deviceEditStates.set(deviceId, isHidden);
     }
   }
 
-  private handleDeviceDelete(deviceId: string): void {
-    // TODO: Implement device deletion
-    console.log('Delete device:', deviceId);
+  private showDeleteConfirmation(deviceId: string): void {
+    const confirmation = this.modal.querySelector(`.${savedCardStyles.deleteConfirmation}[data-device-id="${deviceId}"]`) as HTMLElement;
+    if (confirmation) {
+      confirmation.style.display = 'block';
+    }
+  }
+
+  private hideDeleteConfirmation(deviceId: string): void {
+    const confirmation = this.modal.querySelector(`.${savedCardStyles.deleteConfirmation}[data-device-id="${deviceId}"]`) as HTMLElement;
+    if (confirmation) {
+      confirmation.style.display = 'none';
+    }
+  }
+
+  private async handleDeviceDelete(deviceId: string): Promise<void> {
+    const device = this.savedDevices.find(d => d.id === deviceId);
+    if (!device) return;
+
+    // Hide confirmation UI
+    this.hideDeleteConfirmation(deviceId);
+
+    try {
+      const state = this.loginStateManager.getState();
+      if (!state.isLoggedIn || !state.tokens?.token) {
+        console.error('Must be logged in to delete devices');
+        return;
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+      if (!apiUrl) {
+        throw new Error('VITE_API_URL environment variable is not set');
+      }
+
+      const response = await fetch(`${apiUrl}/devices/${deviceId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${state.tokens.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to delete device: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      // Remove device from local list
+      this.savedDevices = this.savedDevices.filter(d => d.id !== deviceId);
+      
+      // Disconnect if connected
+      if (device.isConnected) {
+        try {
+          await this.trackerManager.disconnectDevice(deviceId);
+        } catch (error) {
+          console.error('Failed to disconnect device during deletion:', error);
+        }
+      }
+
+      // Re-render saved devices
+      this.renderSavedDevices();
+    } catch (error) {
+      console.error('Failed to delete device:', error);
+      // Error is logged, UI will update automatically when device is removed
+    }
+  }
+
+  private updateVersionWarnings(): void {
+    const latestVersion = LatestVersionManager.getInstance().getLatestVersion();
+    
+    // Unsubscribe from previous listener if it exists
+    if (this.versionWarningUnsubscribe) {
+      this.versionWarningUnsubscribe();
+      this.versionWarningUnsubscribe = null;
+    }
+
+    const updateWarnings = (version: string | null) => {
+      if (!version) return;
+      
+      this.modal.querySelectorAll(`.${savedCardStyles.warningIcon}`).forEach((btn: Element) => {
+        const warningBtn = btn as HTMLElement;
+        const deviceVersion = warningBtn.getAttribute('data-device-version');
+        
+        if (deviceVersion && deviceVersion < version) {
+          warningBtn.style.display = 'inline-flex';
+        } else {
+          warningBtn.style.display = 'none';
+        }
+      });
+    };
+
+    // Initial update
+    if (latestVersion) {
+      updateWarnings(latestVersion);
+    }
+
+    // Listen for latest version changes (only add once)
+    this.versionWarningUnsubscribe = LatestVersionManager.getInstance().addListener(updateWarnings);
   }
 
   private updateDeviceConnectionStatus(deviceId: string, isConnected: boolean): void {

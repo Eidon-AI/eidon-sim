@@ -78,6 +78,10 @@ export class Controls {
         <i class="fas fa-microchip"></i>
         <span>Devices</span>
       </button>
+      <button id="navUpdate" class="${styles.navButton}" title="Update Firmware" style="display: none;">
+        <i class="fas fa-cloud-upload-alt"></i>
+        <span>Update</span>
+      </button>
       <button id="navRecordings" class="${styles.navButton} ${styles.navRecordings}" title="Recordings (Login Required)" style="display: none;">
         <i class="fas fa-folder-open"></i>
         <span>Recordings</span>
@@ -99,6 +103,7 @@ export class Controls {
 
   private attachEventListeners(): void {
     const connectBtn = this.toolbar.querySelector('#navConnect') as HTMLButtonElement;
+    const updateBtn = this.toolbar.querySelector('#navUpdate') as HTMLButtonElement;
     const recordingsBtn = this.toolbar.querySelector('#navRecordings') as HTMLButtonElement;
     const adminRecordingsBtn = this.toolbar.querySelector('#navAdminRecordings') as HTMLButtonElement;
     const userInfoBtn = this.toolbar.querySelector('#userInfo') as HTMLButtonElement;
@@ -106,6 +111,10 @@ export class Controls {
 
     connectBtn.addEventListener('click', () => {
       this.showDeviceModal();
+    });
+
+    updateBtn.addEventListener('click', () => {
+      window.location.href = '/update';
     });
 
     recordingsBtn.addEventListener('click', () => {
@@ -483,6 +492,7 @@ export class Controls {
 
   private updateLoginButton(state: LoginState): void {
     const loginBtn = this.toolbar.querySelector('#navLogin') as HTMLButtonElement;
+    const updateBtn = this.toolbar.querySelector('#navUpdate') as HTMLButtonElement;
     const recordingsBtn = this.toolbar.querySelector('#navRecordings') as HTMLButtonElement;
     const adminRecordingsBtn = this.toolbar.querySelector('#navAdminRecordings') as HTMLButtonElement;
     const userInfo = this.toolbar.querySelector('#userInfo') as HTMLButtonElement;
@@ -499,6 +509,9 @@ export class Controls {
       
       // Show separator
       separator.style.display = 'block';
+
+      // Show update button
+      updateBtn.style.display = 'flex';
       
       // Show recordings button with premium styling
       recordingsBtn.style.display = 'flex';
@@ -561,6 +574,7 @@ export class Controls {
       
       // Hide separator, recordings button and user info
       separator.style.display = 'none';
+      updateBtn.style.display = 'none';
       recordingsBtn.style.display = 'none';
       adminRecordingsBtn.style.display = 'none';
       userInfo.style.display = 'none';

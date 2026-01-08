@@ -182,6 +182,11 @@ function bridgeEidonDeviceToDeviceStore(eidonDevice: EidonDevice, store: DeviceS
       existingDevice.color = deviceColor;
     }
     
+    // Update firmware version if available
+    if (eidonDevice.firmwareVersion) {
+      existingDevice.firmwareVersion = eidonDevice.firmwareVersion;
+    }
+    
     existingDevice.lastSeen = performance.now();
     store.dispatchEvent(new CustomEvent('update', { detail: existingDevice }));
     return;
@@ -194,6 +199,7 @@ function bridgeEidonDeviceToDeviceStore(eidonDevice: EidonDevice, store: DeviceS
     position: mapDeviceRole(eidonDevice.role),
     color: getDeviceColor(eidonDevice), // Use saved color from database if available, otherwise default
     connectionId: eidonDevice.connectionId,
+    firmwareVersion: eidonDevice.firmwareVersion,
     quat: quat.create(),
     up: vec3.create(),
     fwd: vec3.create(),
