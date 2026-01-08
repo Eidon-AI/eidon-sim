@@ -5,6 +5,7 @@ import { quat } from 'gl-matrix';
 import styles from './styles/SavedDeviceConnectionCard.module.css';
 import { renderColorDropdown } from './ColorDropdown';
 import { renderRoleSelector } from './RoleSelector';
+import { LatestVersionManager } from '../../../core/LatestVersionManager';
 
 // Re-export styles for use in DeviceModal
 export { styles as cardStyles };
@@ -479,6 +480,14 @@ export function createDeviceConnectionCard(
           <div class="${styles.roleSection}">
             <div class="${styles.deviceRole}">${displayRole}</div>
           </div>
+          <div class="${styles.versionRow}">
+            <span class="${styles.versionChip}" data-device-id="${device.id}">
+              ${device.firmwareVersion ? `v${device.firmwareVersion}` : 'v?'}
+            </span>
+            <button class="${styles.warningIcon}" data-device-id="${device.id}" data-device-version="${device.firmwareVersion || ''}" style="display: none;" title="Update available - click to go to update page">
+              <i class="fas fa-exclamation-triangle"></i>
+            </button>
+          </div>
           ${childCountText ? `
           <div class="${styles.childIndicatorRow}">
             <div class="${styles.childIndicator}">${childCountText} children connected</div>
@@ -500,30 +509,32 @@ export function createDeviceConnectionCard(
       </div>
   `;
 
-  // If connected, show role/color selectors (hidden by default, shown via edit button)
-  if (device.isConnected) {
-    // Config section - hidden by default, shown via edit button
-    cardHtml += `
-      <div class="${styles.configSection}" data-device-id="${device.id}" style="display: none;">
-        <div class="${styles.configRow}">
-          <div class="${styles.selectorGroup}">
-            <label class="${styles.selectorLabel}">
-              <i class="fas fa-palette"></i> Color
-            </label>
-            ${renderColorDropdown(device.id, selectedColor, device.color)}
-          </div>
-          <div class="${styles.selectorGroup}">
-            <label class="${styles.selectorLabel}">
-              <i class="fas fa-tag"></i> Role
-            </label>
-            ${renderRoleSelector(device.id, selectedRole, device.role)}
-          </div>
+  // Config section - hidden by default, shown via edit button (available for both connected and disconnected devices)
+  cardHtml += `
+    <div class="${styles.configSection}" data-device-id="${device.id}" style="display: none;">
+      <div class="${styles.configRow}">
+        <div class="${styles.selectorGroup}">
+          <label class="${styles.selectorLabel}">
+            <i class="fas fa-palette"></i> Color
+          </label>
+          ${renderColorDropdown(device.id, selectedColor, device.color)}
         </div>
-        <button class="${styles.saveBtn}" data-device-id="${device.id}" ${hasChanges ? '' : 'disabled'}>
-          <i class="fas fa-save"></i> Save
-        </button>
+        <div class="${styles.selectorGroup}">
+          <label class="${styles.selectorLabel}">
+            <i class="fas fa-tag"></i> Role
+          </label>
+          ${renderRoleSelector(device.id, selectedRole, device.role)}
+        </div>
       </div>
-      
+      <button class="${styles.saveBtn}" data-device-id="${device.id}" ${hasChanges ? '' : 'disabled'}>
+        <i class="fas fa-save"></i> Save
+      </button>
+    </div>
+  `;
+
+  // If connected, show data view section
+  if (device.isConnected) {
+    cardHtml += `
       <!-- Data View Section -->
       <div class="${styles.dataSection}">
         <button class="${styles.dataToggle}" data-device-id="${device.id}">
@@ -536,6 +547,24 @@ export function createDeviceConnectionCard(
       </div>
     `;
   }
+
+  // Delete confirmation section (hidden by default)
+  cardHtml += `
+    <div class="${styles.deleteConfirmation}" data-device-id="${device.id}" style="display: none;">
+      <div class="${styles.deleteConfirmationMessage}">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>Are you sure you want to delete "${device.name}"? This action cannot be undone.</span>
+      </div>
+      <div class="${styles.deleteConfirmationActions}">
+        <button class="${styles.deleteConfirmBtn}" data-device-id="${device.id}">
+          <i class="fas fa-check"></i> Confirm Delete
+        </button>
+        <button class="${styles.deleteCancelBtn}" data-device-id="${device.id}">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
+    </div>
+  `;
 
   // Show calibrate button (if connected) and edit/delete buttons for saved devices
   if (device.isConnected) {
