@@ -292,26 +292,6 @@ export class UpdatePage {
     connSection.appendChild(this.connectButton);
     this.content.appendChild(connSection);
 
-    // Version Info Container
-    this.versionInfoContainer = document.createElement('div');
-    this.content.appendChild(this.versionInfoContainer);
-
-    // Device List Section
-    const listSection = document.createElement('div');
-    listSection.className = styles.section;
-    
-    const listTitle = document.createElement('h2');
-    listTitle.className = styles.sectionTitle;
-    listTitle.innerHTML = '<i class="fas fa-list"></i> Your Devices';
-    
-    this.deviceListContainer = document.createElement('div');
-    this.deviceListContainer.className = styles.deviceList;
-    this.deviceListContainer.textContent = 'Loading devices...';
-    
-    listSection.appendChild(listTitle);
-    listSection.appendChild(this.deviceListContainer);
-    this.content.appendChild(listSection);
-    
     // Instructions Dropdown Section
     const instructionsSection = document.createElement('div');
     instructionsSection.className = styles.section;
@@ -321,13 +301,16 @@ export class UpdatePage {
     instructionsContent.style.display = 'none';
     instructionsContent.innerHTML = `
       <div class="${styles.instructionStep}">
-        <strong>1. Connect</strong> - Select your device from the serial port dialog
+        <strong>1. Physically Connect</strong> - Connect your tracker to your computer using a USB-C cable. Make sure the cable is properly connected to both the tracker and your computer.
       </div>
       <div class="${styles.instructionStep}">
-        <strong>2. Auto-Detection</strong> - Device will be automatically matched if saved. If not found, you can manually select from your devices or create a new device.
+        <strong>2. Select Device</strong> - Click "Select Device" above and choose your tracker from the serial port dialog that appears.
       </div>
       <div class="${styles.instructionStep}">
-        <strong>3. Success</strong> - After flashing completes, the UI will update and you can close the connection.
+        <strong>3. Auto-Detection</strong> - Device will be automatically matched if saved. If not found, you can manually select from your devices or create a new device.
+      </div>
+      <div class="${styles.instructionStep}">
+        <strong>4. Update</strong> - After flashing completes, the UI will update and you can close the connection.
       </div>
     `;
     
@@ -350,6 +333,26 @@ export class UpdatePage {
     instructionsSection.appendChild(instructionsHeader);
     instructionsSection.appendChild(instructionsContent);
     this.content.appendChild(instructionsSection);
+
+    // Version Info Container
+    this.versionInfoContainer = document.createElement('div');
+    this.content.appendChild(this.versionInfoContainer);
+
+    // Device List Section
+    const listSection = document.createElement('div');
+    listSection.className = styles.section;
+    
+    const listTitle = document.createElement('h2');
+    listTitle.className = styles.sectionTitle;
+    listTitle.innerHTML = '<i class="fas fa-list"></i> Your Devices';
+    
+    this.deviceListContainer = document.createElement('div');
+    this.deviceListContainer.className = styles.deviceList;
+    this.deviceListContainer.textContent = 'Loading devices...';
+    
+    listSection.appendChild(listTitle);
+    listSection.appendChild(this.deviceListContainer);
+    this.content.appendChild(listSection);
   }
 
   private async fetchLatestVersion(): Promise<void> {
