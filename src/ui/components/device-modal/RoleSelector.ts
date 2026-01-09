@@ -12,18 +12,33 @@ export const ROLE_OPTIONS = [
   { value: DeviceRole.LEFT_HUB, label: DEVICE_ROLE_NAMES[DeviceRole.LEFT_HUB] },
   { value: DeviceRole.RIGHT_HUB, label: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_HUB] },
   { value: DeviceRole.CHEST, label: DEVICE_ROLE_NAMES[DeviceRole.CHEST] },
-  { value: DeviceRole.LEFT_GLOVE, label: DEVICE_ROLE_NAMES[DeviceRole.LEFT_GLOVE] },
-  { value: DeviceRole.RIGHT_GLOVE, label: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_GLOVE] },
   { value: DeviceRole.UNKNOWN, label: DEVICE_ROLE_NAMES[DeviceRole.UNKNOWN] }
 ];
 
 /**
  * Render role selector HTML
+ * @param deviceId - The device ID
+ * @param selectedRole - The currently selected role
+ * @param deviceRole - The device's current role
+ * @param excludedRoles - Optional array of roles to exclude from the dropdown
  */
-export function renderRoleSelector(deviceId: string, selectedRole?: DeviceRole, deviceRole?: DeviceRole): string {
+export function renderRoleSelector(
+  deviceId: string, 
+  selectedRole?: DeviceRole, 
+  deviceRole?: DeviceRole,
+  excludedRoles?: DeviceRole[]
+): string {
   const currentRole = selectedRole ?? deviceRole ?? DeviceRole.UNKNOWN;
   
-  const optionsHtml = ROLE_OPTIONS.map(option => {
+  // Filter out excluded roles (roles already used by other saved devices)
+  // But always include the current role even if it's excluded
+  const availableOptions = excludedRoles 
+    ? ROLE_OPTIONS.filter(option => 
+        !excludedRoles.includes(option.value) || option.value === currentRole
+      )
+    : ROLE_OPTIONS;
+  
+  const optionsHtml = availableOptions.map(option => {
     const isSelected = option.value === currentRole;
     return `<option value="${option.value}" ${isSelected ? 'selected' : ''}>${option.label}</option>`;
   }).join('');

@@ -526,7 +526,10 @@ export function createDeviceConnectionCard(
   allDevices?: EidonDevice[], 
   selectedColor?: string, 
   selectedRole?: DeviceRole, 
+  selectedName?: string,
   hasChanges?: boolean,
+  isEditMode?: boolean,
+  isNameEditing?: boolean,
   quaternionDataMap?: Map<string, { quaternion: number[]; timestamp: number }>,
   rawDataMap?: Map<string, RawMotionData>
 ): string {
@@ -556,7 +559,24 @@ export function createDeviceConnectionCard(
         <div class="${styles.cardLeft}">
           <div class="${styles.colorIndicator}" data-color="${displayColor}"></div>
           <div class="${styles.deviceInfo}">
-            <div class="${styles.deviceName}">${device.name}</div>
+            ${isNameEditing ? `
+              <input 
+                type="text" 
+                class="${styles.deviceNameInput}" 
+                data-device-id="${device.id}" 
+                value="${selectedName !== undefined ? selectedName : device.name}" 
+                placeholder="Device name"
+              />
+            ` : `
+              <div class="${styles.deviceNameContainer}">
+                <div class="${styles.deviceName}">${selectedName !== undefined ? selectedName : device.name}</div>
+                ${isEditMode ? `
+                  <button class="${styles.nameEditIcon}" data-device-id="${device.id}" title="Edit name">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                ` : ''}
+              </div>
+            `}
           </div>
         </div>
         ${batteryHtml}

@@ -986,7 +986,11 @@ export class UpdatePage {
       colorGroup.appendChild(colorDropdown);
       configRow.appendChild(colorGroup);
       
-      // Role selector
+      // Role selector - filter out roles already used by saved devices
+      const usedRoles = this.savedDevices
+        .map(device => device.position)
+        .filter((role): role is DeviceRole => role !== undefined);
+      
       const roleGroup = document.createElement('div');
       roleGroup.className = styles.selectorGroup;
       const roleLabel = document.createElement('label');
@@ -994,7 +998,7 @@ export class UpdatePage {
       roleLabel.innerHTML = '<i class="fas fa-tag"></i> Role';
       roleGroup.appendChild(roleLabel);
       const roleSelector = document.createElement('div');
-      roleSelector.innerHTML = renderRoleSelector('update-device', this.connectedDeviceInfo.selectedRole);
+      roleSelector.innerHTML = renderRoleSelector('update-device', this.connectedDeviceInfo.selectedRole, undefined, usedRoles);
       roleGroup.appendChild(roleSelector);
       configRow.appendChild(roleGroup);
       
@@ -1386,12 +1390,41 @@ export class UpdatePage {
       const baseUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
       const url = `${baseUrl}/devices`;
       
+      // Calculate Bluetooth MAC from serial MAC for device name and connectionId
+      // ESP32 Bluetooth MAC is typically base MAC + 2 (incrementing last byte by 2)
+      // This is what the device advertises and what should be stored as connectionId
+      let bluetoothMac: string;
+      if (this.connectedDeviceInfo.matchedDevice?.connectionId) {
+        // Use the matched device's connectionId (Bluetooth MAC that device advertises)
+        bluetoothMac = this.connectedDeviceInfo.matchedDevice.connectionId;
+      } else {
+        // For new devices, calculate Bluetooth MAC from serial MAC
+        const serialMac = this.connectedDeviceInfo.macAddress;
+        const macParts = serialMac.split(':');
+        if (macParts.length === 6) {
+          // Increment last byte by 2 to get Bluetooth MAC
+          const lastByte = parseInt(macParts[5], 16);
+          const bluetoothLastByte = ((lastByte + 2) & 0xFF).toString(16).padStart(2, '0').toUpperCase();
+          bluetoothMac = `${macParts[0]}:${macParts[1]}:${macParts[2]}:${macParts[3]}:${macParts[4]}:${bluetoothLastByte}`;
+        } else {
+          // Fallback to serial MAC if format is unexpected
+          bluetoothMac = serialMac;
+        }
+      }
+      
+      // Extract last 4 hex characters from Bluetooth MAC for device name
+      const macWithoutColons = bluetoothMac.replace(/[:-]/g, '').toUpperCase();
+      const last4Mac = macWithoutColons.slice(-4);
+      const deviceName = `Eidon-Tracker-${last4Mac}`;
+      
+      // Use Bluetooth MAC as connectionId (this is what the device advertises)
+      // This ensures the device can be matched when connecting via Bluetooth
       const requestBody = {
-        name: `Device ${this.connectedDeviceInfo.macAddress.slice(-4)}`,
+        name: deviceName,
         type: 'tracker',
         position: this.connectedDeviceInfo.selectedRole,
         color: this.connectedDeviceInfo.selectedColor,
-        connectionId: this.connectedDeviceInfo.macAddress,
+        connectionId: bluetoothMac,
         version: '0.1.0' // Default version for new devices
       };
       

@@ -19,10 +19,11 @@ export class DeviceModal {
   private isVisible = false;
   private savedDevices: EidonDevice[] = [];
   private discoveredDevices: EidonDevice[] = [];
-  private deviceConfigs = new Map<string, { selectedColor?: string; selectedRole?: DeviceRole }>();
+  private deviceConfigs = new Map<string, { selectedColor?: string; selectedRole?: DeviceRole; selectedName?: string }>();
   private deviceQuaternionData = new Map<string, { quaternion: number[]; timestamp: number }>();
   private deviceRawData = new Map<string, RawMotionData>(); // Key format: ${deviceId}_${type} (hub/hand/forearm)
   private deviceEditStates = new Map<string, boolean>(); // Track which devices have config section visible
+  private deviceNameEditStates = new Map<string, boolean>(); // Track which device names are in edit mode
   private deviceDataViewStates = new Map<string, boolean>(); // Track which devices have data stream visible
   private deviceDisconnecting = new Set<string>(); // Track devices currently disconnecting to prevent reconnection attempts
   private connectionCountIndicator: HTMLElement | null = null;
@@ -601,7 +602,9 @@ export class DeviceModal {
     const html = this.savedDevices.map(device => {
       const config = this.deviceConfigs.get(device.id);
       const hasChanges = this.hasDeviceChanges(device, config);
-      return createSavedDeviceCard(device, allTrackerDevices, config?.selectedColor, config?.selectedRole, hasChanges, this.deviceQuaternionData, this.deviceRawData);
+      const isEditMode = this.deviceEditStates.get(device.id) || false;
+      const isNameEditing = this.deviceNameEditStates.get(device.id) || false;
+      return createSavedDeviceCard(device, allTrackerDevices, config?.selectedColor, config?.selectedRole, config?.selectedName, hasChanges, isEditMode, isNameEditing, this.deviceQuaternionData, this.deviceRawData);
     }).join('');
 
     container.innerHTML = html;
@@ -632,6 +635,21 @@ export class DeviceModal {
         if (configSection) {
           configSection.style.display = 'block';
         }
+      }
+    });
+
+    // Restore name edit states
+    this.deviceNameEditStates.forEach((isEditing, deviceId) => {
+      if (isEditing) {
+        // Name editing state will be preserved through re-render via isNameEditing parameter
+        // Focus the input after render
+        setTimeout(() => {
+          const nameInput = this.modal.querySelector(`.${savedCardStyles.deviceNameInput}[data-device-id="${deviceId}"]`) as HTMLInputElement;
+          if (nameInput) {
+            nameInput.focus();
+            nameInput.select();
+          }
+        }, 0);
       }
     });
     
@@ -807,6 +825,47 @@ export class DeviceModal {
       });
     });
 
+    // Name edit icon buttons (saved devices only)
+    this.modal.querySelectorAll(`.${savedCardStyles.nameEditIcon}`).forEach(btn => {
+      const deviceId = btn.getAttribute('data-device-id');
+      if (deviceId) {
+        btn.addEventListener('click', () => this.handleNameEditClick(deviceId));
+      }
+    });
+
+    // Name input fields (saved devices only)
+    this.modal.querySelectorAll(`.${savedCardStyles.deviceNameInput}`).forEach(input => {
+      const deviceId = (input as HTMLInputElement).getAttribute('data-device-id');
+      if (deviceId) {
+        // Use input event to update config without re-rendering
+        input.addEventListener('input', (e) => {
+          const nameValue = (e.target as HTMLInputElement).value;
+          // Update config directly without triggering re-render
+          const config = this.deviceConfigs.get(deviceId) || {};
+          config.selectedName = nameValue;
+          this.deviceConfigs.set(deviceId, config);
+          
+          // Update save button state without re-rendering
+          const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+          if (device) {
+            const hasChanges = this.hasDeviceChanges(device, config);
+            const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+            const cardStyles = isSaved ? savedCardStyles : newCardStyles;
+            const saveBtn = this.modal.querySelector(`[data-device-id="${deviceId}"].${cardStyles.saveBtn}`) as HTMLButtonElement;
+            if (saveBtn) {
+              saveBtn.disabled = !hasChanges;
+            }
+          }
+        });
+        input.addEventListener('blur', () => {
+          this.handleNameInputBlur(deviceId);
+        });
+        input.addEventListener('keydown', (e: Event) => {
+          this.handleNameInputKeyDown(deviceId, e as KeyboardEvent);
+        });
+      }
+    });
+
     // Calibrate buttons (both lists)
     this.modal.querySelectorAll(`.${newCardStyles.calibrateBtn}, .${savedCardStyles.calibrateBtn}`).forEach(btn => {
       const deviceId = btn.getAttribute('data-device-id');
@@ -972,11 +1031,12 @@ export class DeviceModal {
     }
   }
 
-  private hasDeviceChanges(device: EidonDevice, config?: { selectedColor?: string; selectedRole?: DeviceRole }): boolean {
+  private hasDeviceChanges(device: EidonDevice, config?: { selectedColor?: string; selectedRole?: DeviceRole; selectedName?: string }): boolean {
     if (!config) return false;
     const colorChanged = config.selectedColor !== undefined && config.selectedColor !== device.color;
     const roleChanged = config.selectedRole !== undefined && config.selectedRole !== device.role;
-    return colorChanged || roleChanged;
+    const nameChanged = config.selectedName !== undefined && config.selectedName !== device.name && config.selectedName.trim() !== '';
+    return colorChanged || roleChanged || nameChanged;
   }
 
   private handleColorChange(deviceId: string, color: string): void {
@@ -1007,6 +1067,24 @@ export class DeviceModal {
         this.renderSavedDevices();
       } else {
         this.renderDiscoveredDevices();
+      }
+    }
+  }
+
+  private handleNameChange(deviceId: string, name: string): void {
+    const config = this.deviceConfigs.get(deviceId) || {};
+    config.selectedName = name;
+    this.deviceConfigs.set(deviceId, config);
+    
+    // Update save button state without re-rendering (to preserve input focus)
+    const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
+    if (device) {
+      const hasChanges = this.hasDeviceChanges(device, config);
+      const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+      const cardStyles = isSaved ? savedCardStyles : newCardStyles;
+      const saveBtn = this.modal.querySelector(`[data-device-id="${deviceId}"].${cardStyles.saveBtn}`) as HTMLButtonElement;
+      if (saveBtn) {
+        saveBtn.disabled = !hasChanges;
       }
     }
   }
@@ -1053,13 +1131,17 @@ export class DeviceModal {
 
   private async handleDeviceSave(deviceId: string): Promise<void> {
     const device = this.savedDevices.find(d => d.id === deviceId) || this.discoveredDevices.find(d => d.id === deviceId);
-    if (!device || !device.isConnected) return;
+    if (!device) return;
+
+    // For saved devices, allow saving even when disconnected (updating via API)
+    // For new/discovered devices, require connection
+    const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
+    if (!isSaved && !device.isConnected) return;
 
     const config = this.deviceConfigs.get(deviceId);
     if (!config || !this.hasDeviceChanges(device, config)) return;
 
     // Determine which card type
-    const isSaved = this.savedDevices.find(d => d.id === deviceId) !== undefined;
     const cardStyles = isSaved ? savedCardStyles : newCardStyles;
     const saveBtn = this.modal.querySelector(`[data-device-id="${deviceId}"].${cardStyles.saveBtn}`) as HTMLButtonElement;
     if (!saveBtn) return;
@@ -1082,13 +1164,16 @@ export class DeviceModal {
       // For devices from NewDeviceConnectionCard, isSaved will be false, so isUpdate = false
       const isUpdate = isSaved;
       
-      // Get color and role to save
+      // Get color, role, and name to save
       const colorToSave = config.selectedColor || device.color || 'rgb(40, 40, 40)'; // Default to black
       const positionToSave = config.selectedRole !== undefined ? config.selectedRole : device.role;
+      const nameToSave = config.selectedName !== undefined && config.selectedName.trim() !== '' 
+        ? config.selectedName.trim() 
+        : device.name;
 
       // Build request body according to CreateDeviceDto (POST) or UpdateDeviceDto (PUT)
       const requestBody: any = {
-        name: device.name,
+        name: nameToSave,
         type: 'tracker', // TODO: Check if this should be an enum value
         position: positionToSave,
         color: colorToSave
@@ -1119,6 +1204,7 @@ export class DeviceModal {
       // Update device with saved values
       device.color = colorToSave;
       device.role = positionToSave;
+      device.name = nameToSave;
       
       // Preserve connection state before reloading
       const wasConnected = device.isConnected;
@@ -1498,10 +1584,69 @@ export class DeviceModal {
     
     if (configSection && editBtn) {
       const isHidden = configSection.style.display === 'none' || configSection.style.display === '';
+      
+      // If opening edit mode for the first time, initialize config with current device values
+      if (isHidden) {
+        const existingConfig = this.deviceConfigs.get(deviceId);
+        if (!existingConfig) {
+          // Initialize config with current device values so dropdowns show current selections
+          this.deviceConfigs.set(deviceId, {
+            selectedColor: device.color,
+            selectedRole: device.role,
+            selectedName: device.name
+          });
+        }
+      }
+      
       configSection.style.display = isHidden ? 'block' : 'none';
       
       // Update edit state map to preserve state across re-renders
       this.deviceEditStates.set(deviceId, isHidden);
+      
+      // Re-render to show/hide edit icon next to name and update dropdowns with current values
+      this.renderSavedDevices();
+    }
+  }
+
+  private handleNameEditClick(deviceId: string): void {
+    // Enable name editing mode
+    this.deviceNameEditStates.set(deviceId, true);
+    this.renderSavedDevices();
+    
+    // Focus the input field after render
+    setTimeout(() => {
+      const nameInput = this.modal.querySelector(`.${savedCardStyles.deviceNameInput}[data-device-id="${deviceId}"]`) as HTMLInputElement;
+      if (nameInput) {
+        nameInput.focus();
+        nameInput.select();
+      }
+    }, 0);
+  }
+
+  private handleNameInputBlur(deviceId: string): void {
+    // Exit name editing mode
+    this.deviceNameEditStates.set(deviceId, false);
+    this.renderSavedDevices();
+  }
+
+  private handleNameInputKeyDown(deviceId: string, e: KeyboardEvent): void {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const input = e.target as HTMLInputElement;
+      input.blur(); // This will trigger handleNameInputBlur
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      // Cancel editing and restore original name
+      const device = this.savedDevices.find(d => d.id === deviceId);
+      if (device) {
+        const config = this.deviceConfigs.get(deviceId);
+        if (config) {
+          delete config.selectedName;
+          this.deviceConfigs.set(deviceId, config);
+        }
+      }
+      this.deviceNameEditStates.set(deviceId, false);
+      this.renderSavedDevices();
     }
   }
 
