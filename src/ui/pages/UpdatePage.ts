@@ -515,7 +515,8 @@ export class UpdatePage {
     this.logContainer.style.display = 'block';
 
     try {
-      const port = await (navigator as any).serial.requestPort();
+      // This forces the browser to show EVERYTHING plugged in
+      const port = await (navigator as any).serial.requestPort({ filters: [] });
       
       // Always ensure the port is closed before using it
       // The port might be open from a previous connection
