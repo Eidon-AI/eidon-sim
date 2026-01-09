@@ -7,6 +7,7 @@ import { LoginStateManager } from '../../core/LoginStateManager';
 import { LOGO_ASCII } from './utils/logoAscii';
 import { renderColorDropdown } from '../../ui/components/device-modal/ColorDropdown';
 import { renderRoleSelector } from '../../ui/components/device-modal/RoleSelector';
+import colorDropdownStyles from '../../ui/components/device-modal/styles/ColorDropdown.module.css';
 
 interface FirmwareVersion {
   version: string;
@@ -514,6 +515,11 @@ export class UpdatePage {
     // Show bottom terminal when starting new connection
     this.logContainer.style.display = 'block';
 
+    // Store original console methods for restoration (declare before try block)
+    const originalConsoleLog = console.log;
+    const originalConsoleTrace = console.trace;
+    const originalConsoleDebug = console.debug;
+
     try {
       // This forces the browser to show EVERYTHING plugged in
       const port = await (navigator as any).serial.requestPort({ filters: [] });
@@ -551,11 +557,47 @@ export class UpdatePage {
       // The second parameter (true) means "autoOpen" - we want it to handle opening
       this.transport = new Transport(port, true);
       
-      // Create a terminal-like object to capture logs
+      // Create a terminal-like object to capture logs (filter out TRACE messages)
       const terminal = {
         clean: () => { /* no-op */ },
-        writeLine: (data: string) => this.log(data),
-        write: (data: string) => this.log(data)
+        writeLine: (data: string) => {
+          // Filter out verbose TRACE messages from esptool-js
+          if (!data.includes('TRACE') && !data.trim().startsWith('TRACE')) {
+            this.log(data);
+          }
+        },
+        write: (data: string) => {
+          // Filter out verbose TRACE messages from esptool-js
+          if (!data.includes('TRACE') && !data.trim().startsWith('TRACE')) {
+            this.log(data);
+          }
+        }
+      };
+
+      // Suppress console TRACE logs from esptool-js during connection
+      
+      console.log = (...args: any[]) => {
+        const message = args.join(' ');
+        // Filter out TRACE logs and verbose "Write bytes" messages from esptool-js
+        if (!message.includes('TRACE') && 
+            !message.trim().startsWith('TRACE') &&
+            !message.includes('Write bytes')) {
+          originalConsoleLog.apply(console, args);
+        }
+      };
+      
+      console.trace = (...args: any[]) => {
+        // Suppress all trace calls
+      };
+      
+      console.debug = (...args: any[]) => {
+        const message = args.join(' ');
+        // Filter out TRACE logs and verbose "Write bytes" messages
+        if (!message.includes('TRACE') && 
+            !message.trim().startsWith('TRACE') &&
+            !message.includes('Write bytes')) {
+          originalConsoleDebug.apply(console, args);
+        }
       };
 
       this.deviceLoader = new ESPLoader({
@@ -597,26 +639,6 @@ export class UpdatePage {
       const macUpper = mac.toUpperCase();
       const macNormalized = this.normalizeMacAddress(mac);
       
-      // Debug logging
-      console.log('=== Device Matching Debug ===');
-      console.log('MAC Address to match:', macUpper);
-      console.log('MAC Address normalized:', macNormalized);
-      console.log('Saved devices connectionIds:');
-      this.savedDevices.forEach((device, index) => {
-        const connId = device.connectionId || '';
-        const connIdType = this.getConnectionIdType(connId);
-        const connIdNormalized = this.normalizeMacAddress(connId);
-        
-        console.log(`  Device ${index + 1}:`, {
-          id: device.id,
-          name: device.name,
-          connectionId: connId,
-          connectionIdType: connIdType,
-          connectionIdNormalized: connIdNormalized,
-          canMatch: connIdType === 'mac'
-        });
-      });
-      
       // Try to match device by normalized MAC address
       const matchedDevice = this.savedDevices.find(d => {
         const connId = d.connectionId || '';
@@ -626,12 +648,6 @@ export class UpdatePage {
         // Match if normalized MAC addresses are equal
         return connIdNormalized === macNormalized || idNormalized === macNormalized;
       });
-      
-      console.log('Matched device:', matchedDevice || 'No match found');
-      if (!matchedDevice) {
-        console.log('Note: iOS UUIDs cannot be matched to serial MAC addresses. Only Android MAC addresses can be matched.');
-      }
-      console.log('===========================');
       
       this.connectedDeviceInfo = {
         chipType: chipName,
@@ -643,6 +659,11 @@ export class UpdatePage {
         selectedRole: matchedDevice?.position
       };
       
+      // Restore console methods after connection
+      console.log = originalConsoleLog;
+      console.trace = originalConsoleTrace;
+      console.debug = originalConsoleDebug;
+      
       // Hide bottom terminal and show card
       this.logContainer.style.display = 'none';
       this.renderConnectedDeviceCard();
@@ -651,6 +672,11 @@ export class UpdatePage {
       this.log(LOGO_ASCII);
 
     } catch (e) {
+      // Restore console methods on error (always restore to original values)
+      if (originalConsoleLog) console.log = originalConsoleLog;
+      if (originalConsoleTrace) console.trace = originalConsoleTrace;
+      if (originalConsoleDebug) console.debug = originalConsoleDebug;
+      
       this.log('Connection failed: ' + e);
       if (this.port) {
         try {
@@ -822,6 +848,9 @@ export class UpdatePage {
             this.connectedDeviceInfo.selectedColor = selectedDevice.color;
             this.connectedDeviceInfo.selectedRole = selectedDevice.position;
             
+            // Update save button state
+            this.updateSaveButtonState();
+            
             // Re-render card to show selected device info
             this.renderConnectedDeviceCard();
           }
@@ -975,11 +1004,21 @@ export class UpdatePage {
       const saveButton = document.createElement('button');
       saveButton.className = styles.saveDeviceButton;
       saveButton.innerHTML = '<i class="fas fa-save"></i> Save Device';
+      saveButton.disabled = true; // Disabled by default until device is selected or configured
+      saveButton.title = 'Please select a device from the dropdown above or configure this device with color and role before saving.';
       saveButton.onclick = () => this.saveDevice();
       configSection.appendChild(saveButton);
       
+      // Store reference to save button for enabling/disabling
+      (this as any).saveDeviceButton = saveButton;
+      
       // Setup event listeners for color and role changes
       this.setupDeviceConfigListeners();
+      
+      // Update save button state after a short delay to ensure DOM is ready
+      setTimeout(() => {
+        this.updateSaveButtonState();
+      }, 150);
     }
     
     // Terminal/Logs Section
@@ -1184,55 +1223,144 @@ export class UpdatePage {
   }
   
   private setupDeviceConfigListeners(): void {
-    // Color dropdown listener - need to import colorDropdownStyles
+    // Color dropdown listener - using correct CSS module classes
     setTimeout(() => {
-      const colorTrigger = document.querySelector(`[data-device-id="update-device"][data-selector-type="color"]`);
+      const colorTrigger = this.connectedDeviceCard?.querySelector(`.${colorDropdownStyles.colorDropdownTrigger}[data-device-id="update-device"]`) as HTMLElement;
       if (colorTrigger) {
         colorTrigger.addEventListener('click', (e) => {
           e.stopPropagation();
-          const wrapper = (e.target as HTMLElement).closest('[data-device-id="update-device"]')?.parentElement;
-          const menu = wrapper?.querySelector('[data-device-id="update-device"]:last-child') as HTMLElement;
-          if (menu && menu.classList.contains('colorDropdownMenu')) {
-            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+          const wrapper = colorTrigger.closest(`.${colorDropdownStyles.colorDropdownWrapper}`) as HTMLElement;
+          const menu = wrapper?.querySelector(`.${colorDropdownStyles.colorDropdownMenu}`) as HTMLElement;
+          const isOpen = menu?.style.display !== 'none';
+          
+          // Close all other dropdowns
+          if (this.connectedDeviceCard) {
+            this.connectedDeviceCard.querySelectorAll(`.${colorDropdownStyles.colorDropdownMenu}`).forEach(otherMenu => {
+              if (otherMenu !== menu) {
+                (otherMenu as HTMLElement).style.display = 'none';
+                const otherWrapper = otherMenu.closest(`.${colorDropdownStyles.colorDropdownWrapper}`) as HTMLElement;
+                if (otherWrapper) otherWrapper.removeAttribute('data-open');
+              }
+            });
+          }
+          
+          if (menu && wrapper) {
+            menu.style.display = isOpen ? 'none' : 'block';
+            if (isOpen) {
+              wrapper.removeAttribute('data-open');
+            } else {
+              wrapper.setAttribute('data-open', 'true');
+            }
           }
         });
       }
       
       // Color option listeners
-      document.querySelectorAll(`[data-device-id="update-device"][data-value]`).forEach(option => {
-        option.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const value = (option as HTMLElement).getAttribute('data-value');
-          if (value && this.connectedDeviceInfo) {
-            this.connectedDeviceInfo.selectedColor = value;
-            // Update hidden input
-            const hiddenInput = document.querySelector(`[data-device-id="update-device"].colorSelector`) as HTMLInputElement;
-            if (hiddenInput) {
-              hiddenInput.value = value;
+      if (this.connectedDeviceCard) {
+        this.connectedDeviceCard.querySelectorAll(`.${colorDropdownStyles.colorOption}[data-device-id="update-device"]`).forEach(option => {
+          option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const value = (option as HTMLElement).getAttribute('data-value');
+            if (value && this.connectedDeviceInfo) {
+              this.connectedDeviceInfo.selectedColor = value;
+              
+              const wrapper = option.closest(`.${colorDropdownStyles.colorDropdownWrapper}`) as HTMLElement;
+              const menu = wrapper?.querySelector(`.${colorDropdownStyles.colorDropdownMenu}`) as HTMLElement;
+              const trigger = wrapper?.querySelector(`.${colorDropdownStyles.colorDropdownTrigger}`) as HTMLElement;
+              const hiddenInput = wrapper?.querySelector(`.${colorDropdownStyles.colorSelector}`) as HTMLInputElement;
+              
+              // Update hidden input value
+              if (hiddenInput) {
+                hiddenInput.value = value;
+              }
+              
+              // Update trigger display
+              if (trigger) {
+                const colorCircle = trigger.querySelector(`.${colorDropdownStyles.colorCircle}`) as HTMLElement;
+                const colorText = trigger.querySelector(`.${colorDropdownStyles.colorDropdownText}`) as HTMLElement;
+                const optionText = option.querySelector(`.${colorDropdownStyles.colorLabel}`)?.textContent || '';
+                
+                if (colorCircle && value) {
+                  colorCircle.style.backgroundColor = value;
+                }
+                if (colorText) {
+                  colorText.textContent = optionText;
+                }
+              }
+              
+              // Update selected state
+              wrapper?.querySelectorAll(`.${colorDropdownStyles.colorOption}`).forEach(opt => {
+                opt.classList.remove(colorDropdownStyles.colorOptionSelected);
+              });
+              option.classList.add(colorDropdownStyles.colorOptionSelected);
+              
+              // Close menu
+              if (menu) {
+                menu.style.display = 'none';
+              }
+              if (wrapper) {
+                wrapper.removeAttribute('data-open');
+              }
+              
+              // Update save button state
+              this.updateSaveButtonState();
+              
+              // Re-render card to update color
+              this.renderConnectedDeviceCard();
             }
-            // Close menu
-            const wrapper = (option as HTMLElement).closest('[data-device-id="update-device"]')?.parentElement;
-            const menu = wrapper?.querySelector('[data-device-id="update-device"]:last-child') as HTMLElement;
-            if (menu && menu.classList.contains('colorDropdownMenu')) {
-              menu.style.display = 'none';
-            }
-            // Re-render card to update color
-            this.renderConnectedDeviceCard();
-          }
+          });
         });
-      });
+      }
       
       // Role selector listener
-      const roleSelector = document.querySelector(`[data-device-id="update-device"][data-selector-type="role"]`) as HTMLSelectElement;
+      const roleSelector = this.connectedDeviceCard?.querySelector(`[data-device-id="update-device"][data-selector-type="role"]`) as HTMLSelectElement;
       if (roleSelector) {
         roleSelector.addEventListener('change', (e) => {
           const value = parseInt((e.target as HTMLSelectElement).value);
           if (this.connectedDeviceInfo) {
             this.connectedDeviceInfo.selectedRole = value as DeviceRole;
+            // Update save button state
+            this.updateSaveButtonState();
           }
         });
       }
+      
+      // Close dropdowns when clicking outside
+      const clickOutsideHandler = (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (this.connectedDeviceCard && !target.closest(`.${colorDropdownStyles.colorDropdownWrapper}`)) {
+          this.connectedDeviceCard.querySelectorAll(`.${colorDropdownStyles.colorDropdownMenu}`).forEach(menu => {
+            (menu as HTMLElement).style.display = 'none';
+            const wrapper = menu.closest(`.${colorDropdownStyles.colorDropdownWrapper}`) as HTMLElement;
+            if (wrapper) wrapper.removeAttribute('data-open');
+          });
+        }
+      };
+      document.addEventListener('click', clickOutsideHandler, true);
+      
+      // Store handler for cleanup if needed
+      (this as any).colorDropdownClickOutsideHandler = clickOutsideHandler;
     }, 100);
+  }
+  
+  private updateSaveButtonState(): void {
+    const saveButton = (this as any).saveDeviceButton as HTMLButtonElement | null;
+    if (!saveButton) return;
+    
+    // Enable save button if:
+    // 1. Device is saved (matchedDevice exists and isSaved is true), OR
+    // 2. Device is not saved but has both color and role selected
+    const canSave = this.connectedDeviceInfo?.isSaved || 
+                   (this.connectedDeviceInfo?.selectedColor && 
+                    this.connectedDeviceInfo?.selectedRole !== undefined);
+    
+    saveButton.disabled = !canSave;
+    
+    if (canSave) {
+      saveButton.title = 'Save this device configuration.';
+    } else {
+      saveButton.title = 'Please select a device from the dropdown above or configure this device with color and role before saving.';
+    }
   }
   
   private async saveDevice(): Promise<void> {
@@ -1272,6 +1400,9 @@ export class UpdatePage {
         this.connectedDeviceInfo.matchedDevice = savedDevice;
         this.connectedDeviceInfo.isSaved = true;
         
+        // Update save button state
+        this.updateSaveButtonState();
+        
         // Refresh saved devices list
         await this.fetchSavedDevices();
         
@@ -1296,6 +1427,35 @@ export class UpdatePage {
 
   private async flashFirmware(): Promise<void> {
     if (!this.deviceLoader || !this.transport) return;
+    
+    // Suppress console TRACE logs from esptool-js during flashing
+    const originalConsoleLog = console.log;
+    const originalConsoleTrace = console.trace;
+    const originalConsoleDebug = console.debug;
+    
+    console.log = (...args: any[]) => {
+      const message = args.join(' ');
+      // Filter out TRACE logs and verbose "Write bytes" messages from esptool-js
+      if (!message.includes('TRACE') && 
+          !message.trim().startsWith('TRACE') &&
+          !message.includes('Write bytes')) {
+        originalConsoleLog.apply(console, args);
+      }
+    };
+    
+    console.trace = (...args: any[]) => {
+      // Suppress all trace calls
+    };
+    
+    console.debug = (...args: any[]) => {
+      const message = args.join(' ');
+      // Filter out TRACE logs and verbose "Write bytes" messages
+      if (!message.includes('TRACE') && 
+          !message.trim().startsWith('TRACE') &&
+          !message.includes('Write bytes')) {
+        originalConsoleDebug.apply(console, args);
+      }
+    };
     
     try {
       // Reset and show progress bar in connected device card
@@ -1365,6 +1525,11 @@ export class UpdatePage {
         this.connectedDeviceProgressContainer.style.display = 'none';
       }
     } finally {
+      // Restore console methods
+      console.log = originalConsoleLog;
+      console.trace = originalConsoleTrace;
+      console.debug = originalConsoleDebug;
+      
       // Don't close connection automatically - let user close it
       // Clean up only the loader/transport references, keep port open
       this.transport = null;
