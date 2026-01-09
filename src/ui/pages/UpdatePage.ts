@@ -1377,19 +1377,33 @@ export class UpdatePage {
     
     try {
       const apiUrl = import.meta.env.VITE_API_URL;
-      const response = await fetch(`${apiUrl}/devices`, {
+      if (!apiUrl) {
+        this.log('Error: VITE_API_URL environment variable is not set');
+        return;
+      }
+      
+      // Ensure URL doesn't have double slashes
+      const baseUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
+      const url = `${baseUrl}/devices`;
+      
+      const requestBody = {
+        name: `Device ${this.connectedDeviceInfo.macAddress.slice(-4)}`,
+        type: 'tracker',
+        position: this.connectedDeviceInfo.selectedRole,
+        color: this.connectedDeviceInfo.selectedColor,
+        connectionId: this.connectedDeviceInfo.macAddress,
+        version: '0.1.0' // Default version for new devices
+      };
+      
+      this.log(`Saving device: ${JSON.stringify(requestBody)}`);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${tokens.token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          name: `Device ${this.connectedDeviceInfo.macAddress.slice(-4)}`,
-          type: 'tracker',
-          position: this.connectedDeviceInfo.selectedRole,
-          color: this.connectedDeviceInfo.selectedColor,
-          connectionId: this.connectedDeviceInfo.macAddress
-        })
+        body: JSON.stringify(requestBody)
       });
       
       if (response.ok) {
@@ -1409,7 +1423,30 @@ export class UpdatePage {
         // Re-render card to show update button
         this.renderConnectedDeviceCard();
       } else {
-        this.log(`Failed to save device: ${response.statusText}`);
+        // Try to get error details from response body
+        let errorMessage = response.statusText || 'Unknown error';
+        try {
+          const errorData = await response.json();
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          } else {
+            errorMessage = JSON.stringify(errorData);
+          }
+        } catch (e) {
+          // If response is not JSON, try to get text
+          try {
+            const errorText = await response.text();
+            if (errorText) {
+              errorMessage = errorText;
+            }
+          } catch (textError) {
+            // Ignore - use statusText
+          }
+        }
+        
+        this.log(`Failed to save device (${response.status}): ${errorMessage}`);
       }
     } catch (e) {
       this.log(`Error saving device: ${e}`);
