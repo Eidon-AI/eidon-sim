@@ -16,7 +16,10 @@ export class AdminRecordingsModal {
   private callbacks: AdminRecordingsModalCallbacks;
   private currentRecordings: AdminRecording[] = [];
   private pagination: any = null;
-  private recordingDetails: Record<string, { time: number; total: number }> | null = null;
+  private recordingDetails: {
+    taskTypes?: Record<string, { time: number; total: number }>;
+    versions?: Record<string, number>;
+  } | null = null;
   private detailsLoading: boolean = false;
   private detailsExpanded: boolean = false;
 
@@ -229,23 +232,69 @@ export class AdminRecordingsModal {
       ).join(' ');
     };
 
-    const entries = Object.entries(this.recordingDetails).sort((a, b) => b[1].total - a[1].total);
-    
-    const detailsHTML = entries.map(([taskType, data]) => `
-      <div class="${styles.recordingDetailItem}">
-        <div class="${styles.recordingDetailTaskType}">${formatTaskType(taskType)}</div>
-        <div class="${styles.recordingDetailStats}">
-          <span class="${styles.recordingDetailCount}">${data.total} recording${data.total !== 1 ? 's' : ''}</span>
-          <span class="${styles.recordingDetailTime}">${this.formatDuration(data.time)}</span>
+    let taskTypesHTML = '';
+    if (this.recordingDetails.taskTypes) {
+      const taskEntries = Object.entries(this.recordingDetails.taskTypes).sort((a, b) => b[1].total - a[1].total);
+      taskTypesHTML = taskEntries.map(([taskType, data]) => `
+        <div class="${styles.recordingDetailItem}">
+          <div class="${styles.recordingDetailTaskType}">${formatTaskType(taskType)}</div>
+          <div class="${styles.recordingDetailStats}">
+            <span class="${styles.recordingDetailCount}">${data.total} recording${data.total !== 1 ? 's' : ''}</span>
+            <span class="${styles.recordingDetailTime}">${this.formatDuration(data.time)}</span>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `).join('');
+    }
 
-    detailsContainer.innerHTML = `
-      <div class="${styles.recordingDetailsList}">
-        ${detailsHTML}
-      </div>
-    `;
+    let versionsHTML = '';
+    if (this.recordingDetails.versions) {
+      const versionEntries = Object.entries(this.recordingDetails.versions);
+      const totalRecordings = versionEntries.reduce((sum, [, count]) => sum + count, 0);
+      
+      const sortedVersions = versionEntries.sort((a, b) => {
+        const versionA = parseFloat(a[0]);
+        const versionB = parseFloat(b[0]);
+        return versionB - versionA; // Sort descending by version number
+      });
+
+      versionsHTML = sortedVersions.map(([version, count]) => {
+        const percentage = totalRecordings > 0 ? ((count / totalRecordings) * 100).toFixed(1) : '0.0';
+        return `
+          <div class="${styles.recordingDetailItem}">
+            <div class="${styles.recordingDetailTaskType}">Version ${version}</div>
+            <div class="${styles.recordingDetailStats}">
+              <span class="${styles.recordingDetailCount}">${count} recording${count !== 1 ? 's' : ''}</span>
+              <span class="${styles.recordingDetailPercentage}">${percentage}%</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    const sections = [];
+    if (taskTypesHTML) {
+      sections.push(`
+        <div class="${styles.recordingDetailsSection}">
+          <h4 class="${styles.recordingDetailsSectionTitle}">By Task Type</h4>
+          <div class="${styles.recordingDetailsList}">
+            ${taskTypesHTML}
+          </div>
+        </div>
+      `);
+    }
+    
+    if (versionsHTML) {
+      sections.push(`
+        <div class="${styles.recordingDetailsSection}">
+          <h4 class="${styles.recordingDetailsSectionTitle}">By Version</h4>
+          <div class="${styles.recordingDetailsList}">
+            ${versionsHTML}
+          </div>
+        </div>
+      `);
+    }
+
+    detailsContainer.innerHTML = sections.join('');
   }
 
   private renderRecordingDetailsError(errorMessage: string): void {
