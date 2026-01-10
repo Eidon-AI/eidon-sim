@@ -8,6 +8,7 @@ import { LOGO_ASCII } from './utils/logoAscii';
 import { renderColorDropdown } from '../../ui/components/device-modal/ColorDropdown';
 import { renderRoleSelector } from '../../ui/components/device-modal/RoleSelector';
 import colorDropdownStyles from '../../ui/components/device-modal/styles/ColorDropdown.module.css';
+import { isUpdateAvailable } from '../../core/versionUtils';
 
 interface FirmwareVersion {
   version: string;
@@ -818,6 +819,11 @@ export class UpdatePage {
         versionChip.className = styles.deviceVersionChip;
         versionChip.textContent = `v${device.version || '?'}`;
         
+        // Check if device version is outdated and add orange highlight
+        if (this.latestVersion && device.version && isUpdateAvailable(device.version, this.latestVersion)) {
+          versionChip.classList.add(styles.deviceVersionChipOutdated);
+        }
+        
         option.appendChild(colorDot);
         option.appendChild(optionText);
         option.appendChild(versionChip);
@@ -831,6 +837,10 @@ export class UpdatePage {
             const selectedText = optionText.cloneNode(true) as HTMLElement;
             selectedText.className = styles.deviceSelectOptionText;
             const selectedVersionChip = versionChip.cloneNode(true) as HTMLElement;
+            // Preserve the outdated class if it exists
+            if (versionChip.classList.contains(styles.deviceVersionChipOutdated)) {
+              selectedVersionChip.classList.add(styles.deviceVersionChipOutdated);
+            }
             deviceSelectTrigger.appendChild(selectedColorDot);
             deviceSelectTrigger.appendChild(selectedText);
             deviceSelectTrigger.appendChild(selectedVersionChip);
