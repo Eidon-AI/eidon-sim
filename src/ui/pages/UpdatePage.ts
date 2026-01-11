@@ -12,6 +12,7 @@ import { isUpdateAvailable } from '../../core/versionUtils';
 
 interface FirmwareVersion {
   version: string;
+  changelog?: string;
 }
 
 interface SavedDevice {
@@ -42,6 +43,7 @@ export class UpdatePage {
   private transport: Transport | null = null;
   private port: any = null; // SerialPort from Web Serial API
   private latestVersion: string | null = null;
+  private latestChangelog: string | null = null;
   private savedDevices: SavedDevice[] = [];
   private logContainer: HTMLElement;
   private progressBar: HTMLElement;
@@ -266,7 +268,55 @@ export class UpdatePage {
   private renderInfo(msg: string): void {
     const info = document.createElement('div');
     info.className = styles.info;
-    info.innerHTML = `<i class="fas fa-info-circle"></i> ${msg}`;
+    
+    const infoContent = document.createElement('div');
+    infoContent.style.display = 'flex';
+    infoContent.style.alignItems = 'flex-start';
+    infoContent.style.gap = '0.75rem';
+    
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-info-circle';
+    infoContent.appendChild(icon);
+    
+    const textContainer = document.createElement('div');
+    textContainer.style.display = 'flex';
+    textContainer.style.flexDirection = 'column';
+    textContainer.style.gap = '0.5rem';
+    
+    const versionText = document.createElement('div');
+    versionText.textContent = msg;
+    textContainer.appendChild(versionText);
+    
+    // Add changelog if available
+    if (this.latestChangelog) {
+      const changelogContainer = document.createElement('div');
+      changelogContainer.style.marginTop = '0.5rem';
+      
+      const changelogTitle = document.createElement('div');
+      changelogTitle.style.fontWeight = '600';
+      changelogTitle.style.marginBottom = '0.5rem';
+      changelogTitle.textContent = 'What changed:';
+      changelogContainer.appendChild(changelogTitle);
+      
+      const changelogList = document.createElement('ul');
+      changelogList.style.margin = '0';
+      changelogList.style.paddingLeft = '1.5rem';
+      changelogList.style.listStyleType = 'disc';
+      
+      // Split changelog by newlines and create list items
+      const changelogItems = this.latestChangelog.split('\n').filter(item => item.trim().length > 0);
+      changelogItems.forEach(item => {
+        const listItem = document.createElement('li');
+        listItem.textContent = item.trim();
+        changelogList.appendChild(listItem);
+      });
+      
+      changelogContainer.appendChild(changelogList);
+      textContainer.appendChild(changelogContainer);
+    }
+    
+    infoContent.appendChild(textContainer);
+    info.appendChild(infoContent);
     
     if (this.versionInfoContainer) {
       this.versionInfoContainer.innerHTML = '';
@@ -364,6 +414,7 @@ export class UpdatePage {
       if (response.ok) {
         const data: FirmwareVersion = await response.json();
         this.latestVersion = data.version;
+        this.latestChangelog = data.changelog || null;
         this.renderInfo(`Latest Firmware Version: ${this.latestVersion}`);
         
         // Pre-fetch firmware files
