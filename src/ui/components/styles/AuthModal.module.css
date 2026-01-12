@@ -168,3 +168,35 @@
     opacity: 1;
   }
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .container {
+    padding: 24px;
+    width: 95vw;
+    max-width: 95vw;
+    min-width: auto;
+    border-radius: 12px;
+  }
+
+  .closeButton {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .button {
+    padding: 14px 24px;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .button.primary {
+    font-size: 18px;
+  }
+
+  .subtitle {
+    font-size: 20px;
+  }
+}

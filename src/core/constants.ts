@@ -16,14 +16,13 @@ export const QUATERNION_CHAR_UUID = 'e1d00002-8b5a-3e5b-9e23-4f9b5c91bbde';
 export const CALIBRATION_CHAR_UUID = 'e1d00003-8b5a-3e5b-9e23-4f9b5c91bbde';
 export const DEVICE_INFO_CHAR_UUID = 'e1d00005-8b5a-3e5b-9e23-4f9b5c91bbde';
 
-// Hub-specific characteristics
-export const HAND_QUATERNION_CHAR_UUID = 'e1d00008-8b5a-3e5b-9e23-4f9b5c91bbde';
-export const FOREARM_QUATERNION_CHAR_UUID = 'e1d00009-8b5a-3e5b-9e23-4f9b5c91bbde';
+// LEFT characteristics (for receiving child data from left-side devices via ESP-NOW)
+// These are available on right-side hub devices (right_hand, right_forearm, right_shoulder)
+export const LEFT_QUATERNION_CHAR_UUID = 'e1d00008-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const LEFT_RAW_DATA_CHAR_UUID = 'e1d0000c-8b5a-3e5b-9e23-4f9b5c91bbde';
 
-// Raw data characteristics (for hub devices)
+// Raw data characteristics (for device's own data - MAIN characteristics)
 export const HUB_RAW_DATA_CHAR_UUID = 'e1d0000b-8b5a-3e5b-9e23-4f9b5c91bbde';
-export const HAND_RAW_DATA_CHAR_UUID = 'e1d0000c-8b5a-3e5b-9e23-4f9b5c91bbde';
-export const FOREARM_RAW_DATA_CHAR_UUID = 'e1d0000d-8b5a-3e5b-9e23-4f9b5c91bbde';
 
 // Glove-specific characteristics
 export const FINGER_SENSOR_CHAR_UUID = 'e1d0000a-8b5a-3e5b-9e23-4f9b5c91bbde';
@@ -40,8 +39,8 @@ export enum DeviceRole {
   RIGHT_HAND = 1,
   LEFT_FOREARM = 2,
   RIGHT_FOREARM = 3,
-  LEFT_HUB = 4,
-  RIGHT_HUB = 5,
+  LEFT_SHOULDER = 4,
+  RIGHT_SHOULDER = 5,
   CHEST = 6,
   UNKNOWN = 7,
   LEFT_GLOVE = 8,
@@ -53,8 +52,8 @@ export const DEVICE_ROLE_NAMES = {
   [DeviceRole.RIGHT_HAND]: 'Right Hand',
   [DeviceRole.LEFT_FOREARM]: 'Left Forearm',
   [DeviceRole.RIGHT_FOREARM]: 'Right Forearm',
-  [DeviceRole.LEFT_HUB]: 'Left Hub',
-  [DeviceRole.RIGHT_HUB]: 'Right Hub',
+  [DeviceRole.LEFT_SHOULDER]: 'Left Shoulder',
+  [DeviceRole.RIGHT_SHOULDER]: 'Right Shoulder',
   [DeviceRole.CHEST]: 'Chest',
   [DeviceRole.UNKNOWN]: 'Unknown',
   [DeviceRole.LEFT_GLOVE]: 'Left Glove',

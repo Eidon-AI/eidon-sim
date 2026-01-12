@@ -8,7 +8,7 @@ import { eulerXYZ } from './mathUtils';
  * - 2: Use chest UP vector projection onto XZ plane
  * - 3: Use direct yaw from chest device quaternion
  */
-export const CHEST_YAW_METHOD = 2;
+export const CHEST_YAW_METHOD = 1;
 
 /**
  * Calculate yaw angle from chest device UP vector projection onto yaw plane (XZ plane).

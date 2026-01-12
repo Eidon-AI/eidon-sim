@@ -114,3 +114,56 @@
 .button:hover {
   background-color: #404040;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .content {
+    width: 95vw;
+    max-width: 95vw;
+    padding: 20px;
+    margin: 1rem;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .closeButton {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 20px;
+  }
+
+  .input {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .urlInput {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .colorInput {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .button {
+    min-height: 44px;
+    padding: 12px 20px;
+    font-size: 16px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .actions .button {
+    width: 100%;
+  }
+}

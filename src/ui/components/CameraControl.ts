@@ -153,33 +153,21 @@ export class CameraControl {
   }
 
   private onClick(event: MouseEvent) {
-    console.log('Click detected');
-    console.log('Mouse position:', this.mouse);
-    
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    console.log('Raycaster ray:', this.raycaster.ray);
     
     const intersects = this.raycaster.intersectObject(this.cube, true);
-    console.log('Intersects:', intersects);
 
     if (intersects.length > 0) {
       const intersect = intersects[0];
-      console.log('Intersect object:', intersect.object);
-      console.log('Intersect point:', intersect.point);
       
       if (intersect.face) {
         const normal = intersect.face.normal.clone();
-        console.log('Face normal:', normal);
         
         // Convert normal to world space
         normal.applyQuaternion(this.cube.quaternion);
-        console.log('World space normal:', normal);
         
         const view = this.getViewFromNormal(normal);
         if (view) {
-          console.log('Selected view:', view);
-          console.log('View position:', VIEWS[view].position);
-          console.log('View target:', VIEWS[view].target);
           this.onViewChange(VIEWS[view]);
           
           // Update cube orientation to match the new view
@@ -190,15 +178,8 @@ export class CameraControl {
             new THREE.Vector3(0, 0.05, 0)
           );
           this.cube.quaternion.setFromRotationMatrix(lookAtMatrix);
-          console.log('Updated cube quaternion:', this.cube.quaternion);
-        } else {
-          console.log('No view found for normal');
         }
-      } else {
-        console.log('No face found in intersection');
       }
-    } else {
-      console.log('No intersection found');
     }
   }
 
@@ -207,9 +188,6 @@ export class CameraControl {
     const absX = Math.abs(normal.x);
     const absY = Math.abs(normal.y);
     const absZ = Math.abs(normal.z);
-    
-    console.log('Normal components:', { x: normal.x, y: normal.y, z: normal.z });
-    console.log('Absolute values:', { x: absX, y: absY, z: absZ });
     
     // Use a higher threshold to ensure we're clicking on a face
     const threshold = 0.7;
@@ -269,7 +247,5 @@ export class CameraControl {
 
     // Remove from DOM
     this.unmount();
-
-    console.log('CameraControl destroyed');
   }
 } 

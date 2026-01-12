@@ -13,6 +13,8 @@ import { ProfileModal } from './ProfileModal';
 import { RecordingsModal } from './RecordingsModal';
 import { AdminRecordingsModal } from './AdminRecordingsModal';
 import { VideoModal } from './VideoModal';
+import { LatestVersionManager } from '../../../core/LatestVersionManager';
+import { isUpdateAvailable } from '../../../core/versionUtils';
 import styles from './styles/Controls.module.css';
 
 export class Controls {
@@ -31,18 +33,22 @@ export class Controls {
   private videoModal: VideoModal | null = null;
   private unsubscribe: (() => void) | null = null;
   private previousModal: string | null = null;
+  private latestVersionUnsubscribe: (() => void) | null = null;
+  private latestVersionManager: LatestVersionManager;
   
   constructor(playbackManager: PlaybackManager, trackerManager: EidonTrackerManager, deviceConnectionStateManager: DeviceConnectionStateManager) {
     this.playbackManager = playbackManager;
     this.trackerManager = trackerManager;
     this.deviceConnectionStateManager = deviceConnectionStateManager;
     this.loginStateManager = LoginStateManager.getInstance();
+    this.latestVersionManager = LatestVersionManager.getInstance();
     this.container = this.createContainer();
     this.toolbar = this.createToolbar();
     this.container.appendChild(this.toolbar);
     
     this.setupEventListeners();
     this.render();
+    this.setupVersionCheck();
   }
 
   private setupEventListeners(): void {
@@ -65,6 +71,85 @@ export class Controls {
     document.addEventListener('requestLogin', () => {
       this.showAuthModal();
     });
+
+    // Listen for device info updates to check for outdated versions
+    this.trackerManager.addEventListener('deviceInfoUpdated', () => {
+      this.checkForOutdatedDevices();
+    });
+
+    // Listen for device connections/disconnections to check for outdated versions
+    this.trackerManager.addEventListener('deviceConnected', () => {
+      this.checkForOutdatedDevices();
+    });
+
+    this.trackerManager.addEventListener('deviceDisconnected', () => {
+      this.checkForOutdatedDevices();
+    });
+
+    // Listen for saved devices being loaded (from API)
+    document.addEventListener('savedDevicesLoaded', () => {
+      this.checkForOutdatedDevices();
+    });
+  }
+
+  private setupVersionCheck(): void {
+    // Fetch latest version on initialization
+    this.latestVersionManager.fetchLatestVersion().then(() => {
+      this.checkForOutdatedDevices();
+    });
+
+    // Listen for latest version changes
+    this.latestVersionUnsubscribe = this.latestVersionManager.addListener(() => {
+      this.checkForOutdatedDevices();
+    });
+  }
+
+  private checkForOutdatedDevices(): void {
+    const latestVersion = this.latestVersionManager.getLatestVersion();
+    if (!latestVersion) {
+      // No latest version available, don't show orange
+      this.updateUpdateButtonColor(false);
+      return;
+    }
+
+    // Check all devices for outdated versions
+    // Include both tracker devices (connected/discovered) and saved devices (from API)
+    const trackerDevices = this.trackerManager.getAllDevices();
+    const savedDevices = this.deviceModal?.getSavedDevices() || [];
+    
+    // Combine devices, preferring tracker devices (they have more up-to-date info)
+    const allDevices = [...trackerDevices];
+    savedDevices.forEach(savedDevice => {
+      // Only add saved device if not already in tracker devices
+      const exists = allDevices.some(d => 
+        d.id === savedDevice.id || 
+        d.connectionId === savedDevice.connectionId ||
+        d.macAddress === savedDevice.macAddress
+      );
+      if (!exists) {
+        allDevices.push(savedDevice);
+      }
+    });
+
+    const hasOutdatedDevice = allDevices.some(device => {
+      if (!device.firmwareVersion) {
+        return false; // Can't determine if outdated without version
+      }
+      return isUpdateAvailable(device.firmwareVersion, latestVersion);
+    });
+
+    this.updateUpdateButtonColor(hasOutdatedDevice);
+  }
+
+  private updateUpdateButtonColor(hasOutdated: boolean): void {
+    const updateBtn = this.toolbar.querySelector('#navUpdate') as HTMLButtonElement;
+    if (!updateBtn) return;
+
+    if (hasOutdated) {
+      updateBtn.classList.add(styles.updateButtonOutdated);
+    } else {
+      updateBtn.classList.remove(styles.updateButtonOutdated);
+    }
   }
 
   private render(): void {
@@ -513,6 +598,9 @@ export class Controls {
       // Show update button
       updateBtn.style.display = 'flex';
       
+      // Check for outdated devices when button becomes visible
+      this.checkForOutdatedDevices();
+      
       // Show recordings button with premium styling
       recordingsBtn.style.display = 'flex';
       recordingsBtn.className = `${styles.navButton} ${styles.navRecordings} ${styles.navRecordingsPremium}`;
@@ -612,6 +700,11 @@ export class Controls {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
+    }
+
+    if (this.latestVersionUnsubscribe) {
+      this.latestVersionUnsubscribe();
+      this.latestVersionUnsubscribe = null;
     }
     
     if (this.authModal) {

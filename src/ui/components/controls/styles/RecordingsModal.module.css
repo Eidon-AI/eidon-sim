@@ -6,6 +6,31 @@
   animation: slideInFromTop 0.3s ease-out forwards;
 }
 
+/* Mobile: Full-screen overlay */
+@media (max-width: 768px) {
+  .modal {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+  }
+
+  .modalContent {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    max-height: 90vh !important;
+    margin: 0;
+  }
+}
+
 .modalContent {
   background: rgba(23, 23, 23, 0.95);
   backdrop-filter: blur(20px);
@@ -405,6 +430,84 @@
   100% {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .modalContent {
+    width: 95vw;
+    max-width: 95vw;
+    padding: 16px;
+    max-height: 90vh;
+  }
+
+  .modalClose {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    top: 12px;
+    right: 12px;
+    font-size: 24px;
+  }
+
+  .recordingsHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .recordingsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .recordingThumbnail {
+    height: 100px;
+  }
+
+  .recordingInfo {
+    padding: 12px;
+  }
+
+  .recordingTask {
+    font-size: 14px;
+  }
+
+  .recordingDate {
+    font-size: 12px;
+  }
+
+  .playbackButton {
+    min-height: 44px;
+    font-size: 13px;
+    padding: 12px 14px;
+  }
+
+  .pagination {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .pageButton {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  .recordingDetailsList {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .recordingDetailItem {
+    padding: 10px;
+  }
+
+  .recordingDetailStats {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }
 

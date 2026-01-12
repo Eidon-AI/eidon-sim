@@ -1,16 +1,14 @@
 import {
   EIDON_SERVICE_UUID,
   QUATERNION_CHAR_UUID,
-  HAND_QUATERNION_CHAR_UUID,
-  FOREARM_QUATERNION_CHAR_UUID,
+  LEFT_QUATERNION_CHAR_UUID,
   DEVICE_INFO_CHAR_UUID,
   CALIBRATION_CHAR_UUID,
   FINGER_SENSOR_CHAR_UUID,
   ROLE_CONFIG_SERVICE_UUID,
   ROLE_CONFIG_CHAR_UUID,
   HUB_RAW_DATA_CHAR_UUID,
-  HAND_RAW_DATA_CHAR_UUID,
-  FOREARM_RAW_DATA_CHAR_UUID,
+  LEFT_RAW_DATA_CHAR_UUID,
   DeviceRole,
   DEVICE_ROLE_NAMES
 } from './constants';
@@ -19,8 +17,8 @@ import { parseRawMotionData } from './rawMotionDataParser';
 
 // Types for child devices (no longer using ChildDeviceConnectionManager)
 export type ChildDeviceId = string;
-export type ChildDeviceType = 'hand' | 'forearm';
-export type ChildDeviceRole = 'left_hand' | 'right_hand' | 'left_forearm' | 'right_forearm';
+export type ChildDeviceType = 'hand' | 'forearm' | 'shoulder';
+export type ChildDeviceRole = 'left_hand' | 'right_hand' | 'left_forearm' | 'right_forearm' | 'left_shoulder' | 'right_shoulder';
 
 export type DeviceId = string;
 
@@ -63,13 +61,11 @@ export class EidonTrackerManager extends EventTarget {
   
   // Raw data streams - keyed by deviceId
   private hubRawDataStreams = new Map<DeviceId, ReadableStream<RawMotionData>>();
-  private handRawDataStreams = new Map<DeviceId, ReadableStream<RawMotionData>>();
-  private forearmRawDataStreams = new Map<DeviceId, ReadableStream<RawMotionData>>();
+  private leftRawDataStreams = new Map<DeviceId, ReadableStream<RawMotionData>>();
   
   // Stream controllers for raw data
   private hubRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
-  private handRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
-  private forearmRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
+  private leftRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
   private scanAbortController?: AbortController;
 
   constructor() {
@@ -554,8 +550,9 @@ export class EidonTrackerManager extends EventTarget {
    */
   async connectToAll(): Promise<void> {
     const hubAndChestDevices = Array.from(this.devices.values()).filter(
-      device => device.role === DeviceRole.LEFT_HUB || 
-                device.role === DeviceRole.RIGHT_HUB || 
+      device => device.role === DeviceRole.RIGHT_HAND || 
+                device.role === DeviceRole.RIGHT_FOREARM || 
+                device.role === DeviceRole.RIGHT_SHOULDER || 
                 device.role === DeviceRole.CHEST
     );
 
@@ -699,7 +696,10 @@ export class EidonTrackerManager extends EventTarget {
         macAddress: macAddress || bluetoothDevice.id,
         connectionId: bluetoothDevice.id,
         isConnected: false,
-        isHub: role === DeviceRole.LEFT_HUB || role === DeviceRole.RIGHT_HUB || role === DeviceRole.CHEST,
+        isHub: role === DeviceRole.RIGHT_HAND || 
+               role === DeviceRole.RIGHT_FOREARM || 
+               role === DeviceRole.RIGHT_SHOULDER || 
+               role === DeviceRole.CHEST,
         lastSeen: performance.now()
       };
 
@@ -927,7 +927,10 @@ export class EidonTrackerManager extends EventTarget {
 
       // If this is a hub, create and subscribe to child devices
       // Only setup if not already set up (check if child devices already exist)
-      if (device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB)) {
+      // Right-side devices (RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER) are hubs in the new architecture
+      if (device.isHub && (device.role === DeviceRole.RIGHT_HAND || 
+                            device.role === DeviceRole.RIGHT_FOREARM || 
+                            device.role === DeviceRole.RIGHT_SHOULDER)) {
         const existingChildren = Array.from(this.devices.values()).filter(d => d.parentHub === deviceId);
         if (existingChildren.length === 0) {
           await this.setupChildDevicesForHub(deviceId);
@@ -997,8 +1000,9 @@ export class EidonTrackerManager extends EventTarget {
           device.role = roleValue as DeviceRole;
 
           // Update isHub flag based on role
-          device.isHub = device.role === DeviceRole.LEFT_HUB ||
-                        device.role === DeviceRole.RIGHT_HUB ||
+          device.isHub = device.role === DeviceRole.RIGHT_HAND ||
+                        device.role === DeviceRole.RIGHT_FOREARM ||
+                        device.role === DeviceRole.RIGHT_SHOULDER ||
                         device.role === DeviceRole.CHEST;
 
           this.devices.set(deviceId, device);
@@ -1040,8 +1044,9 @@ export class EidonTrackerManager extends EventTarget {
           const isValidRole = (roleFromInfo >= 0 && roleFromInfo <= 6) || roleFromInfo === 8 || roleFromInfo === 9;
           if (isValidRole && device.role === DeviceRole.UNKNOWN) {
             device.role = roleFromInfo as DeviceRole;
-            device.isHub = device.role === DeviceRole.LEFT_HUB ||
-                          device.role === DeviceRole.RIGHT_HUB ||
+            device.isHub = device.role === DeviceRole.RIGHT_HAND ||
+                          device.role === DeviceRole.RIGHT_FOREARM ||
+                          device.role === DeviceRole.RIGHT_SHOULDER ||
                           device.role === DeviceRole.CHEST;
           }
         } else if (infoData.byteLength >= 6) {
@@ -1060,8 +1065,9 @@ export class EidonTrackerManager extends EventTarget {
           const isValidRole = (roleFromInfo >= 0 && roleFromInfo <= 6) || roleFromInfo === 8 || roleFromInfo === 9;
           if (isValidRole && device.role === DeviceRole.UNKNOWN) {
             device.role = roleFromInfo as DeviceRole;
-            device.isHub = device.role === DeviceRole.LEFT_HUB ||
-                          device.role === DeviceRole.RIGHT_HUB ||
+            device.isHub = device.role === DeviceRole.RIGHT_HAND ||
+                          device.role === DeviceRole.RIGHT_FOREARM ||
+                          device.role === DeviceRole.RIGHT_SHOULDER ||
                           device.role === DeviceRole.CHEST;
           }
 
@@ -1126,37 +1132,12 @@ export class EidonTrackerManager extends EventTarget {
       }
     }
 
-    // Subscribe to hand raw data
-    const handRawDataChar = connectionState.characteristics.get(HAND_RAW_DATA_CHAR_UUID);
-    if (handRawDataChar) {
-      try {
-        await handRawDataChar.startNotifications();
-        handRawDataChar.addEventListener('characteristicvaluechanged', (event) => {
-          this.handleRawData(deviceId, 'hand', event);
-        });
-        console.log(`[EidonTrackerManager] Subscribed to hand raw data for ${deviceId}`);
-      } catch (error) {
-        console.warn(`[EidonTrackerManager] Failed to subscribe to hand raw data:`, error);
-      }
-    }
-
-    // Subscribe to forearm raw data
-    const forearmRawDataChar = connectionState.characteristics.get(FOREARM_RAW_DATA_CHAR_UUID);
-    if (forearmRawDataChar) {
-      try {
-        await forearmRawDataChar.startNotifications();
-        forearmRawDataChar.addEventListener('characteristicvaluechanged', (event) => {
-          this.handleRawData(deviceId, 'forearm', event);
-        });
-        console.log(`[EidonTrackerManager] Subscribed to forearm raw data for ${deviceId}`);
-      } catch (error) {
-        console.warn(`[EidonTrackerManager] Failed to subscribe to forearm raw data:`, error);
-      }
-    }
+    // Subscribe to LEFT raw data (for right-side hubs receiving data from left-side children)
+    await this.subscribeToLeftRawData(deviceId);
   }
 
   private createRawDataStreams(deviceId: DeviceId): void {
-    // Create hub raw data stream
+    // Create hub raw data stream (device's own data)
     if (!this.hubRawDataStreams.has(deviceId)) {
       const hubStream = new ReadableStream<RawMotionData>({
         start: (controller) => {
@@ -1166,28 +1147,19 @@ export class EidonTrackerManager extends EventTarget {
       this.hubRawDataStreams.set(deviceId, hubStream);
     }
 
-    // Create hand raw data stream
-    if (!this.handRawDataStreams.has(deviceId)) {
-      const handStream = new ReadableStream<RawMotionData>({
+    // Create LEFT raw data stream (for right-side hubs receiving data from left-side children)
+    const device = this.devices.get(deviceId);
+    if (device && this.isRightSideHub(device.role) && !this.leftRawDataStreams.has(deviceId)) {
+      const leftStream = new ReadableStream<RawMotionData>({
         start: (controller) => {
-          this.handRawDataControllers.set(deviceId, controller);
+          this.leftRawDataControllers.set(deviceId, controller);
         }
       });
-      this.handRawDataStreams.set(deviceId, handStream);
-    }
-
-    // Create forearm raw data stream
-    if (!this.forearmRawDataStreams.has(deviceId)) {
-      const forearmStream = new ReadableStream<RawMotionData>({
-        start: (controller) => {
-          this.forearmRawDataControllers.set(deviceId, controller);
-        }
-      });
-      this.forearmRawDataStreams.set(deviceId, forearmStream);
+      this.leftRawDataStreams.set(deviceId, leftStream);
     }
   }
 
-  private handleRawData(deviceId: DeviceId, type: 'hub' | 'hand' | 'forearm', event: Event): void {
+  private handleRawData(deviceId: DeviceId, type: 'hub', event: Event): void {
     const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
     const data = characteristic.value;
 
@@ -1205,46 +1177,14 @@ export class EidonTrackerManager extends EventTarget {
         return;
       }
 
-      // For HUB_RAW_DATA_CHAR_UUID: route to the device's own hub stream
-      // - If deviceId is a child device (hand/forearm) connecting directly: route to child device's hub stream
-      // - If deviceId is a hub: route to hub's hub stream
-      // For HAND_RAW_DATA_CHAR_UUID and FOREARM_RAW_DATA_CHAR_UUID: route directly (only hubs have these)
-      // These are used when child devices connect via hub (ESP NOW), and hub reports child data
-      
-      let targetDeviceId = deviceId;
-      let streamType = type;
-      
-      // Check if this is a child device using HUB_RAW_DATA_CHAR_UUID (direct connection case)
-      if (type === 'hub') {
-        const device = this.devices.get(deviceId);
-        if (device) {
-          const isHand = device.role === DeviceRole.LEFT_HAND || device.role === DeviceRole.RIGHT_HAND;
-          const isForearm = device.role === DeviceRole.LEFT_FOREARM || device.role === DeviceRole.RIGHT_FOREARM;
-          
-          if (isHand || isForearm) {
-            // Child device connecting directly - using HUB_RAW_DATA_CHAR_UUID for its own data
-            // Route to child device's hub stream (DeviceModal will interpret based on device role)
-            targetDeviceId = deviceId; // Use child device's ID
-            streamType = 'hub'; // Still use 'hub' stream type, but for the child device
-          } else {
-            // Actual hub device - route to hub's hub stream
-            targetDeviceId = deviceId;
-            streamType = 'hub';
-          }
-        }
-      }
-
-      // Enqueue to appropriate stream based on characteristic type and device
-      const controller = streamType === 'hub' 
-        ? this.hubRawDataControllers.get(targetDeviceId)
-        : streamType === 'hand'
-        ? this.handRawDataControllers.get(targetDeviceId)
-        : this.forearmRawDataControllers.get(targetDeviceId);
+      // HUB_RAW_DATA_CHAR_UUID contains the device's own raw data
+      // Route to the device's hub stream
+      const controller = this.hubRawDataControllers.get(deviceId);
 
       if (controller) {
         controller.enqueue(rawData);
       } else {
-        console.warn(`[EidonTrackerManager] No ${streamType} stream controller found for ${targetDeviceId}`);
+        console.warn(`[EidonTrackerManager] No hub raw data stream controller found for ${deviceId}`);
       }
     } catch (error) {
       console.warn(`[EidonTrackerManager] Error handling raw data:`, error);
@@ -1256,12 +1196,8 @@ export class EidonTrackerManager extends EventTarget {
     return this.hubRawDataStreams.get(deviceId);
   }
 
-  getHandRawDataStream(deviceId: DeviceId): ReadableStream<RawMotionData> | undefined {
-    return this.handRawDataStreams.get(deviceId);
-  }
-
-  getForearmRawDataStream(deviceId: DeviceId): ReadableStream<RawMotionData> | undefined {
-    return this.forearmRawDataStreams.get(deviceId);
+  getLeftRawDataStream(deviceId: DeviceId): ReadableStream<RawMotionData> | undefined {
+    return this.leftRawDataStreams.get(deviceId);
   }
 
   // Checkers for raw data availability
@@ -1270,14 +1206,9 @@ export class EidonTrackerManager extends EventTarget {
     return connectionState?.characteristics.has(HUB_RAW_DATA_CHAR_UUID) ?? false;
   }
 
-  hasHandRawDataCharacteristic(deviceId: DeviceId): boolean {
+  hasLeftRawDataCharacteristic(deviceId: DeviceId): boolean {
     const connectionState = this.connectionStates.get(deviceId);
-    return connectionState?.characteristics.has(HAND_RAW_DATA_CHAR_UUID) ?? false;
-  }
-
-  hasForearmRawDataCharacteristic(deviceId: DeviceId): boolean {
-    const connectionState = this.connectionStates.get(deviceId);
-    return connectionState?.characteristics.has(FOREARM_RAW_DATA_CHAR_UUID) ?? false;
+    return connectionState?.characteristics.has(LEFT_RAW_DATA_CHAR_UUID) ?? false;
   }
 
   private cleanupRawDataStreams(deviceId: DeviceId): void {
@@ -1293,29 +1224,59 @@ export class EidonTrackerManager extends EventTarget {
     }
     this.hubRawDataStreams.delete(deviceId);
 
-    // Close and remove hand raw data stream
-    const handController = this.handRawDataControllers.get(deviceId);
-    if (handController) {
+    // Close and remove LEFT raw data stream
+    const leftController = this.leftRawDataControllers.get(deviceId);
+    if (leftController) {
       try {
-        handController.close();
+        leftController.close();
       } catch (error) {
         // Ignore errors on close
       }
-      this.handRawDataControllers.delete(deviceId);
+      this.leftRawDataControllers.delete(deviceId);
     }
-    this.handRawDataStreams.delete(deviceId);
+    this.leftRawDataStreams.delete(deviceId);
+  }
 
-    // Close and remove forearm raw data stream
-    const forearmController = this.forearmRawDataControllers.get(deviceId);
-    if (forearmController) {
-      try {
-        forearmController.close();
-      } catch (error) {
-        // Ignore errors on close
-      }
-      this.forearmRawDataControllers.delete(deviceId);
+  /**
+   * Handle LEFT raw data (from left-side child devices via ESP-NOW)
+   */
+  private handleLeftRawData(deviceId: DeviceId, event: Event): void {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const data = characteristic.value;
+
+    if (!data || data.byteLength < 36) {
+      console.warn(`[EidonTrackerManager] Invalid LEFT raw data: data=${!!data}, byteLength=${data?.byteLength}`);
+      return;
     }
-    this.forearmRawDataStreams.delete(deviceId);
+
+    try {
+      const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+      const rawData = parseRawMotionData(dataView, performance.now());
+
+      if (!rawData) {
+        console.warn(`[EidonTrackerManager] Failed to parse LEFT raw data for ${deviceId}`);
+        return;
+      }
+
+      // Route to LEFT raw data stream
+      const controller = this.leftRawDataControllers.get(deviceId);
+      if (controller) {
+        controller.enqueue(rawData);
+      } else {
+        console.warn(`[EidonTrackerManager] No LEFT raw data stream controller found for ${deviceId}`);
+      }
+    } catch (error) {
+      console.warn(`[EidonTrackerManager] Error handling LEFT raw data:`, error);
+    }
+  }
+
+  /**
+   * Check if device is a right-side hub
+   */
+  private isRightSideHub(role: DeviceRole): boolean {
+    return role === DeviceRole.RIGHT_HAND || 
+           role === DeviceRole.RIGHT_FOREARM || 
+           role === DeviceRole.RIGHT_SHOULDER;
   }
 
   private async subscribeToFingerData(deviceId: DeviceId): Promise<void> {
@@ -1372,30 +1333,134 @@ export class EidonTrackerManager extends EventTarget {
 
 
   /**
-   * Generate child device ID based on hub ID and device type
+   * Get child type name from role
    */
-  private generateChildDeviceId(hubId: DeviceId, type: ChildDeviceType): ChildDeviceId {
-    return `${hubId}_${type}`;
+  private getChildTypeName(role: ChildDeviceRole): string {
+    if (role.includes('hand')) return 'Hand';
+    if (role.includes('forearm')) return 'Forearm';
+    if (role.includes('shoulder')) return 'Shoulder';
+    return 'Device';
   }
 
   /**
-   * Determine child device role based on hub role and characteristic UUID
+   * Subscribe to LEFT quaternion characteristic for a right-side hub
    */
-  private getChildDeviceRole(hubRole: DeviceRole, characteristicUuid: string): ChildDeviceRole | null {
-    const isHand = characteristicUuid.toLowerCase() === HAND_QUATERNION_CHAR_UUID.toLowerCase();
-    const isForearm = characteristicUuid.toLowerCase() === FOREARM_QUATERNION_CHAR_UUID.toLowerCase();
+  private async subscribeToLeftQuaternion(
+    hubId: DeviceId,
+    childId: ChildDeviceId,
+    childRole: ChildDeviceRole
+  ): Promise<void> {
+    const connectionState = this.connectionStates.get(hubId);
+    if (!connectionState) {
+      return;
+    }
+
+    const leftQuaternionChar = connectionState.characteristics.get(LEFT_QUATERNION_CHAR_UUID);
+    if (!leftQuaternionChar) {
+      return;
+    }
+
+    try {
+      await leftQuaternionChar.startNotifications();
+      
+      // Create event handler that routes data to child device ID
+      const eventHandler = (event: Event) => {
+        try {
+          this.handleLeftQuaternionData(hubId, childId, childRole, event);
+        } catch (error) {
+          console.error(`[EidonTrackerManager] Error in LEFT quaternion event handler for ${childId}:`, error);
+        }
+      };
+      
+      leftQuaternionChar.addEventListener('characteristicvaluechanged', eventHandler);
+      console.log(`[EidonTrackerManager] Subscribed to LEFT quaternion for child device ${childId} on hub ${hubId}`);
+    } catch (error) {
+      console.error(`[EidonTrackerManager] Failed to subscribe to LEFT quaternion for hub ${hubId}:`, error);
+    }
+  }
+
+  /**
+   * Subscribe to LEFT raw data characteristic for a right-side hub
+   */
+  private async subscribeToLeftRawData(deviceId: DeviceId): Promise<void> {
+    const connectionState = this.connectionStates.get(deviceId);
+    if (!connectionState) {
+      return;
+    }
+
+    const device = this.devices.get(deviceId);
+    const leftRawDataChar = connectionState.characteristics.get(LEFT_RAW_DATA_CHAR_UUID);
+    if (!leftRawDataChar || !device || !this.isRightSideHub(device.role)) {
+      return;
+    }
+
+    try {
+      await leftRawDataChar.startNotifications();
+      leftRawDataChar.addEventListener('characteristicvaluechanged', (event) => {
+        this.handleLeftRawData(deviceId, event);
+      });
+      console.log(`[EidonTrackerManager] Subscribed to LEFT raw data for ${deviceId}`);
+    } catch (error) {
+      console.error(`[EidonTrackerManager] Failed to subscribe to LEFT raw data:`, error);
+    }
+  }
+
+  /**
+   * Handle LEFT quaternion data (from left-side child devices via ESP-NOW)
+   */
+  private handleLeftQuaternionData(
+    hubId: DeviceId,
+    childId: ChildDeviceId,
+    childRole: ChildDeviceRole,
+    event: Event
+  ): void {
+    const characteristic = event.target as BluetoothRemoteGATTCharacteristic;
+    const data = characteristic.value;
     
-    if (!isHand && !isForearm) {
-      return null;
+    if (!data) {
+      return;
     }
 
-    if (hubRole === DeviceRole.LEFT_HUB) {
-      return isHand ? 'left_hand' : 'left_forearm';
-    } else if (hubRole === DeviceRole.RIGHT_HUB) {
-      return isHand ? 'right_hand' : 'right_forearm';
-    }
+    try {
+      // Parse quaternion data (16 bytes: 4 floats)
+      // Byte order: Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z
+      const quaternion = new Float32Array(data.buffer, data.byteOffset, 4);
+      
+      // Update child device lastSeen
+      const childDevice = this.devices.get(childId);
+      if (childDevice) {
+        childDevice.lastSeen = performance.now();
+        childDevice.isConnected = true; // Mark as connected when we receive data
+        this.devices.set(childId, childDevice);
+      }
 
-    return null;
+      // Dispatch quaternion data event with child device ID
+      this.dispatchEvent(new CustomEvent('quaternionData', {
+        detail: {
+          deviceId: childId, // Use child device ID, not hub ID
+          quaternion: Array.from(quaternion),
+          timestamp: performance.now()
+        }
+      }));
+    } catch (error) {
+      console.error(`[EidonTrackerManager] Error handling LEFT quaternion data for ${childId}:`, error);
+    }
+  }
+
+  /**
+   * Get the corresponding left child role for a right-side hub
+   */
+  private getLeftChildRoleForHub(hubRole: DeviceRole): ChildDeviceRole | null {
+    switch (hubRole) {
+      case DeviceRole.RIGHT_HAND:
+        return 'left_hand';
+      case DeviceRole.RIGHT_FOREARM:
+        return 'left_forearm';
+      case DeviceRole.RIGHT_SHOULDER:
+        return 'left_shoulder';
+      default:
+        return null;
+    }
   }
 
   /**
@@ -1411,6 +1476,10 @@ export class EidonTrackerManager extends EventTarget {
         return DeviceRole.LEFT_FOREARM;
       case 'right_forearm':
         return DeviceRole.RIGHT_FOREARM;
+      case 'left_shoulder':
+        return DeviceRole.LEFT_SHOULDER;
+      case 'right_shoulder':
+        return DeviceRole.RIGHT_SHOULDER;
       default:
         return DeviceRole.UNKNOWN;
     }
@@ -1427,8 +1496,10 @@ export class EidonTrackerManager extends EventTarget {
       return;
     }
 
-    // Only handle LEFT_HUB and RIGHT_HUB (not CHEST)
-    if (hubDevice.role !== DeviceRole.LEFT_HUB && hubDevice.role !== DeviceRole.RIGHT_HUB) {
+    // Only handle right-side hubs (not CHEST)
+    if (hubDevice.role !== DeviceRole.RIGHT_HAND && 
+        hubDevice.role !== DeviceRole.RIGHT_FOREARM && 
+        hubDevice.role !== DeviceRole.RIGHT_SHOULDER) {
       return;
     }
 
@@ -1438,72 +1509,47 @@ export class EidonTrackerManager extends EventTarget {
       return;
     }
 
-    // Check if hub has child characteristics
-    const handChar = connectionState.characteristics.get(HAND_QUATERNION_CHAR_UUID);
-    const forearmChar = connectionState.characteristics.get(FOREARM_QUATERNION_CHAR_UUID);
-
-    if (!handChar && !forearmChar) {
-      console.log(`[EidonTrackerManager] Hub ${hubId} does not have child device characteristics - skipping child device setup`);
+    // Check if hub has LEFT quaternion characteristic
+    const leftQuaternionChar = connectionState.characteristics.get(LEFT_QUATERNION_CHAR_UUID);
+    if (!leftQuaternionChar) {
+      console.log(`[EidonTrackerManager] Hub ${hubId} does not have LEFT quaternion characteristic - skipping child device setup`);
       return;
     }
 
-    // Create child devices
-    const childDevices: Array<{ id: ChildDeviceId; type: ChildDeviceType; role: ChildDeviceRole; char: BluetoothRemoteGATTCharacteristic }> = [];
-
-    if (handChar) {
-      const handId = this.generateChildDeviceId(hubId, 'hand');
-      const handRole = this.getChildDeviceRole(hubDevice.role, HAND_QUATERNION_CHAR_UUID);
-      if (handRole) {
-        childDevices.push({ id: handId, type: 'hand', role: handRole, char: handChar });
-      }
+    // Get corresponding left child role
+    const childRole = this.getLeftChildRoleForHub(hubDevice.role);
+    if (!childRole) {
+      console.warn(`[EidonTrackerManager] Cannot determine child role for hub ${hubId} with role ${hubDevice.role}`);
+      return;
     }
 
-    if (forearmChar) {
-      const forearmId = this.generateChildDeviceId(hubId, 'forearm');
-      const forearmRole = this.getChildDeviceRole(hubDevice.role, FOREARM_QUATERNION_CHAR_UUID);
-      if (forearmRole) {
-        childDevices.push({ id: forearmId, type: 'forearm', role: forearmRole, char: forearmChar });
-      }
-    }
+    // Generate child device ID based on role
+    const childId = `${hubId}_${childRole}`;
 
-    // Create EidonDevice entries for each child and subscribe to characteristics
-    for (const child of childDevices) {
-      const childDevice: EidonDevice = {
-        id: child.id,
-        name: `${hubDevice.name} ${child.type === 'hand' ? 'Hand' : 'Forearm'}`,
-        role: this.mapChildRoleToDeviceRole(child.role),
-        macAddress: `${hubDevice.macAddress}_${child.type}`,
-        connectionId: hubDevice.connectionId, // Use parent hub's connectionId
-        isConnected: true, // Child devices are "connected" when hub is connected
-        isHub: false,
-        parentHub: hubId,
-        color: hubDevice.color, // Inherit color from parent
-        lastSeen: performance.now()
-      };
+    // Create child device
+    const childDevice: EidonDevice = {
+      id: childId,
+      name: `${hubDevice.name} (Left ${this.getChildTypeName(childRole)})`,
+      role: this.mapChildRoleToDeviceRole(childRole),
+      macAddress: `${hubDevice.macAddress}_left`,
+      connectionId: hubDevice.connectionId,
+      isConnected: true,
+      isHub: false,
+      parentHub: hubId,
+      color: hubDevice.color,
+      lastSeen: performance.now()
+    };
 
-      this.devices.set(child.id, childDevice);
+    this.devices.set(childId, childDevice);
 
-      // Dispatch deviceConnected event for child device
-      this.dispatchEvent(new CustomEvent('deviceConnected', { detail: { deviceId: child.id, device: childDevice } }));
+    // Dispatch deviceConnected event for child device
+    this.dispatchEvent(new CustomEvent('deviceConnected', { 
+      detail: { deviceId: childId, device: childDevice } 
+    }));
 
-      // Subscribe to characteristic notifications
-      try {
-        await child.char.startNotifications();
-        
-        // Create event handler that routes data to child device ID
-        const eventHandler = (event: Event) => {
-          try {
-            this.handleChildQuaternionData(hubId, child.id, child.type, event);
-          } catch (error) {
-            console.error(`[EidonTrackerManager] Error in child quaternion event handler for ${child.id}:`, error);
-          }
-        };
-        
-        child.char.addEventListener('characteristicvaluechanged', eventHandler);
-      } catch (error) {
-        console.error(`[EidonTrackerManager] Failed to subscribe to ${child.type} quaternion data for hub ${hubId}:`, error);
-      }
-    }
+    // Subscribe to LEFT quaternion characteristic
+    await this.subscribeToLeftQuaternion(hubId, childId, childRole);
+
   }
 
   /**
@@ -1742,7 +1788,10 @@ export class EidonTrackerManager extends EventTarget {
       connectionState.isConnecting = false;
 
       // If this is a hub, set up child devices
-      if (device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB)) {
+      // Right-side devices (RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER) are hubs in the new architecture
+      if (device.isHub && (device.role === DeviceRole.RIGHT_HAND || 
+                           device.role === DeviceRole.RIGHT_FOREARM || 
+                           device.role === DeviceRole.RIGHT_SHOULDER)) {
         const existingChildren = Array.from(this.devices.values()).filter(d => d.parentHub === deviceId);
         if (existingChildren.length === 0) {
           await this.setupChildDevicesForHub(deviceId);
