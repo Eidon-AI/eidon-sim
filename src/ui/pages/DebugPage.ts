@@ -1,5 +1,7 @@
 import styles from './styles/DebugPage.module.css';
 import { LOGO_ASCII } from './utils/logoAscii';
+import { AuthModal } from '../../ui/components/AuthModal';
+import { LoginStateManager } from '../../core/LoginStateManager';
 
 export class DebugPage {
   private container: HTMLElement;
@@ -12,6 +14,7 @@ export class DebugPage {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private isConnected: boolean = false;
   private dividerAdded: boolean = false;
+  private authModal: AuthModal | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -34,6 +37,13 @@ export class DebugPage {
 
     this.renderHeader();
     
+    // Check if logged in
+    const loginState = LoginStateManager.getInstance().getState();
+    if (!loginState.isLoggedIn) {
+      this.showAuthModal();
+      return;
+    }
+
     // Check compatibility
     if (!('serial' in navigator)) {
       this.renderWarning('Web Serial API is not supported in this browser. Please use Chrome or Edge.');
@@ -54,6 +64,11 @@ export class DebugPage {
   public unmount(): void {
     // Restore default metadata
     this.restoreDefaultMetadata();
+    
+    if (this.authModal) {
+      this.authModal.unmount();
+      this.authModal = null;
+    }
     
     // Disconnect if connected
     if (this.isConnected) {
@@ -136,6 +151,58 @@ export class DebugPage {
     warning.className = styles.warning;
     warning.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${msg}`;
     this.content.appendChild(warning);
+  }
+
+  private showAuthModal(): void {
+    // Clear content first to avoid clutter
+    this.content.innerHTML = '';
+    this.renderHeader(); // Keep header visible
+    
+    const message = document.createElement('div');
+    message.className = styles.noRecordings; // Reuse existing style or create new
+    message.textContent = 'Please sign in to access the serial debug terminal.';
+    message.style.marginTop = '2rem';
+    this.content.appendChild(message);
+
+    this.authModal = new AuthModal(
+      async () => {
+        try {
+          await LoginStateManager.getInstance().login();
+          if (this.authModal) {
+            this.authModal.unmount();
+            this.authModal = null;
+          }
+          // Reload content after login
+          this.content.innerHTML = ''; // Clear auth message
+          this.renderHeader(); // Re-render header
+          
+          // Continue with loading content
+          if (!('serial' in navigator)) {
+            this.renderWarning('Web Serial API is not supported in this browser. Please use Chrome or Edge.');
+            return;
+          }
+          this.renderMainContent();
+          
+          // Render terminal section (header + logs in unified container)
+          const terminalSection = (this as any).terminalSection;
+          if (terminalSection) {
+            this.content.appendChild(terminalSection);
+          }
+          
+          this.log('Ready to connect to device.');
+          
+        } catch (error) {
+          console.error('Login failed:', error);
+          alert('Login failed. Please try again.');
+        }
+      },
+      () => {
+        // If they choose explore anonymously, redirect to home since this page requires auth
+        window.location.href = '/';
+      }
+    );
+    
+    this.authModal.mount(this.container);
   }
 
   private renderMainContent(): void {

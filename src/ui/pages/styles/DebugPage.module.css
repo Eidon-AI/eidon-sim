@@ -284,6 +284,13 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.noRecordings {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  padding: 40px 20px;
+}
+
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
   .container {
