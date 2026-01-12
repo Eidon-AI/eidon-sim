@@ -167,6 +167,10 @@ export class Controls {
         <i class="fas fa-cloud-upload-alt"></i>
         <span>Update</span>
       </button>
+      <button id="navDebug" class="${styles.navButton}" title="Serial Debug Terminal">
+        <i class="fas fa-terminal"></i>
+        <span>Debug</span>
+      </button>
       <button id="navRecordings" class="${styles.navButton} ${styles.navRecordings}" title="Recordings (Login Required)" style="display: none;">
         <i class="fas fa-folder-open"></i>
         <span>Recordings</span>
@@ -189,6 +193,7 @@ export class Controls {
   private attachEventListeners(): void {
     const connectBtn = this.toolbar.querySelector('#navConnect') as HTMLButtonElement;
     const updateBtn = this.toolbar.querySelector('#navUpdate') as HTMLButtonElement;
+    const debugBtn = this.toolbar.querySelector('#navDebug') as HTMLButtonElement;
     const recordingsBtn = this.toolbar.querySelector('#navRecordings') as HTMLButtonElement;
     const adminRecordingsBtn = this.toolbar.querySelector('#navAdminRecordings') as HTMLButtonElement;
     const userInfoBtn = this.toolbar.querySelector('#userInfo') as HTMLButtonElement;
@@ -200,6 +205,10 @@ export class Controls {
 
     updateBtn.addEventListener('click', () => {
       window.location.href = '/update';
+    });
+
+    debugBtn.addEventListener('click', () => {
+      window.location.href = '/debug';
     });
 
     recordingsBtn.addEventListener('click', () => {

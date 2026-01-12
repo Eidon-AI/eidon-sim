@@ -1,0 +1,361 @@
+.container {
+  width: 100%;
+  height: 100vh;
+  /* Use global background if visible, or a dark fallback that matches app theme */
+  background: radial-gradient(
+    167.67% 75.36% at 11.96% 5.24%,
+    rgb(86, 74, 76) 0%,
+    rgb(62, 53, 54) 25vw,
+    rgb(0, 0, 0) 100vw
+  );
+  color: rgb(var(--foreground-rgb));
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center content like a modal/page */
+  padding: 2rem;
+  box-sizing: border-box;
+  font-family: var(--font-primary);
+  overflow-y: auto;
+}
+
+/* Limit content width to match other modals/panels roughly or be readable */
+.contentWrapper {
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.header {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: bold;
+  color: white;
+  margin: 0;
+  text-shadow: var(--text-shadow);
+}
+
+.backButton {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-family: var(--font-primary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.backButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.section {
+  background: rgba(23, 23, 23, 0.6); /* Semi-transparent like modals */
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.sectionTitle {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sectionTitle i {
+  color: rgb(var(--brand-rgb));
+}
+
+.warning {
+  background: rgba(234, 179, 8, 0.1); /* Amber/Yellow tint */
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  color: #fbbf24;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.buttonContainer {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.terminalSection {
+  background: rgba(23, 23, 23, 0.6);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.terminalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.terminalTitle {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.terminalTitle i {
+  color: rgb(var(--brand-rgb));
+}
+
+.connectionControls {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.button {
+  background: linear-gradient(135deg, rgb(var(--brand-rgb)) 0%, rgb(var(--brand-sub-rgb)) 100%);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: var(--font-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(var(--brand-rgb), 0.3);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.button:disabled {
+  background: rgba(64, 64, 64, 0.5);
+  color: rgba(255, 255, 255, 0.4);
+  border-color: transparent;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.disconnectButton {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.disconnectButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 1) 0%, rgba(220, 38, 38, 1) 100%);
+  box-shadow: 0 6px 12px rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.7);
+}
+
+.restartButton {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.8) 0%, rgba(217, 119, 6, 0.8) 100%);
+  border-color: rgba(234, 179, 8, 0.5);
+}
+
+.restartButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 1) 0%, rgba(217, 119, 6, 1) 100%);
+  box-shadow: 0 6px 12px rgba(234, 179, 8, 0.3);
+  border-color: rgba(234, 179, 8, 0.7);
+}
+
+.instructionsHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+  padding: 0.5rem 0;
+  transition: color 0.2s ease;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.instructionsHeader:hover {
+  color: white;
+}
+
+.instructionsHeader i:first-child {
+  color: rgb(var(--brand-rgb));
+}
+
+.instructionsChevron {
+  margin-left: auto;
+  transition: transform 0.3s ease;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.instructionsContent {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.instructionStep {
+  margin-bottom: 0.5rem;
+}
+
+.instructionStep:last-child {
+  margin-bottom: 0;
+}
+
+.instructionStep strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+.logContainer {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.85rem;
+  height: 400px;
+  overflow-y: auto;
+  color: #d4d4d4;
+  white-space: pre-wrap;
+  backdrop-filter: blur(4px);
+  margin-top: 0;
+}
+
+.logLine {
+  margin: 0;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  word-wrap: break-word;
+}
+
+.logDivider {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 600;
+  text-align: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .contentWrapper {
+    gap: 1rem;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .backButton {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+
+  .section {
+    padding: 1rem;
+  }
+
+  .sectionTitle {
+    font-size: 1.1rem;
+  }
+
+  .buttonContainer {
+    flex-direction: column;
+    width: 100%;
+    gap: 1rem;
+  }
+
+  .terminalSection {
+    padding: 1rem;
+  }
+
+  .terminalHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .connectionControls {
+    width: 100%;
+    justify-content: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .button {
+    width: 100%;
+    min-height: 44px;
+    padding: 12px 20px;
+    justify-content: center;
+  }
+
+  .connectionControls .button {
+    width: 100%;
+  }
+
+  .logContainer {
+    height: 300px;
+    font-size: 0.8rem;
+  }
+}
