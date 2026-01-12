@@ -15,6 +15,7 @@ export class DebugPage {
   private isConnected: boolean = false;
   private dividerAdded: boolean = false;
   private authModal: AuthModal | null = null;
+  private lineBuffer: string = ''; // Buffer for incomplete lines
 
   constructor() {
     this.container = document.createElement('div');
@@ -338,6 +339,7 @@ export class DebugPage {
       // Update UI
       this.isConnected = true;
       this.dividerAdded = false; // Reset divider flag on new connection
+      this.lineBuffer = ''; // Clear line buffer on new connection
       if (this.connectButton) {
         this.connectButton.disabled = true;
       }
@@ -459,6 +461,7 @@ export class DebugPage {
     
     // Update UI
     this.dividerAdded = false; // Reset divider flag on disconnect
+    this.lineBuffer = ''; // Clear line buffer on disconnect
     if (this.connectButton) {
       this.connectButton.disabled = false;
     }
@@ -477,6 +480,7 @@ export class DebugPage {
   private clearLogs(): void {
     this.logContainer.innerHTML = '';
     this.dividerAdded = false; // Reset divider flag when clearing
+    this.lineBuffer = ''; // Clear line buffer
   }
 
   private async resetDevice(): Promise<void> {
@@ -529,11 +533,25 @@ export class DebugPage {
       this.dividerAdded = true;
     }
     
-    // Split by newlines to handle multi-line output
-    const lines = text.split('\n');
+    // Append new text to buffer
+    this.lineBuffer += text;
     
-    lines.forEach((line, index) => {
-      if (line.trim() || index < lines.length - 1) {
+    // Split by newlines - last element might be incomplete
+    const lines = this.lineBuffer.split('\n');
+    
+    // Keep the last element in buffer if it doesn't end with newline
+    // (it's an incomplete line)
+    if (text.endsWith('\n')) {
+      // All lines are complete, clear buffer
+      this.lineBuffer = '';
+    } else {
+      // Last line is incomplete, keep it in buffer
+      this.lineBuffer = lines.pop() || '';
+    }
+    
+    // Display all complete lines
+    lines.forEach((line) => {
+      if (line.trim() || line.length > 0) {
         const logLine = document.createElement('div');
         logLine.className = styles.logLine;
         logLine.textContent = line;
