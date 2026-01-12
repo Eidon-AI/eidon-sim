@@ -93,7 +93,7 @@ export class ArmSolver extends EventTarget {
   }
 
   private solveSide(side: 'left' | 'right'): SevenAngles | null {
-    const upRole = side === 'left' ? DeviceRole.ROLE_LEFT_HUB : DeviceRole.ROLE_RIGHT_HUB;
+    const upRole = side === 'left' ? DeviceRole.ROLE_LEFT_SHOULDER : DeviceRole.ROLE_RIGHT_SHOULDER;
     const lowRole = side === 'left' ? DeviceRole.ROLE_LEFT_FOREARM : DeviceRole.ROLE_RIGHT_FOREARM;
     const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
     

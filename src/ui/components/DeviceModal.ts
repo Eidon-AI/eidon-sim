@@ -257,8 +257,8 @@ export class DeviceModal {
       case 1: return DeviceRole.RIGHT_HAND;
       case 2: return DeviceRole.LEFT_FOREARM;
       case 3: return DeviceRole.RIGHT_FOREARM;
-      case 4: return DeviceRole.LEFT_HUB;
-      case 5: return DeviceRole.RIGHT_HUB;
+      case 4: return DeviceRole.LEFT_SHOULDER;
+      case 5: return DeviceRole.RIGHT_SHOULDER;
       case 6: return DeviceRole.CHEST;
       case 8: return DeviceRole.LEFT_GLOVE;
       case 9: return DeviceRole.RIGHT_GLOVE;
@@ -267,16 +267,23 @@ export class DeviceModal {
   }
 
   private isHubRole(apiPosition: number): boolean {
-    return apiPosition === 4 || apiPosition === 5 || apiPosition === 6; // LEFT_HUB, RIGHT_HUB, CHEST
+    // Note: This will be updated in Phase 6 - hubs are now right-side devices and chest
+    return apiPosition === 1 || apiPosition === 3 || apiPosition === 5 || apiPosition === 6; // RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER, CHEST
   }
 
   private getParentHub(device: any, allDevices: any[]): string | undefined {
     // For child devices, find their parent hub
     if (device.position === 0 || device.position === 2) { // LEFT_HAND, LEFT_FOREARM
-      const leftHub = allDevices.find(d => d.position === 4); // LEFT_HUB
-      return leftHub?.id;
-    } else if (device.position === 1 || device.position === 3) { // RIGHT_HAND, RIGHT_FOREARM
-      const rightHub = allDevices.find(d => d.position === 5); // RIGHT_HUB
+      // Note: This will be updated in Phase 2 - left devices connect to corresponding right devices
+      const rightHand = allDevices.find(d => d.position === 1); // RIGHT_HAND (hub)
+      return rightHand?.id;
+    } else if (device.position === 2) { // LEFT_FOREARM
+      const rightForearm = allDevices.find(d => d.position === 3); // RIGHT_FOREARM (hub)
+      return rightForearm?.id;
+    } else if (device.position === 4) { // LEFT_SHOULDER
+      const rightShoulder = allDevices.find(d => d.position === 5); // RIGHT_SHOULDER (hub)
+      return rightShoulder?.id;
+    } else if (device.position === 1 || device.position === 3) { // RIGHT_HAND, RIGHT_FOREARM (these are now hubs)
       return rightHub?.id;
     }
     return undefined;
@@ -317,10 +324,10 @@ export class DeviceModal {
 
     // Group devices by side
     const leftDevices = this.savedDevices.filter(d => 
-      d.role === DeviceRole.LEFT_HUB || d.role === DeviceRole.LEFT_HAND || d.role === DeviceRole.LEFT_FOREARM
+      d.role === DeviceRole.LEFT_SHOULDER || d.role === DeviceRole.LEFT_HAND || d.role === DeviceRole.LEFT_FOREARM
     );
     const rightDevices = this.savedDevices.filter(d => 
-      d.role === DeviceRole.RIGHT_HUB || d.role === DeviceRole.RIGHT_HAND || d.role === DeviceRole.RIGHT_FOREARM
+      d.role === DeviceRole.RIGHT_SHOULDER || d.role === DeviceRole.RIGHT_HAND || d.role === DeviceRole.RIGHT_FOREARM
     );
     const chestDevices = this.savedDevices.filter(d => d.role === DeviceRole.CHEST);
 

@@ -9,8 +9,8 @@ export const ROLE_OPTIONS = [
   { value: DeviceRole.RIGHT_HAND, label: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_HAND] },
   { value: DeviceRole.LEFT_FOREARM, label: DEVICE_ROLE_NAMES[DeviceRole.LEFT_FOREARM] },
   { value: DeviceRole.RIGHT_FOREARM, label: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_FOREARM] },
-  { value: DeviceRole.LEFT_HUB, label: DEVICE_ROLE_NAMES[DeviceRole.LEFT_HUB] },
-  { value: DeviceRole.RIGHT_HUB, label: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_HUB] },
+  { value: DeviceRole.LEFT_SHOULDER, label: DEVICE_ROLE_NAMES[DeviceRole.LEFT_SHOULDER] },
+  { value: DeviceRole.RIGHT_SHOULDER, label: DEVICE_ROLE_NAMES[DeviceRole.RIGHT_SHOULDER] },
   { value: DeviceRole.CHEST, label: DEVICE_ROLE_NAMES[DeviceRole.CHEST] },
   { value: DeviceRole.UNKNOWN, label: DEVICE_ROLE_NAMES[DeviceRole.UNKNOWN] }
 ];

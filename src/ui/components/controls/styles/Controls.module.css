@@ -89,6 +89,22 @@
   text-align: center;
 }
 
+/* Update button outdated state (orange border, white text) */
+.updateButtonOutdated {
+  border-color: rgba(255, 152, 0, 0.8) !important;
+  color: white !important;
+}
+
+.updateButtonOutdated:hover {
+  background: rgba(255, 152, 0, 0.2) !important;
+  border-color: rgba(255, 152, 0, 1) !important;
+  color: white !important;
+}
+
+.updateButtonOutdated i {
+  color: white !important;
+}
+
 /* Recordings button style for logged-in users */
 .navRecordingsPremium:hover {
   border-color: rgba(233, 51, 112, 0.8);

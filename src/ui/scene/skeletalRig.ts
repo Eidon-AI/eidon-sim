@@ -353,8 +353,8 @@ export class SkeletalRig {
     
     if (CHEST_YAW_METHOD === 1) {
       // Method 1: Calculate yaw from average forward direction of hubs
-      const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
-      const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+      const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_SHOULDER);
+      const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_SHOULDER);
       yawRad = calculateYawFromHubs(leftHub, rightHub, this.hasActiveData.bind(this));
     } else if (CHEST_YAW_METHOD === 2) {
       // Method 2: Calculate yaw from chest UP vector projection
@@ -384,7 +384,7 @@ export class SkeletalRig {
     const arm = this.armBones[side];
 
     /* Shoulder: Use quaternion directly to avoid angle wrapping */
-    const upperRole = side === 'left' ? DeviceRole.ROLE_LEFT_HUB : DeviceRole.ROLE_RIGHT_HUB;
+    const upperRole = side === 'left' ? DeviceRole.ROLE_LEFT_SHOULDER : DeviceRole.ROLE_RIGHT_SHOULDER;
     const upperDevice = this.store.getByPosition(upperRole);
     if (upperDevice && this.hasActiveData(upperDevice, false)) {
       const deviceQuat = upperDevice.quat;

@@ -74,7 +74,10 @@ export function setDeviceCardStyles(container: HTMLElement): void {
  * Get device type class for styling
  */
 function getDeviceTypeClass(device: EidonDevice): string {
-  if (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB) {
+  // Right-side devices (RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER) are hubs in the new architecture
+  if (device.role === DeviceRole.RIGHT_HAND || 
+      device.role === DeviceRole.RIGHT_FOREARM || 
+      device.role === DeviceRole.RIGHT_SHOULDER) {
     return styles.hubDevice;
   }
   if (device.role === DeviceRole.CHEST) {
@@ -188,14 +191,9 @@ function getConnectedChildCount(device: EidonDevice, allDevices?: EidonDevice[])
   
   const childDevices = getChildDevicesForHub(device, allDevices);
   const connectedCount = childDevices.filter(d => d.isConnected).length;
-  const totalCount = childDevices.length;
   
-  // If no children exist yet, show 0/2
-  if (totalCount === 0) {
-    return '0/2';
-  }
-  
-  return `${connectedCount}/${totalCount}`;
+  // Show connected count out of 1 (each hub has 1 child device)
+  return `${connectedCount}/1`;
 }
 
 /**
@@ -274,7 +272,10 @@ function renderDataContent(
   allDevices?: EidonDevice[],
   quaternionDataMap?: Map<string, { quaternion: number[]; timestamp: number }>
 ): string {
-  const isHub = device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB);
+  // Right-side devices (RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER) are hubs in the new architecture
+  const isHub = device.role === DeviceRole.RIGHT_HAND || 
+                device.role === DeviceRole.RIGHT_FOREARM || 
+                device.role === DeviceRole.RIGHT_SHOULDER;
   
   if (!isHub) {
     // Non-hub device - render single device data
@@ -292,22 +293,67 @@ function renderDataContent(
   
   // Hub device - render hub data + child device data streams
   // CRITICAL: Find matching trackerManager hub device to get correct ID for quaternion lookups
-  // The trackerManager uses IDs like `${hubId}_hand` and `${hubId}_forearm` for child devices
+  // The trackerManager uses IDs like `${hubId}_left_hand`, `${hubId}_left_forearm`, `${hubId}_left_shoulder` for child devices
   const trackerHubDevice = allDevices?.find(d => 
     d.id === device.id || 
     d.connectionId === device.connectionId || 
+    d.macAddress === device.connectionId ||
     d.macAddress === device.macAddress ||
     (d.connectionId === device.connectionId && d.role === device.role)
   );
   
   // Use trackerManager hub device ID if found, otherwise fall back to saved device ID
   const hubIdForData = trackerHubDevice?.id || device.id;
-  const handId = `${hubIdForData}_hand`;
-  const forearmId = `${hubIdForData}_forearm`;
+  
+  // Determine the corresponding left child role and ID based on hub role
+  let childDeviceRole: DeviceRole | null = null;
+  
+  switch (device.role) {
+    case DeviceRole.RIGHT_HAND:
+      childDeviceRole = DeviceRole.LEFT_HAND;
+      break;
+    case DeviceRole.RIGHT_FOREARM:
+      childDeviceRole = DeviceRole.LEFT_FOREARM;
+      break;
+    case DeviceRole.RIGHT_SHOULDER:
+      childDeviceRole = DeviceRole.LEFT_SHOULDER;
+      break;
+    default:
+      // Not a right-side hub, shouldn't reach here
+      break;
+  }
+  
+  // Find the child device directly in allTrackerDevices by matching parentHub and role
+  // This ensures we get the correct child device ID as created by trackerManager
+  const childDevice = allDevices?.find(d => 
+    d.parentHub === hubIdForData && 
+    d.role === childDeviceRole
+  ) || allDevices?.find(d => 
+    trackerHubDevice && d.parentHub === trackerHubDevice.id && 
+    d.role === childDeviceRole
+  );
+  
+  // Construct child ID - prefer actual child device ID from trackerManager, fallback to constructed ID
+  let childId: string | null = null;
+  if (childDevice) {
+    childId = childDevice.id;
+  } else if (childDeviceRole !== null) {
+    // Fallback: construct ID based on role (matches trackerManager pattern)
+    switch (childDeviceRole) {
+      case DeviceRole.LEFT_HAND:
+        childId = `${hubIdForData}_left_hand`;
+        break;
+      case DeviceRole.LEFT_FOREARM:
+        childId = `${hubIdForData}_left_forearm`;
+        break;
+      case DeviceRole.LEFT_SHOULDER:
+        childId = `${hubIdForData}_left_shoulder`;
+        break;
+    }
+  }
   
   const hubQuatData = quaternionDataMap?.get(hubIdForData);
-  const handQuatData = quaternionDataMap?.get(handId);
-  const forearmQuatData = quaternionDataMap?.get(forearmId);
+  const childQuatData = childId ? quaternionDataMap?.get(childId) : undefined;
   
   let html = '';
   
@@ -315,23 +361,11 @@ function renderDataContent(
   const hubRoleName = DEVICE_ROLE_NAMES[device.role];
   html += renderSingleDeviceDataContent(hubRoleName, hubIdForData, hubQuatData);
   
-  // Hand quaternion data (from HAND_QUATERNION_CHAR_UUID)
-  // CRITICAL: Always render the full dial structure (with canvases) so updateDeviceDials can find them
-  // even if data hasn't arrived yet
-  const handRoleName = device.role === DeviceRole.LEFT_HUB 
-    ? DEVICE_ROLE_NAMES[DeviceRole.LEFT_HAND]
-    : DEVICE_ROLE_NAMES[DeviceRole.RIGHT_HAND];
-  
-  html += renderSingleDeviceDataContent(handRoleName, handId, handQuatData);
-  
-  // Forearm quaternion data (from FOREARM_QUATERNION_CHAR_UUID)
-  // CRITICAL: Always render the full dial structure (with canvases) so updateDeviceDials can find them
-  // even if data hasn't arrived yet
-  const forearmRoleName = device.role === DeviceRole.LEFT_HUB
-    ? DEVICE_ROLE_NAMES[DeviceRole.LEFT_FOREARM]
-    : DEVICE_ROLE_NAMES[DeviceRole.RIGHT_FOREARM];
-  
-  html += renderSingleDeviceDataContent(forearmRoleName, forearmId, forearmQuatData);
+  // LEFT quaternion data (from LEFT_QUATERNION_CHAR_UUID) - only show the corresponding left child
+  if (childId && childDeviceRole) {
+    const childRoleName = DEVICE_ROLE_NAMES[childDeviceRole];
+    html += renderSingleDeviceDataContent(childRoleName, childId, childQuatData);
+  }
   
   return html;
 }
@@ -344,14 +378,14 @@ export function updateDeviceDials(deviceId: string, quaternionData?: { quaternio
   // Strategy: For child devices (hand/forearm), they're nested inside parent hub cards
   // We need to find the parent hub card first, then search within it
   
-  // Check if this is a child device ID (ends with _hand or _forearm)
-  const isChildDevice = deviceId.endsWith('_hand') || deviceId.endsWith('_forearm');
+  // Check if this is a child device ID (ends with _left_hand, _left_forearm, or _left_shoulder)
+  const isChildDevice = deviceId.endsWith('_left_hand') || deviceId.endsWith('_left_forearm') || deviceId.endsWith('_left_shoulder');
   
   let container: HTMLElement | null = null;
   
   if (isChildDevice) {
     // For child devices, find ALL hub cards and search within each for the child device's data section
-    // The child deviceId format is: ${hubId}_hand or ${hubId}_forearm
+    // The child deviceId format is: ${hubId}_left_hand, ${hubId}_left_forearm, or ${hubId}_left_shoulder
     // We need to search all hub cards since the saved device ID might differ from trackerManager hub ID
     const allHubCards = document.querySelectorAll(`.${styles.deviceCard}`);
     
@@ -458,7 +492,10 @@ export function createDeviceConnectionCard(
   const displayRole = selectedRole !== undefined ? DEVICE_ROLE_NAMES[selectedRole] : roleName;
 
   // Check if this is a hub and get child device count
-  const isHub = device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB);
+  // Right-side devices (RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER) are hubs in the new architecture
+  const isHub = device.role === DeviceRole.RIGHT_HAND || 
+                device.role === DeviceRole.RIGHT_FOREARM || 
+                device.role === DeviceRole.RIGHT_SHOULDER;
   const childCountText = isHub ? getConnectedChildCount(device, allDevices) : '';
 
   // Battery indicator
