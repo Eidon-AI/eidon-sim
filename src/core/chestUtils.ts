@@ -8,7 +8,7 @@ import { eulerXYZ } from './mathUtils';
  * - 2: Use chest UP vector projection onto XZ plane
  * - 3: Use direct yaw from chest device quaternion
  */
-export const CHEST_YAW_METHOD = 1;
+export const CHEST_YAW_METHOD = 3;
 
 /**
  * Calculate yaw angle from chest device UP vector projection onto yaw plane (XZ plane).
@@ -131,24 +131,57 @@ export function calculateYawFromHubs(
  * @returns Yaw angle in radians, or null if chest device is invalid
  */
 export function calculateYawFromChestYaw(chest: Device | undefined): number | null {
-  if (!chest || !chest.quat) {
-    return null;
-  }
+  if (!chest || !chest.quat) return null;
 
-  // Check if quaternion is not identity (identity = [0, 0, 0, 1])
-  const isIdentity = Math.abs(chest.quat[0]) < 0.001 && 
-                     Math.abs(chest.quat[1]) < 0.001 && 
-                     Math.abs(chest.quat[2]) < 0.001 && 
-                     Math.abs(chest.quat[3] - 1.0) < 0.001;
-  
-  if (isIdentity) {
-    return null;
-  }
-
-  // Extract yaw directly from quaternion using eulerXYZ
-  // eulerXYZ returns [yaw, roll, pitch] in radians
+  // Since the vector visualization works perfectly using this exact value,
+  // we just return it directly.
   const [yawRad] = eulerXYZ(chest.quat);
   
   return yawRad;
 }
+// export function calculateYawFromChestYaw(chest: Device | undefined): number | null {
+//   if (!chest || !chest.quat) return null;
+
+//   // 1. Get the "Device Right" vector (Device X axis)
+//   // We calculate this fresh from the quaternion to avoid any confusion 
+//   // with the swapped/negated axes in quaternionToVectors.
+//   const q = chest.quat;
+//   const xVec = vec3.transformQuat(vec3.create(), [1, 0, 0], q);
+
+//   // 2. Map to Scene Space
+//   // We must apply the same "Handedness Flip" you verified earlier:
+//   // Scene X = -Device X
+//   // Scene Z = Device Y
+//   // Scene Y = Device Z (not needed for yaw)
+  
+//   // Note: We only need Scene X and Scene Z components for the projection
+//   const sceneRightX = -xVec[0]; 
+//   const sceneRightZ =  xVec[1]; // Device Y maps to Scene Z (index 1) in your system
+//                                 // Wait, in your vector packing fwdY[1] went to Z.
+//                                 // Let's stick to the definition:
+//                                 // Device X [1,0,0] -> transformed -> xVec [x, y, z]
+//                                 // Your mapping: Scene X = -xVec[0], Scene Z = xVec[2]?? 
+                                
+//   // LET'S RE-VERIFY THE MAPPING based on your successful "quaternionToVectors":
+//   // const up = [-upZ[0], upZ[2], upZ[1]]; 
+//   // Index 0 (Scene X) comes from input Index 0 (negated).
+//   // Index 1 (Scene Z) comes from input Index 2.
+//   // Index 2 (Scene Y) comes from input Index 1.
+  
+//   // So for our Right Vector xVec:
+//   const projX = -xVec[0];  // Scene X
+//   const projZ =  xVec[2];  // Scene Z
+  
+//   // 3. Calculate Yaw of the Right Vector
+//   const yawRightRad = Math.atan2(projZ, projX);
+  
+//   // 4. Offset by 90 degrees (PI/2)
+//   // If your Right side is facing Forward (0°), you are facing Left (90°).
+//   // Therefore: Body Facing = Right Vector Facing + 90° (or -90° depending on sign)
+//   // Let's test:
+//   // If facing Z+ (0°), Right vector points X- (-90° due to flip).
+//   // We want result 0°. So -90° + 90° = 0°. Correct.
+  
+//   return yawRightRad - Math.PI;
+// }
 
