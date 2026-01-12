@@ -3,10 +3,10 @@
 .container {
   pointer-events: none;
   position: fixed;
-  left: -400px; /* Move off-screen when collapsed */
+  left: -500px; /* Move off-screen when collapsed */
   top: 3.75rem; /* top-15 */
   bottom: 0;
-  width: 400px; /* Fixed width for the sidepanel */
+  width: 500px; /* Fixed width for the sidepanel */
   z-index: 50;
   transition: left 300ms ease-in-out;
 }
@@ -17,7 +17,7 @@
 }
 
 .container.modalHidden {
-  left: -400px; /* Ensure hidden containers stay off-screen */
+  left: -500px; /* Ensure hidden containers stay off-screen */
 }
 
 .container.loggedOut {
@@ -112,6 +112,22 @@
   justify-content: center;
   border-radius: 4px;
   transition: all 0.2s ease;
+  z-index: 100;
+}
+
+/* Desktop close button - keep original position */
+.closeButtonDesktop {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* Mobile close button - inline with headerLeft */
+.closeButtonMobile {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  display: none;
 }
 
 .closeButton:hover {
@@ -174,6 +190,41 @@
 .divider {
   border-top: 1px solid rgba(64, 64, 64, 0.6);
   padding-top: 1rem;
+}
+
+.sectionToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  transition: color 0.2s;
+}
+
+.sectionToggle:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sectionToggle .title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.sectionToggleIcon {
+  transition: transform 0.2s;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.collapsibleSection {
+  margin-top: 1rem;
 }
 
 .subsection {
@@ -439,4 +490,122 @@
 
 .opacity-hidden {
   opacity: 0 !important;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .container {
+    left: -100vw;
+    width: 100vw;
+    top: 0;
+    border-radius: 0;
+  }
+
+  .container:not(.modalHidden) {
+    left: 0;
+  }
+
+  .container.modalHidden {
+    left: -100vw;
+  }
+
+  .content {
+    border-radius: 0;
+    padding: 16px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .header {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .headerLeft {
+    gap: 0.5rem;
+  }
+
+  /* Hide mobile close button in headerLeft on mobile */
+  .closeButtonMobile {
+    display: none !important;
+  }
+
+  /* Show desktop close button in top-right on mobile */
+  .closeButtonDesktop {
+    display: flex !important;
+    position: absolute !important;
+    top: 12px !important;
+    right: 12px !important;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 24px;
+  }
+
+  .calibrateAllBtn {
+    padding: 10px 14px;
+    min-height: 44px;
+    font-size: 0.875rem;
+  }
+
+  .body {
+    font-size: 14px;
+    max-height: calc(100vh - 250px);
+    padding-bottom: 20px;
+  }
+
+  .arrowIndicator {
+    display: none;
+  }
+
+  /* Mobile close button at bottom */
+  .mobileCloseButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 20px;
+    margin-top: 16px;
+    background: rgba(233, 51, 112, 0.2);
+    border: 1px solid rgba(233, 51, 112, 0.6);
+    border-radius: 8px;
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 48px;
+  }
+
+  .mobileCloseButton:hover {
+    background: rgba(233, 51, 112, 0.3);
+    border-color: rgba(233, 51, 112, 0.8);
+  }
+
+  .mobileCloseButton:active {
+    background: rgba(233, 51, 112, 0.4);
+  }
+
+  .mobileCloseButton i {
+    font-size: 18px;
+  }
+}
+
+/* Hide mobile close button on desktop */
+.mobileCloseButton {
+  display: none;
+}
+
+/* Hide mobile close button in header on desktop */
+@media (min-width: 769px) {
+  .closeButtonMobile {
+    display: none !important;
+  }
+
+  /* Show desktop close button on desktop */
+  .closeButtonDesktop {
+    display: flex !important;
+  }
 }

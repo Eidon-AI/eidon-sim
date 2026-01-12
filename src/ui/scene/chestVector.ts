@@ -131,8 +131,8 @@ export class ChestVector {
     
     if (CHEST_YAW_METHOD === 1) {
       // Method 1: Show average forward direction of hubs
-      const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
-      const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+      const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_SHOULDER);
+      const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_SHOULDER);
       
       const leftHubValid = leftHub && this.hasActiveData(leftHub);
       const rightHubValid = rightHub && this.hasActiveData(rightHub);

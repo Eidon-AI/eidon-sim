@@ -153,8 +153,8 @@ export class VectorArm {
 
   private refresh() {
     /* ---- gather devices by exact position ---- */
-    const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_HUB);
-    const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_HUB);
+    const leftHub = this.store.getByPosition(DeviceRole.ROLE_LEFT_SHOULDER);
+    const rightHub = this.store.getByPosition(DeviceRole.ROLE_RIGHT_SHOULDER);
     const leftForearm = this.store.getByPosition(DeviceRole.ROLE_LEFT_FOREARM);
     const rightForearm = this.store.getByPosition(DeviceRole.ROLE_RIGHT_FOREARM);
     const leftHand = this.store.getByPosition(DeviceRole.ROLE_LEFT_HAND);

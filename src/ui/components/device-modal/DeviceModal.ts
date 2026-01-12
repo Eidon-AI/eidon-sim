@@ -93,15 +93,16 @@ export class DeviceModal {
               <i class="fas fa-compass"></i>
               <span>Calibrate All</span>
             </button>
+            <button class="${styles.closeButton} ${styles.closeButtonMobile}">&times;</button>
           </div>
-          <button class="${styles.closeButton}">&times;</button>
+          <button class="${styles.closeButton} ${styles.closeButtonDesktop}">&times;</button>
         </div>
 
         <!-- Saved Devices Section -->
         <div class="${styles.body}">
           <div class="${styles.section}">
             <div class="${styles.sectionHeader}">
-              <h3 class="${styles.title} saved-devices-title">Saved Devices</h3>
+              <h3 class="${styles.title} saved-devices-title">Primary Devices</h3>
             </div>
             <div class="${styles.devicesContainer} saved-devices-container">
               <!-- Devices will be populated here -->
@@ -122,6 +123,12 @@ export class DeviceModal {
             </div>
           </div>
         </div>
+        
+        <!-- Mobile close button at bottom -->
+        <button class="${styles.mobileCloseButton}">
+          <i class="fas fa-times"></i>
+          <span>Close</span>
+        </button>
       </div>
     `;
 
@@ -132,9 +139,17 @@ export class DeviceModal {
   }
 
   private setupEventListeners(): void {
-    // Close button
-    const closeBtn = this.modal.querySelector(`.${styles.closeButton}`) as HTMLButtonElement;
-    closeBtn.addEventListener('click', () => this.hide());
+    // Close buttons (both mobile and desktop)
+    const closeButtons = this.modal.querySelectorAll(`.${styles.closeButton}`) as NodeListOf<HTMLButtonElement>;
+    closeButtons.forEach(btn => {
+      btn.addEventListener('click', () => this.hide());
+    });
+
+    // Mobile close button (bottom)
+    const mobileCloseBtn = this.modal.querySelector(`.${styles.mobileCloseButton}`) as HTMLButtonElement;
+    if (mobileCloseBtn) {
+      mobileCloseBtn.addEventListener('click', () => this.hide());
+    }
 
     // Remove overlay click to close since we're not using an overlay anymore
 
@@ -464,6 +479,9 @@ export class DeviceModal {
       });
       
       this.renderSavedDevices();
+      
+      // Dispatch event so Controls can check for outdated devices
+      document.dispatchEvent(new CustomEvent('savedDevicesLoaded'));
 
     } catch (error) {
       console.error('Failed to load saved devices:', error);
@@ -529,8 +547,8 @@ export class DeviceModal {
       case 1: return DeviceRole.RIGHT_HAND;
       case 2: return DeviceRole.LEFT_FOREARM;
       case 3: return DeviceRole.RIGHT_FOREARM;
-      case 4: return DeviceRole.LEFT_HUB;
-      case 5: return DeviceRole.RIGHT_HUB;
+      case 4: return DeviceRole.LEFT_SHOULDER;
+      case 5: return DeviceRole.RIGHT_SHOULDER;
       case 6: return DeviceRole.CHEST;
       case 8: return DeviceRole.LEFT_GLOVE;
       case 9: return DeviceRole.RIGHT_GLOVE;
@@ -539,17 +557,21 @@ export class DeviceModal {
   }
 
   private isHubRole(apiPosition: number): boolean {
-    return apiPosition === 4 || apiPosition === 5 || apiPosition === 6; // LEFT_HUB, RIGHT_HUB, CHEST
+    // Hubs are now right-side devices (RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER) and chest
+    return apiPosition === 1 || apiPosition === 3 || apiPosition === 5 || apiPosition === 6; // RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER, CHEST
   }
 
   private getParentHub(device: any, allDevices: any[]): string | undefined {
-    // For child devices, find their parent hub
-    if (device.position === 0 || device.position === 2) { // LEFT_HAND, LEFT_FOREARM
-      const leftHub = allDevices.find(d => d.position === 4); // LEFT_HUB
-      return leftHub?.id;
-    } else if (device.position === 1 || device.position === 3) { // RIGHT_HAND, RIGHT_FOREARM
-      const rightHub = allDevices.find(d => d.position === 5); // RIGHT_HUB
-      return rightHub?.id;
+    // Left devices connect to corresponding right devices via ESP-NOW
+    if (device.position === 0) { // LEFT_HAND
+      const rightHand = allDevices.find(d => d.position === 1); // RIGHT_HAND (hub)
+      return rightHand?.id;
+    } else if (device.position === 2) { // LEFT_FOREARM
+      const rightForearm = allDevices.find(d => d.position === 3); // RIGHT_FOREARM (hub)
+      return rightForearm?.id;
+    } else if (device.position === 4) { // LEFT_SHOULDER
+      const rightShoulder = allDevices.find(d => d.position === 5); // RIGHT_SHOULDER (hub)
+      return rightShoulder?.id;
     }
     return undefined;
   }
@@ -583,7 +605,6 @@ export class DeviceModal {
       return;
     }
 
-    // Simple list - no grouping needed
     // Get all devices from trackerManager (including child devices) for rendering child device data streams
     const allTrackerDevices = this.trackerManager.getAllDevices();
     
@@ -599,15 +620,50 @@ export class DeviceModal {
     
     // Don't add child devices to savedDevices - they're handled by DeviceConnectionStateManager
     
-    const html = this.savedDevices.map(device => {
+    // Sort devices: hubs first (right side or chest), then left non-hub devices
+    const hubDevices = this.savedDevices.filter(device => 
+      device.isHub || device.role === DeviceRole.CHEST
+    );
+    const leftNonHubDevices = this.savedDevices.filter(device => 
+      !device.isHub && device.role !== DeviceRole.CHEST &&
+      (device.role === DeviceRole.LEFT_HAND || 
+       device.role === DeviceRole.LEFT_FOREARM || 
+       device.role === DeviceRole.LEFT_SHOULDER)
+    );
+    
+    // Render hub devices first
+    const hubHtml = hubDevices.map(device => {
       const config = this.deviceConfigs.get(device.id);
       const hasChanges = this.hasDeviceChanges(device, config);
       const isEditMode = this.deviceEditStates.get(device.id) || false;
       const isNameEditing = this.deviceNameEditStates.get(device.id) || false;
       return createSavedDeviceCard(device, allTrackerDevices, config?.selectedColor, config?.selectedRole, config?.selectedName, hasChanges, isEditMode, isNameEditing, this.deviceQuaternionData, this.deviceRawData);
     }).join('');
+    
+    // Add divider if we have both hub and left devices
+    const leftDevicesHtml = leftNonHubDevices.map(device => {
+      const config = this.deviceConfigs.get(device.id);
+      const hasChanges = this.hasDeviceChanges(device, config);
+      const isEditMode = this.deviceEditStates.get(device.id) || false;
+      const isNameEditing = this.deviceNameEditStates.get(device.id) || false;
+      return createSavedDeviceCard(device, allTrackerDevices, config?.selectedColor, config?.selectedRole, config?.selectedName, hasChanges, isEditMode, isNameEditing, this.deviceQuaternionData, this.deviceRawData);
+    }).join('');
+    
+    const dividerHtml = (hubDevices.length > 0 && leftNonHubDevices.length > 0) 
+      ? `<div class="${styles.divider}" style="margin: 1rem 0;">
+          <button class="${styles.sectionToggle}" data-section="left-devices">
+            <i class="fas fa-chevron-down ${styles.sectionToggleIcon}"></i>
+            <h3 class="${styles.title}">Left Side devices (child devices)</h3>
+          </button>
+          <div class="${styles.collapsibleSection}" data-section="left-devices" style="display: block;">
+            <div class="${styles.devicesContainer}">
+              ${leftDevicesHtml}
+            </div>
+          </div>
+        </div>`
+      : leftNonHubDevices.length > 0 ? `<div class="${styles.devicesContainer}">${leftDevicesHtml}</div>` : '';
 
-    container.innerHTML = html;
+    container.innerHTML = hubHtml + dividerHtml;
     setSavedDeviceCardStyles(container);
     this.attachDeviceEventListeners();
     this.updateVersionWarnings();
@@ -903,6 +959,17 @@ export class DeviceModal {
         }
       });
     });
+
+    // Section toggle buttons (for collapsible sections)
+    this.modal.querySelectorAll(`.${styles.sectionToggle}`).forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const button = (e.target as HTMLElement).closest(`.${styles.sectionToggle}`) as HTMLElement;
+        const sectionName = button?.getAttribute('data-section');
+        if (sectionName) {
+          this.toggleSection(sectionName);
+        }
+      });
+    });
   }
 
   private toggleDataView(deviceId: string): void {
@@ -936,6 +1003,18 @@ export class DeviceModal {
 
     const isHidden = rawDataContent.style.display === 'none';
     rawDataContent.style.display = isHidden ? 'block' : 'none';
+    icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+  }
+
+  private toggleSection(sectionName: string): void {
+    const toggleBtn = this.modal.querySelector(`.${styles.sectionToggle}[data-section="${sectionName}"]`) as HTMLElement;
+    const sectionContent = this.modal.querySelector(`.${styles.collapsibleSection}[data-section="${sectionName}"]`) as HTMLElement;
+    const icon = toggleBtn?.querySelector(`.${styles.sectionToggleIcon}`) as HTMLElement;
+    
+    if (!sectionContent || !toggleBtn || !icon) return;
+
+    const isHidden = sectionContent.style.display === 'none';
+    sectionContent.style.display = isHidden ? 'block' : 'none';
     icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
   }
 
@@ -1724,7 +1803,10 @@ export class DeviceModal {
       return;
     }
     
-    const isHub = device.isHub && (device.role === DeviceRole.LEFT_HUB || device.role === DeviceRole.RIGHT_HUB);
+    // Right-side devices (RIGHT_HAND, RIGHT_FOREARM, RIGHT_SHOULDER) are hubs in the new architecture
+    const isHub = device.role === DeviceRole.RIGHT_HAND || 
+                  device.role === DeviceRole.RIGHT_FOREARM || 
+                  device.role === DeviceRole.RIGHT_SHOULDER;
     const isHand = device.role === DeviceRole.LEFT_HAND || device.role === DeviceRole.RIGHT_HAND;
     const isForearm = device.role === DeviceRole.LEFT_FOREARM || device.role === DeviceRole.RIGHT_FOREARM;
     
@@ -1765,57 +1847,42 @@ export class DeviceModal {
       console.log(`[DeviceModal] No hub raw data stream available for ${deviceId}`);
     }
 
-    // Setup hand raw data stream (HAND_RAW_DATA_CHAR_UUID)
-    // Only hubs have this characteristic - it reports child hand data
+    // Setup LEFT raw data stream (LEFT_RAW_DATA_CHAR_UUID)
+    // Only right-side hubs have this characteristic - it reports data from corresponding left-side child device
     if (isHub) {
-      const handStream = this.trackerManager.getHandRawDataStream(deviceId);
-      if (handStream) {
-        console.log(`[DeviceModal] Setting up hand raw data stream for hub ${deviceId}`);
-        const reader = handStream.getReader();
-        const readHandData = () => {
+      const leftStream = this.trackerManager.getLeftRawDataStream(deviceId);
+      if (leftStream) {
+        console.log(`[DeviceModal] Setting up LEFT raw data stream for hub ${deviceId}`);
+        const reader = leftStream.getReader();
+        const readLeftData = () => {
           reader.read().then(({ done, value }) => {
             if (done) return;
             if (value) {
-              console.log(`[DeviceModal] Received hand raw data for hub ${deviceId}`);
-              this.deviceRawData.set(`${deviceId}_hand`, value);
-              this.updateRawDataDisplay(deviceId, 'hand', value);
+              console.log(`[DeviceModal] Received LEFT raw data for hub ${deviceId}`);
+              // Determine child type based on hub role for storage and display
+              const device = this.trackerManager.getDevice(deviceId);
+              let childRawDataType: 'hand' | 'forearm' | null = null;
+              if (device) {
+                if (device.role === DeviceRole.RIGHT_HAND) childRawDataType = 'hand';
+                else if (device.role === DeviceRole.RIGHT_FOREARM) childRawDataType = 'forearm';
+                // RIGHT_SHOULDER doesn't have raw data (shoulder doesn't have sensors)
+              }
+              // Store raw data with key format: ${deviceId}_left (for lookup in renderDataContent)
+              this.deviceRawData.set(`${deviceId}_left`, value);
+              // Update display using the correct type ('hand' or 'forearm') to match renderRawMotionData format
+              if (childRawDataType) {
+                this.updateRawDataDisplay(deviceId, childRawDataType, value);
+              }
             }
-            readHandData();
+            readLeftData();
           }).catch((error) => {
-            console.warn(`[DeviceModal] Hand raw data stream error for ${deviceId}:`, error);
+            console.warn(`[DeviceModal] LEFT raw data stream error for ${deviceId}:`, error);
             // Stream closed or error - stop reading
           });
         };
-        readHandData();
+        readLeftData();
       } else {
-        console.log(`[DeviceModal] No hand raw data stream available for hub ${deviceId}`);
-      }
-    }
-
-    // Setup forearm raw data stream (FOREARM_RAW_DATA_CHAR_UUID)
-    // Only hubs have this characteristic - it reports child forearm data
-    if (isHub) {
-      const forearmStream = this.trackerManager.getForearmRawDataStream(deviceId);
-      if (forearmStream) {
-        console.log(`[DeviceModal] Setting up forearm raw data stream for hub ${deviceId}`);
-        const reader = forearmStream.getReader();
-        const readForearmData = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) return;
-            if (value) {
-              console.log(`[DeviceModal] Received forearm raw data for hub ${deviceId}`);
-              this.deviceRawData.set(`${deviceId}_forearm`, value);
-              this.updateRawDataDisplay(deviceId, 'forearm', value);
-            }
-            readForearmData();
-          }).catch((error) => {
-            console.warn(`[DeviceModal] Forearm raw data stream error for ${deviceId}:`, error);
-            // Stream closed or error - stop reading
-          });
-        };
-        readForearmData();
-      } else {
-        console.log(`[DeviceModal] No forearm raw data stream available for hub ${deviceId}`);
+        console.log(`[DeviceModal] No LEFT raw data stream available for hub ${deviceId}`);
       }
     }
   }
@@ -2180,6 +2247,10 @@ export class DeviceModal {
     if (this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
+  }
+
+  public getSavedDevices(): EidonDevice[] {
+    return [...this.savedDevices];
   }
 }
 

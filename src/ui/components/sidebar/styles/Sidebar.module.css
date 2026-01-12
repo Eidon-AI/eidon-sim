@@ -122,3 +122,29 @@
 .angleModeButton span {
   flex: 1;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .container {
+    right: 0.5rem;
+    left: 0.5rem;
+  }
+
+  .sidebar {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 0.5rem;
+    border-bottom-left-radius: 0.5rem;
+    border-bottom-right-radius: 0.5rem;
+  }
+
+  .sidebarHeader {
+    min-height: 44px;
+  }
+
+  .angleModeButton {
+    padding: 12px 1rem;
+    min-height: 44px;
+    font-size: 0.875rem;
+  }
+}
