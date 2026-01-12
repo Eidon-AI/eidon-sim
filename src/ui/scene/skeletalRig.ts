@@ -397,7 +397,7 @@ export class SkeletalRig {
       // Map eulerXYZ output [yaw, roll, pitch] to bone rotations
       const correctedRoll = -rollRad;   // roll (negated)
       const correctedPitch = pitchRad;  // pitch (no negation)
-      const correctedYaw = -yawRad;     // yaw (negated)
+      const correctedYaw = yawRad;      // yaw (no negation)
       
       // Convert to THREE.js Euler angles (XYZ order) and apply directly
       const correctedEuler = new THREE.Euler(correctedRoll, correctedPitch, correctedYaw, 'XYZ');
@@ -510,35 +510,35 @@ export class SkeletalRig {
 
     /* Shoulder: Apply actuator angles with offset to forward pose */
     // Define forward pose offsets (in degrees) - these represent the forward pose when actuator angles are 0
-    // Forward pose rotations: Left (-180°, -180°, -90°), Right (180°, -180°, 90°)
+    // Forward pose rotations: Left (-180°, 0°, -90°), Right (180°, 0°, 90°)
+    // Pitch offset changed from -180° to 0° to match corrected forward vector direction
     const forwardPoseOffsets = {
-      left: { roll: -180, pitch: -180, yaw: -90 },
-      right: { roll: 180, pitch: -180, yaw: 90 }
+      left: { roll: -180, pitch: 0, yaw: -90 },
+      right: { roll: 180, pitch: 0, yaw: 90 }
     };
     const offsets = forwardPoseOffsets[side];
     
-    // Apply actuator angles with offsets: rotation = offset + actuator_angle
-    // Note: signs match the original mapping: -roll, +pitch, -yaw
-    arm.shoulder.quaternion.set(0, 0, 0, 1); // Reset quaternion
+    // Since we flipped X in the vector math, positive Yaw input now creates 
+    // negative rotation in the scene. We must subtract the yaw angle.
     arm.shoulder.rotation.set(
       -(offsets.roll + a.shRoll) * d2r,
       (offsets.pitch + a.shPitch) * d2r,
-      -(offsets.yaw + a.shYaw) * d2r
+      -(offsets.yaw - a.shYaw) * d2r
     );
 
     /* Elbow: Use calculated actuator angle */
     arm.elbow.quaternion.set(0, 0, 0, 1); // Reset quaternion
     
-    // Apply both elbow flex (Z rotation) and forearm roll (Y rotation) 
-    // The elbow bone is actually the forearm, so it needs both rotations
-    const elbowFlex = sgn * a.elFlex * d2r;    // flex around Z (hinge)
-    const forearmRoll = (-1) * a.faRoll * d2r;       // roll around Y (length of forearm)
+    // FIX: Negate the flexion due to Handedness flip (Right-Hand Rule vs Left-Hand Rule)
+    // Was: const elbowFlex = sgn * a.elFlex * d2r;
+    const elbowFlex = -sgn * a.elFlex * d2r;    
     
-    // Create separate rotations and combine them
+    // Invert forearm roll by π radians to flip default from hand up to hand down
+    const forearmRoll = (-1) * a.faRoll * d2r + Math.PI;       
+    
     const flexQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), elbowFlex);
     const rollQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), forearmRoll);
     
-    // Combine: apply roll first, then flex (so flex has priority)
     arm.elbow.quaternion.multiplyQuaternions(flexQuat, rollQuat);
 
     /* Wrist: Use calculated actuator angles */
