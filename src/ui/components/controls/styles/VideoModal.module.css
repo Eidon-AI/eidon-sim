@@ -147,3 +147,51 @@
   font-size: 18px;
 }
 
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .videoModalContainer {
+    width: 95vw;
+    max-width: 95vw;
+    padding: 16px;
+    max-height: 95vh;
+  }
+
+  .videoModalClose {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    top: 12px;
+    right: 12px;
+    font-size: 24px;
+  }
+
+  .sensorStatsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .sensorStat {
+    padding: 12px 8px;
+  }
+
+  .statValue {
+    font-size: 18px;
+  }
+
+  .statLabel {
+    font-size: 11px;
+  }
+
+  .videoPlayer {
+    max-height: 50vh;
+  }
+
+  .deviceDataButton {
+    width: 100%;
+    min-height: 48px;
+    padding: 14px 20px;
+    font-size: 14px;
+  }
+}
+

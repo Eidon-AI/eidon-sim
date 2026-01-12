@@ -93,8 +93,9 @@ export class DeviceModal {
               <i class="fas fa-compass"></i>
               <span>Calibrate All</span>
             </button>
+            <button class="${styles.closeButton} ${styles.closeButtonMobile}">&times;</button>
           </div>
-          <button class="${styles.closeButton}">&times;</button>
+          <button class="${styles.closeButton} ${styles.closeButtonDesktop}">&times;</button>
         </div>
 
         <!-- Saved Devices Section -->
@@ -122,6 +123,12 @@ export class DeviceModal {
             </div>
           </div>
         </div>
+        
+        <!-- Mobile close button at bottom -->
+        <button class="${styles.mobileCloseButton}">
+          <i class="fas fa-times"></i>
+          <span>Close</span>
+        </button>
       </div>
     `;
 
@@ -132,9 +139,17 @@ export class DeviceModal {
   }
 
   private setupEventListeners(): void {
-    // Close button
-    const closeBtn = this.modal.querySelector(`.${styles.closeButton}`) as HTMLButtonElement;
-    closeBtn.addEventListener('click', () => this.hide());
+    // Close buttons (both mobile and desktop)
+    const closeButtons = this.modal.querySelectorAll(`.${styles.closeButton}`) as NodeListOf<HTMLButtonElement>;
+    closeButtons.forEach(btn => {
+      btn.addEventListener('click', () => this.hide());
+    });
+
+    // Mobile close button (bottom)
+    const mobileCloseBtn = this.modal.querySelector(`.${styles.mobileCloseButton}`) as HTMLButtonElement;
+    if (mobileCloseBtn) {
+      mobileCloseBtn.addEventListener('click', () => this.hide());
+    }
 
     // Remove overlay click to close since we're not using an overlay anymore
 

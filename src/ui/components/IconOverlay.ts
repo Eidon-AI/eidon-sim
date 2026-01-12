@@ -18,7 +18,7 @@ export class IconOverlay {
     this.container.style.display = 'flex';
     this.container.style.alignItems = 'center';
     this.container.style.gap = '12px';
-    this.container.className = 'z-5';
+    this.container.className = 'z-5 icon-overlay';
 
     // Create initial icon and title
     this.updateIcon();

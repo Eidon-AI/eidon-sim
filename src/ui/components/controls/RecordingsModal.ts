@@ -40,12 +40,17 @@ export class RecordingsModal {
   }
 
   private positionModal(modal: HTMLElement): void {
-    const toolbarRect = this.toolbar.getBoundingClientRect();
-    const modalWidth = 1000; // Recordings modal is wider
-    const left = (toolbarRect.width - modalWidth) / 2;
-    const top = toolbarRect.height + 16;
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
+    // On mobile, CSS handles full-screen positioning
+    if (window.innerWidth > 768) {
+      // Desktop positioning relative to toolbar
+      const toolbarRect = this.toolbar.getBoundingClientRect();
+      const modalWidth = 1000; // Recordings modal is wider
+      const left = toolbarRect.left + (toolbarRect.width - modalWidth) / 2;
+      const top = toolbarRect.bottom + 16;
+      modal.style.left = `${left}px`;
+      modal.style.top = `${top}px`;
+    }
+    // Mobile positioning is handled by CSS media query
   }
 
   private createModal(content: string): HTMLElement {

@@ -551,3 +551,46 @@
   }
 }
 
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .modalContent {
+    width: 95vw;
+    max-width: 95vw;
+    padding: 20px;
+  }
+
+  .modalContent.editProfileForm {
+    width: 95vw;
+    max-width: 95vw;
+  }
+
+  .userProfileModal {
+    width: 95vw;
+    max-width: 95vw;
+    padding: 20px;
+  }
+
+  .modalClose {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    top: 12px;
+    right: 12px;
+  }
+
+  .formRow {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .profileStats {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .button, .editButton, .backButton, .cancelButton, .saveButton, .uploadButton {
+    min-height: 44px;
+  }
+}
+

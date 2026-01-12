@@ -140,3 +140,39 @@ input, select {
   display: flex;
   margin: 0;
 }
+
+/* Mobile-friendly touch targets and spacing */
+@media (max-width: 768px) {
+  /* Ensure minimum touch target size (44x44px recommended by Apple/Google) */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Improve text readability on mobile */
+  body {
+    font-size: 16px; /* Prevent zoom on iOS */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Better spacing for mobile */
+  .btn {
+    padding: 12px 16px;
+    min-height: 44px;
+  }
+
+  .btn-sm {
+    padding: 10px 14px;
+    min-height: 44px;
+  }
+
+  /* Hide IconOverlay (prysm cube) on mobile */
+  .icon-overlay {
+    display: none !important;
+  }
+
+  /* Hide CameraControl cube (prysm) on mobile */
+  .camera-control-cube {
+    display: none !important;
+  }
+}

@@ -1108,3 +1108,102 @@
     opacity: 1;
   }
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .container {
+    top: 0.5rem;
+    left: 0;
+    right: 0;
+    transform: none;
+    padding: 0 0.5rem;
+  }
+
+  .toolbar {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px 12px;
+    gap: 0.5rem;
+    border-radius: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .navButton {
+    padding: 10px 14px;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  /* Hide text labels on mobile, show only icons */
+  .navButton span {
+    display: none;
+  }
+
+  .navButton i {
+    font-size: 18px;
+    width: 18px;
+  }
+
+  /* Keep user name visible but shorter */
+  .userInfo {
+    padding: 0 4px 0 0;
+  }
+
+  .userName {
+    display: none;
+  }
+
+  .userAvatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .adminBadge {
+    display: none;
+  }
+
+  .navSeparator {
+    display: none;
+  }
+
+  /* Modals - full width on mobile */
+  .modalContent {
+    width: 95vw;
+    max-width: 95vw;
+    padding: 20px;
+    border-radius: 12px;
+  }
+
+  .recordingsModal .modalContent {
+    width: 95vw;
+    max-width: 95vw;
+  }
+
+  .userProfileModal {
+    width: 95vw;
+    max-width: 95vw;
+  }
+
+  .recordingsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .sensorStatsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .formRow {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .videoModalContainer {
+    width: 95vw;
+    max-width: 95vw;
+    padding: 16px;
+  }
+}
