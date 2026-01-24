@@ -177,7 +177,16 @@ export class AdminRecordingsModal {
     this.updateDetailsButton();
 
     try {
-      const response = await fetch(`${apiUrl}/recordings/admin/recording-details`, {
+      // Build URL with filter parameter
+      let url = `${apiUrl}/recordings/admin/recording-details`;
+      if (this.currentFilter === 'video_only') {
+        url += '?videoOnly=true';
+      } else if (this.currentFilter === 'complete') {
+        url += '?videoOnly=false';
+      }
+      // 'all' filter = no query param (returns combined stats)
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${tokens.token}`,
@@ -257,12 +266,25 @@ export class AdminRecordingsModal {
       `).join('');
     }
 
+    // Only show versions section if NOT filtering by video_only
+    // (video-only recordings don't have versions)
     let versionsHTML = '';
-    if (this.recordingDetails.versions) {
-      const versionEntries = Object.entries(this.recordingDetails.versions);
+    const showVersions = this.currentFilter !== 'video_only';
+    
+    if (showVersions && this.recordingDetails.versions) {
+      let versionEntries = Object.entries(this.recordingDetails.versions);
+      
+      // When filtering by 'complete', exclude null versions (video-only artifacts)
+      if (this.currentFilter === 'complete') {
+        versionEntries = versionEntries.filter(([version]) => version !== 'null' && version !== null);
+      }
+      
       const totalRecordings = versionEntries.reduce((sum, [, count]) => sum + count, 0);
       
       const sortedVersions = versionEntries.sort((a, b) => {
+        // Handle 'null' version - put at end
+        if (a[0] === 'null' || a[0] === null) return 1;
+        if (b[0] === 'null' || b[0] === null) return -1;
         const versionA = parseFloat(a[0]);
         const versionB = parseFloat(b[0]);
         return versionB - versionA; // Sort descending by version number
@@ -270,9 +292,10 @@ export class AdminRecordingsModal {
 
       versionsHTML = sortedVersions.map(([version, count]) => {
         const percentage = totalRecordings > 0 ? ((count / totalRecordings) * 100).toFixed(1) : '0.0';
+        const displayVersion = version === 'null' || version === null ? 'No Version' : `Version ${version}`;
         return `
           <div class="${styles.recordingDetailItem}">
-            <div class="${styles.recordingDetailTaskType}">Version ${version}</div>
+            <div class="${styles.recordingDetailTaskType}">${displayVersion}</div>
             <div class="${styles.recordingDetailStats}">
               <span class="${styles.recordingDetailCount}">${count} recording${count !== 1 ? 's' : ''}</span>
               <span class="${styles.recordingDetailPercentage}">${percentage}%</span>
@@ -294,7 +317,7 @@ export class AdminRecordingsModal {
       `);
     }
     
-    if (versionsHTML) {
+    if (showVersions && versionsHTML) {
       sections.push(`
         <div class="${styles.recordingDetailsSection}">
           <h4 class="${styles.recordingDetailsSectionTitle}">By Version</h4>
