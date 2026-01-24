@@ -422,6 +422,95 @@
   white-space: nowrap;
 }
 
+/* Recording Type Badge */
+.recordingTypeBadge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  backdrop-filter: blur(4px);
+}
+
+.recordingTypeBadge i {
+  font-size: 9px;
+}
+
+.videoOnlyBadge {
+  background: rgba(156, 39, 176, 0.85);
+  color: white;
+  border: 1px solid rgba(186, 104, 200, 0.5);
+}
+
+.completeBadge {
+  background: rgba(76, 175, 80, 0.85);
+  color: white;
+  border: 1px solid rgba(129, 199, 132, 0.5);
+}
+
+/* Video Only Playback Button */
+.videoOnlyPlaybackButton {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 0.8) 0%, rgba(123, 31, 162, 0.8) 100%);
+  border: 1px solid rgba(186, 104, 200, 0.3);
+}
+
+.videoOnlyPlaybackButton:hover {
+  background: linear-gradient(135deg, rgba(156, 39, 176, 1) 0%, rgba(123, 31, 162, 1) 100%);
+  box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
+}
+
+/* Filter Toggle Buttons */
+.filterToggle {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.filterButton {
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filterButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.filterButton i {
+  font-size: 11px;
+}
+
+.filterButtonActive {
+  background: rgba(255, 193, 7, 0.2);
+  color: rgba(255, 193, 7, 1);
+}
+
+.filterButtonActive:hover {
+  background: rgba(255, 193, 7, 0.25);
+  color: rgba(255, 193, 7, 1);
+}
+
 @keyframes slideInFromTop {
   0% {
     transform: translateY(-10px);
@@ -508,6 +597,24 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+
+  .recordingTypeBadge {
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+
+  .recordingTypeBadge i {
+    font-size: 8px;
+  }
+
+  .filterToggle {
+    flex-wrap: wrap;
+  }
+
+  .filterButton {
+    padding: 8px 12px;
+    font-size: 12px;
   }
 }
 

@@ -19,17 +19,18 @@ export interface Recording {
   userId: string;       // Foreign key to users table
   user: User;           // User relation
   videoUrl: string;     // GCS URL for video file
-  sensorDataUrl: string; // GCS URL for sensor data file
+  sensorDataUrl: string | null; // GCS URL for sensor data file (null for video-only)
   thumbnailUrl: string | null; // GCS URL for thumbnail (optional)
   duration: number | null;     // Recording duration in seconds (optional)
-  recordingVersion: string;    // Version string (default: '1')
+  recordingVersion: string | null;    // Version string (null for video-only recordings)
   taskType: TaskType | null;   // Task type enum (optional)
   completed: boolean;          // Completion status (default: false)
+  videoOnly: boolean;          // True if this is a video-only recording (no sensor data)
 }
 
 export interface RecordingWithUrls extends Recording {
   videoReadUrl: string;        // Signed URL for video access
-  sensorDataReadUrl: string;   // Signed URL for sensor data access
+  sensorDataReadUrl: string | null;   // Signed URL for sensor data access (null for video-only)
   thumbnailReadUrl: string | null;  // Signed URL for thumbnail (if exists)
 }
 
@@ -48,7 +49,7 @@ export interface PaginatedRecordingsResponse {
 // Admin-only interface that extends Recording with signed URLs and user information
 export interface AdminRecording extends Recording {
   videoReadUrl: string;
-  sensorDataReadUrl: string;
+  sensorDataReadUrl: string | null;  // null for video-only recordings
   thumbnailReadUrl: string | null;
   userFullName: string;
   userEmail: string | null;
