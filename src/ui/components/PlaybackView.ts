@@ -8,7 +8,7 @@ export class PlaybackView {
   private container: HTMLElement;
   private videoElement: HTMLVideoElement | null = null;
   private playbackManager: PlaybackManager;
-  private sensorData: SensorRecording;
+  private sensorData: SensorRecording | null;
   private apiRecording: RecordingWithUrls | AdminRecording;
   private isPlaying: boolean = false;
   private isSeeking: boolean = false;
@@ -16,10 +16,11 @@ export class PlaybackView {
   private onExit: () => void;
   private isAdmin: boolean = false;
   private returnToModal: string | null = null;
+  private isVideoOnly: boolean = false;
 
   constructor(
     playbackManager: PlaybackManager,
-    sensorData: SensorRecording,
+    sensorData: SensorRecording | null,
     apiRecording: RecordingWithUrls | AdminRecording,
     onExit: () => void,
     returnToModal?: string | null
@@ -29,6 +30,7 @@ export class PlaybackView {
     this.apiRecording = apiRecording;
     this.onExit = onExit;
     this.returnToModal = returnToModal || null;
+    this.isVideoOnly = sensorData === null;
     
     // Check if current user is admin
     const loginStateManager = LoginStateManager.getInstance();
@@ -217,18 +219,22 @@ export class PlaybackView {
   private startPlayback(): void {
     if (!this.videoElement) return;
 
-    // Start sensor data playback
-    this.playbackManager.startPlayback(this.sensorData);
+    // Start sensor data playback (only if not video-only)
+    if (!this.isVideoOnly && this.sensorData) {
+      this.playbackManager.startPlayback(this.sensorData);
+    }
 
     // Start video playback (autoplay)
     this.videoElement.play().then(() => {
       this.isPlaying = true;
       this.updatePlayPauseButton();
-      console.log('Playback started (video + sensor data)');
+      console.log(this.isVideoOnly ? 'Playback started (video only)' : 'Playback started (video + sensor data)');
     }).catch(error => {
       console.error('Failed to autoplay video:', error);
-      // If autoplay fails, pause the sensor playback too
-      this.playbackManager.pausePlayback();
+      // If autoplay fails, pause the sensor playback too (if not video-only)
+      if (!this.isVideoOnly) {
+        this.playbackManager.pausePlayback();
+      }
     });
   }
 
@@ -237,11 +243,15 @@ export class PlaybackView {
 
     if (this.isPlaying) {
       this.videoElement.pause();
-      this.playbackManager.pausePlayback();
+      if (!this.isVideoOnly) {
+        this.playbackManager.pausePlayback();
+      }
       this.isPlaying = false;
     } else {
       this.videoElement.play();
-      this.playbackManager.resumePlayback();
+      if (!this.isVideoOnly) {
+        this.playbackManager.resumePlayback();
+      }
       this.isPlaying = true;
     }
     this.updatePlayPauseButton();
@@ -260,9 +270,11 @@ export class PlaybackView {
     // Update video
     this.videoElement.currentTime = timeInSeconds;
 
-    // Update sensor playback (convert to milliseconds)
-    const timeInMs = timeInSeconds * 1000;
-    this.playbackManager.seekTo(timeInMs);
+    // Update sensor playback (convert to milliseconds) - only if not video-only
+    if (!this.isVideoOnly) {
+      const timeInMs = timeInSeconds * 1000;
+      this.playbackManager.seekTo(timeInMs);
+    }
   }
 
   private handleTimelineDrag(e: MouseEvent): void {
@@ -362,8 +374,10 @@ export class PlaybackView {
   private handleVideoEnd(): void {
     this.isPlaying = false;
     this.updatePlayPauseButton();
-    // Sensor playback loops automatically, but we stop it here
-    this.playbackManager.pausePlayback();
+    // Sensor playback loops automatically, but we stop it here (only if not video-only)
+    if (!this.isVideoOnly) {
+      this.playbackManager.pausePlayback();
+    }
   }
 
   private exit(): void {
@@ -371,7 +385,11 @@ export class PlaybackView {
     if (this.videoElement) {
       this.videoElement.pause();
     }
-    this.playbackManager.stopPlayback();
+    
+    // Only stop sensor playback if not video-only
+    if (!this.isVideoOnly) {
+      this.playbackManager.stopPlayback();
+    }
 
     // Clean up animation frame
     if (this.animationFrameId) {
@@ -381,11 +399,11 @@ export class PlaybackView {
     // Remove event listeners
     document.removeEventListener('keydown', this.handleKeyPress);
 
-    // Return camera to default position
-    this.returnCameraToDefault();
-
-    // Remove vector colors and reset model
-    this.resetModel();
+    // Return camera to default position and reset model (only for full recordings)
+    if (!this.isVideoOnly) {
+      this.returnCameraToDefault();
+      this.resetModel();
+    }
 
     // Remove from DOM
     this.container.remove();

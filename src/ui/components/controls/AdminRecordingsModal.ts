@@ -8,6 +8,8 @@ export interface AdminRecordingsModalCallbacks {
   onClose: () => void;
 }
 
+type RecordingTypeFilter = 'all' | 'complete' | 'video_only';
+
 export class AdminRecordingsModal {
   private modal: HTMLElement | null = null;
   private parent: HTMLElement;
@@ -22,6 +24,7 @@ export class AdminRecordingsModal {
   } | null = null;
   private detailsLoading: boolean = false;
   private detailsExpanded: boolean = false;
+  private currentFilter: RecordingTypeFilter = 'all';
 
   constructor(parent: HTMLElement, toolbar: HTMLElement, callbacks: AdminRecordingsModalCallbacks) {
     this.parent = parent;
@@ -105,7 +108,15 @@ export class AdminRecordingsModal {
       throw new Error('VITE_API_URL environment variable is not set');
     }
 
-    const response = await fetch(`${apiUrl}/recordings/admin/all-recordings?page=${page}&limit=${limit}`, {
+    // Build URL with filter parameter
+    let url = `${apiUrl}/recordings/admin/all-recordings?page=${page}&limit=${limit}`;
+    if (this.currentFilter === 'video_only') {
+      url += '&videoOnly=true';
+    } else if (this.currentFilter === 'complete') {
+      url += '&videoOnly=false';
+    }
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${tokens.token}`,
@@ -403,42 +414,96 @@ export class AdminRecordingsModal {
       }
     };
 
-    const recordingsGrid = recordings.map(recording => `
-      <div class="${styles.recordingCard} ${styles.adminRecordingCard}" data-recording-id="${recording.id}">
-        <div class="${styles.recordingThumbnail}">
-          ${recording.thumbnailReadUrl ? 
-            `<img src="${recording.thumbnailReadUrl}" alt="Recording thumbnail" />` :
-            `<div class="${styles.thumbnailPlaceholder}">No thumbnail</div>`
-          }
-          <button class="${styles.videoPlayButton}" data-video-url="${recording.videoReadUrl}">
-            <i class="fas fa-play"></i>
-          </button>
+    const recordingsGrid = recordings.map(recording => {
+      const isVideoOnly = recording.videoOnly;
+      return `
+        <div class="${styles.recordingCard} ${styles.adminRecordingCard}" data-recording-id="${recording.id}">
+          <div class="${styles.recordingThumbnail}">
+            ${recording.thumbnailReadUrl ? 
+              `<img src="${recording.thumbnailReadUrl}" alt="Recording thumbnail" />` :
+              `<div class="${styles.thumbnailPlaceholder}">No thumbnail</div>`
+            }
+            <button class="${styles.videoPlayButton}" data-video-url="${recording.videoReadUrl}">
+              <i class="fas fa-play"></i>
+            </button>
+            <div class="${styles.recordingTypeBadge} ${isVideoOnly ? styles.videoOnlyBadge : styles.completeBadge}">
+              <i class="fas ${isVideoOnly ? 'fa-video' : 'fa-wave-square'}"></i>
+              <span>${isVideoOnly ? 'Video Only' : 'Full Data'}</span>
+            </div>
+          </div>
+          <div class="${styles.recordingInfo}">
+            <p class="${styles.adminRecordingUser}">${recording.userFullName}${recording.userEmail ? ` (${recording.userEmail})` : ''}</p>
+            <h4 class="${styles.recordingTask}">${formatTaskType(recording.taskType)}</h4>
+            <p class="${styles.recordingDate}">${formatDate(recording.createdAt.toString())}</p>
+            ${isVideoOnly ? `
+              <button class="${styles.playbackButton} ${styles.videoOnlyPlaybackButton}" title="Play video">
+                <i class="fas fa-play"></i>
+                <span>Play Video</span>
+              </button>
+            ` : `
+              <button class="${styles.playbackButton}" title="Playback video + device simulation">
+                <i class="fas fa-play-circle"></i>
+                <span>Playback Data</span>
+              </button>
+            `}
+          </div>
         </div>
-        <div class="${styles.recordingInfo}">
-          <p class="${styles.adminRecordingUser}">${recording.userFullName}${recording.userEmail ? ` (${recording.userEmail})` : ''}</p>
-          <h4 class="${styles.recordingTask}">${formatTaskType(recording.taskType)}</h4>
-          <p class="${styles.recordingDate}">${formatDate(recording.createdAt.toString())}</p>
-          <button class="${styles.playbackButton}" title="Playback video + device simulation">
-            <i class="fas fa-play-circle"></i>
-            <span>Playback Data</span>
-          </button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     const state = this.loginStateManager.getState();
-    const totalRecordings = pagination?.total || state.profile?.systemTotalRecordings || recordings.length;
-    const totalSeconds = state.profile?.systemTotalSeconds;
+    const profile = state.profile;
+    
+    // Calculate stats based on current filter
+    let totalRecordings: number;
+    let totalSeconds: number | null;
+    let headerTitle: string;
+    
+    if (this.currentFilter === 'video_only') {
+      totalRecordings = pagination?.total ?? profile?.systemTotalVideoOnlyRecordings ?? recordings.length;
+      totalSeconds = profile?.systemTotalVideoOnlySeconds ?? null;
+      headerTitle = 'Video-Only Recordings';
+    } else if (this.currentFilter === 'complete') {
+      // Complete = total - video-only
+      const systemTotal = profile?.systemTotalRecordings ?? 0;
+      const videoOnlyTotal = profile?.systemTotalVideoOnlyRecordings ?? 0;
+      const systemSeconds = profile?.systemTotalSeconds ?? 0;
+      const videoOnlySeconds = profile?.systemTotalVideoOnlySeconds ?? 0;
+      totalRecordings = pagination?.total ?? (systemTotal - videoOnlyTotal);
+      totalSeconds = systemSeconds - videoOnlySeconds;
+      headerTitle = 'Complete Recordings';
+    } else {
+      totalRecordings = pagination?.total ?? profile?.systemTotalRecordings ?? recordings.length;
+      totalSeconds = profile?.systemTotalSeconds ?? null;
+      headerTitle = 'System Recordings';
+    }
+    
     const totalSecondsFormatted = totalSeconds ? this.formatDuration(totalSeconds) : '';
 
     const paginationHTML = pagination ? this.createPagination(pagination) : '';
+    
+    // Filter toggle buttons
+    const filterButtons = `
+      <div class="${styles.filterToggle}">
+        <button class="${styles.filterButton} ${this.currentFilter === 'all' ? styles.filterButtonActive : ''}" data-filter="all">
+          All
+        </button>
+        <button class="${styles.filterButton} ${this.currentFilter === 'complete' ? styles.filterButtonActive : ''}" data-filter="complete">
+          <i class="fas fa-wave-square"></i> Complete
+        </button>
+        <button class="${styles.filterButton} ${this.currentFilter === 'video_only' ? styles.filterButtonActive : ''}" data-filter="video_only">
+          <i class="fas fa-video"></i> Video Only
+        </button>
+      </div>
+    `;
 
     return `
       <div class="${styles.recordingsContainer}">
         <div class="${styles.recordingsHeader} ${styles.adminHeader}">
           <div class="${styles.headerLeft}">
-            <h3>System Recordings (${totalRecordings})</h3>
+            <h3>${headerTitle} (${totalRecordings})</h3>
             ${totalSecondsFormatted ? `<p class="${styles.recordingsSubtext}">Total recording time: ${totalSecondsFormatted}</p>` : ''}
+            ${filterButtons}
             <button class="${styles.recordingDetailsButton}">
               See recording details <i class="fas fa-chevron-down"></i>
             </button>
@@ -575,6 +640,22 @@ export class AdminRecordingsModal {
         this.updateDetailsButton();
       });
     }
+
+    // Filter toggle buttons
+    const filterButtons = this.modal.querySelectorAll(`.${styles.filterButton}`);
+    filterButtons.forEach(button => {
+      button.addEventListener('click', async (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const filter = target.getAttribute('data-filter') as RecordingTypeFilter;
+        if (filter && filter !== this.currentFilter) {
+          this.currentFilter = filter;
+          // Reset details when filter changes since they need to be refetched for the new filter
+          this.recordingDetails = null;
+          this.detailsExpanded = false;
+          await this.loadRecordings();
+        }
+      });
+    });
   }
 
   private async loadAdminRecordingsPage(page: number): Promise<void> {

@@ -415,27 +415,33 @@ export class Controls {
     try {
       // Use the recording data passed from the modal
       const apiRecording = recording;
+      const isVideoOnly = apiRecording.videoOnly === true;
 
-      // 1. Check if sensor data URL exists
-      if (!apiRecording.sensorDataReadUrl) {
-        console.error('No sensor data URL for recording:', recording.id);
-        alert('No sensor data available for this recording');
-        return;
-      }
+      let sensorData: SensorRecording | null = null;
 
-      // 2. Fetch the sensor data JSON from GCS
-      console.log('Fetching sensor data from:', apiRecording.sensorDataReadUrl);
-      const sensorResponse = await fetch(apiRecording.sensorDataReadUrl);
-      if (!sensorResponse.ok) {
-        throw new Error(`Failed to fetch sensor data: ${sensorResponse.status} ${sensorResponse.statusText}`);
-      }
+      // Only fetch sensor data for non-video-only recordings
+      if (!isVideoOnly) {
+        // 1. Check if sensor data URL exists
+        if (!apiRecording.sensorDataReadUrl) {
+          console.error('No sensor data URL for recording:', recording.id);
+          alert('No sensor data available for this recording');
+          return;
+        }
 
-      const sensorData: SensorRecording = await sensorResponse.json();
-      console.log('Sensor data loaded:', sensorData);
+        // 2. Fetch the sensor data JSON from GCS
+        console.log('Fetching sensor data from:', apiRecording.sensorDataReadUrl);
+        const sensorResponse = await fetch(apiRecording.sensorDataReadUrl);
+        if (!sensorResponse.ok) {
+          throw new Error(`Failed to fetch sensor data: ${sensorResponse.status} ${sensorResponse.statusText}`);
+        }
 
-      // 3. Validate sensor data
-      if (!sensorData.devices || !sensorData.snapshots) {
-        throw new Error('Invalid sensor data format: missing devices or snapshots');
+        sensorData = await sensorResponse.json();
+        console.log('Sensor data loaded:', sensorData);
+
+        // 3. Validate sensor data
+        if (!sensorData?.devices || !sensorData?.snapshots) {
+          throw new Error('Invalid sensor data format: missing devices or snapshots');
+        }
       }
 
       // 4. Store which modal was open before closing
@@ -449,8 +455,10 @@ export class Controls {
         this.adminRecordingsModal = null;
       }
 
-      // 5. Animate camera to back view (key "2" position)
-      this.animateCameraToBackView();
+      // 5. Animate camera to back view (key "2" position) - only for full recordings
+      if (!isVideoOnly) {
+        this.animateCameraToBackView();
+      }
 
       // 6. Open playback view with video + controls
       this.playbackView = new PlaybackView(
@@ -462,7 +470,7 @@ export class Controls {
       );
       this.playbackView.mount(document.body);
       
-      console.log('Playback view opened for:', sensorData.name);
+      console.log('Playback view opened for:', isVideoOnly ? 'video-only recording' : sensorData?.name);
 
     } catch (error) {
       console.error('Failed to start playback:', error);
@@ -534,30 +542,36 @@ export class Controls {
       const apiRecording: AdminRecording = await response.json();
       console.log('Fetched recording from URL:', apiRecording);
 
-      // Check if sensor data URL exists
-      if (!apiRecording.sensorDataReadUrl) {
-        console.error('No sensor data URL for recording:', recordingId);
-        alert('No sensor data available for this recording');
-        return;
+      const isVideoOnly = apiRecording.videoOnly === true;
+      let sensorData: SensorRecording | null = null;
+
+      // Only fetch sensor data for non-video-only recordings
+      if (!isVideoOnly) {
+        // Check if sensor data URL exists
+        if (!apiRecording.sensorDataReadUrl) {
+          console.error('No sensor data URL for recording:', recordingId);
+          alert('No sensor data available for this recording');
+          return;
+        }
+
+        // Fetch the sensor data JSON from GCS
+        console.log('Fetching sensor data from:', apiRecording.sensorDataReadUrl);
+        const sensorResponse = await fetch(apiRecording.sensorDataReadUrl);
+        if (!sensorResponse.ok) {
+          throw new Error(`Failed to fetch sensor data: ${sensorResponse.status} ${sensorResponse.statusText}`);
+        }
+
+        sensorData = await sensorResponse.json();
+        console.log('Sensor data loaded:', sensorData);
+
+        // Validate sensor data
+        if (!sensorData?.devices || !sensorData?.snapshots) {
+          throw new Error('Invalid sensor data format: missing devices or snapshots');
+        }
+
+        // Animate camera to back view for full recordings
+        this.animateCameraToBackView();
       }
-
-      // Fetch the sensor data JSON from GCS
-      console.log('Fetching sensor data from:', apiRecording.sensorDataReadUrl);
-      const sensorResponse = await fetch(apiRecording.sensorDataReadUrl);
-      if (!sensorResponse.ok) {
-        throw new Error(`Failed to fetch sensor data: ${sensorResponse.status} ${sensorResponse.statusText}`);
-      }
-
-      const sensorData: SensorRecording = await sensorResponse.json();
-      console.log('Sensor data loaded:', sensorData);
-
-      // Validate sensor data
-      if (!sensorData.devices || !sensorData.snapshots) {
-        throw new Error('Invalid sensor data format: missing devices or snapshots');
-      }
-
-      // Animate camera to back view
-      this.animateCameraToBackView();
 
       // Open playback view with video + controls
       this.playbackView = new PlaybackView(
@@ -568,7 +582,7 @@ export class Controls {
       );
       this.playbackView.mount(document.body);
       
-      console.log('Playback view opened for:', sensorData.name);
+      console.log('Playback view opened for:', isVideoOnly ? 'video-only recording' : sensorData?.name);
 
       // Clear the URL parameter to avoid reloading on refresh
       const url = new URL(window.location.href);

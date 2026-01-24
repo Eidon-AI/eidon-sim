@@ -176,27 +176,41 @@ export class RecordingsModal {
       }
     };
 
-    const recordingsGrid = recordings.recordings.map(recording => `
-      <div class="${styles.recordingCard}" data-recording-id="${recording.id}">
-        <div class="${styles.recordingThumbnail}">
-          ${recording.thumbnailReadUrl ? 
-            `<img src="${recording.thumbnailReadUrl}" alt="Recording thumbnail" />` :
-            `<div class="${styles.thumbnailPlaceholder}">No thumbnail</div>`
-          }
-          <button class="${styles.videoPlayButton}" data-video-url="${recording.videoReadUrl}">
-            <i class="fas fa-play"></i>
-          </button>
+    const recordingsGrid = recordings.recordings.map(recording => {
+      const isVideoOnly = recording.videoOnly;
+      return `
+        <div class="${styles.recordingCard}" data-recording-id="${recording.id}">
+          <div class="${styles.recordingThumbnail}">
+            ${recording.thumbnailReadUrl ? 
+              `<img src="${recording.thumbnailReadUrl}" alt="Recording thumbnail" />` :
+              `<div class="${styles.thumbnailPlaceholder}">No thumbnail</div>`
+            }
+            <button class="${styles.videoPlayButton}" data-video-url="${recording.videoReadUrl}">
+              <i class="fas fa-play"></i>
+            </button>
+            <div class="${styles.recordingTypeBadge} ${isVideoOnly ? styles.videoOnlyBadge : styles.completeBadge}">
+              <i class="fas ${isVideoOnly ? 'fa-video' : 'fa-wave-square'}"></i>
+              <span>${isVideoOnly ? 'Video Only' : 'Full Data'}</span>
+            </div>
+          </div>
+          <div class="${styles.recordingInfo}">
+            <h4 class="${styles.recordingTask}">${formatTaskType(recording.taskType)}</h4>
+            <p class="${styles.recordingDate}">${formatDate(recording.createdAt.toString())}</p>
+            ${isVideoOnly ? `
+              <button class="${styles.playbackButton} ${styles.videoOnlyPlaybackButton}" title="Play video">
+                <i class="fas fa-play"></i>
+                <span>Play Video</span>
+              </button>
+            ` : `
+              <button class="${styles.playbackButton}" title="Playback video + device simulation">
+                <i class="fas fa-play-circle"></i>
+                <span>Playback Data</span>
+              </button>
+            `}
+          </div>
         </div>
-        <div class="${styles.recordingInfo}">
-          <h4 class="${styles.recordingTask}">${formatTaskType(recording.taskType)}</h4>
-          <p class="${styles.recordingDate}">${formatDate(recording.createdAt.toString())}</p>
-          <button class="${styles.playbackButton}" title="Playback video + device simulation">
-            <i class="fas fa-play-circle"></i>
-            <span>Playback Data</span>
-          </button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     const pagination = this.createPagination(recordings.pagination);
 
