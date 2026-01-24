@@ -3,6 +3,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import { mount } from './ui/App';
 import { UpdatePage } from './ui/pages/UpdatePage';
 import { DebugPage } from './ui/pages/DebugPage';
+import { DeleteRequestPage } from './ui/pages/DeleteRequestPage';
 
 window.addEventListener('DOMContentLoaded', () => {
   const root = document.getElementById('root')!;
@@ -15,6 +16,9 @@ window.addEventListener('DOMContentLoaded', () => {
   } else if (path === '/debug' || path === '/app/debug') {
     const debugPage = new DebugPage();
     debugPage.mount(root);
+  } else if (path === '/delete' || path === '/app/delete') {
+    const deleteRequestPage = new DeleteRequestPage();
+    deleteRequestPage.mount(root);
   } else {
     mount(root);
   }
