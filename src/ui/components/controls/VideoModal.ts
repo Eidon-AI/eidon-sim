@@ -1,4 +1,5 @@
 import { SensorRecording } from '../../../types/sensorData';
+import { fetchSensorData } from '../../../utils/sensorDataFetch';
 import styles from './styles/VideoModal.module.css';
 
 export interface VideoModalCallbacks {
@@ -109,12 +110,7 @@ export class VideoModal {
       return;
     }
 
-    const response = await fetch(this.recording.sensorDataReadUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sensor data: ${response.status}`);
-    }
-
-    const sensorData: SensorRecording = await response.json();
+    const sensorData: SensorRecording = await fetchSensorData(this.recording.sensorDataReadUrl);
     this.updateSensorDataInModal(sensorData);
   }
 
