@@ -3,6 +3,7 @@ import { LoginStateManager, LoginState } from '../../../core/LoginStateManager';
 import { AuthModal } from '../AuthModal';
 import { PaginatedRecordingsResponse, RecordingWithUrls, AdminRecording } from '../../../types/recording';
 import { SensorRecording } from '../../../types/sensorData';
+import { fetchSensorData } from '../../../utils/sensorDataFetch';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
 import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
 import { DeviceModal } from '../device-modal/DeviceModal';
@@ -428,14 +429,9 @@ export class Controls {
           return;
         }
 
-        // 2. Fetch the sensor data JSON from GCS
+        // 2. Fetch the sensor data JSON from GCS (handles gzip compression)
         console.log('Fetching sensor data from:', apiRecording.sensorDataReadUrl);
-        const sensorResponse = await fetch(apiRecording.sensorDataReadUrl);
-        if (!sensorResponse.ok) {
-          throw new Error(`Failed to fetch sensor data: ${sensorResponse.status} ${sensorResponse.statusText}`);
-        }
-
-        sensorData = await sensorResponse.json();
+        sensorData = await fetchSensorData(apiRecording.sensorDataReadUrl);
         console.log('Sensor data loaded:', sensorData);
 
         // 3. Validate sensor data
@@ -554,14 +550,9 @@ export class Controls {
           return;
         }
 
-        // Fetch the sensor data JSON from GCS
+        // Fetch the sensor data JSON from GCS (handles gzip compression)
         console.log('Fetching sensor data from:', apiRecording.sensorDataReadUrl);
-        const sensorResponse = await fetch(apiRecording.sensorDataReadUrl);
-        if (!sensorResponse.ok) {
-          throw new Error(`Failed to fetch sensor data: ${sensorResponse.status} ${sensorResponse.statusText}`);
-        }
-
-        sensorData = await sensorResponse.json();
+        sensorData = await fetchSensorData(apiRecording.sensorDataReadUrl);
         console.log('Sensor data loaded:', sensorData);
 
         // Validate sensor data
