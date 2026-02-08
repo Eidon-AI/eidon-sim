@@ -1329,8 +1329,15 @@ export class LabelPage {
       <div id="videoModalContent">${this.renderVideoModalContent()}</div>
     `;
 
+    const actionsBar = document.createElement('div');
+    actionsBar.className = styles.videoSelectionActions;
+    actionsBar.id = 'videoSelectionActions';
+
     overlay.appendChild(modal);
+    overlay.appendChild(actionsBar);
     document.body.appendChild(overlay);
+
+    this.updateVideoSelectionActions();
 
     const closeButton = document.getElementById('videoCloseButton');
     closeButton?.addEventListener('click', () => this.closeVideoModal());
@@ -1342,19 +1349,49 @@ export class LabelPage {
     document.addEventListener('keydown', this.handleVideoKeyDown);
   }
 
+  private updateVideoSelectionActions(): void {
+    const actionsBar = document.getElementById('videoSelectionActions');
+    if (!actionsBar) return;
+
+    const count = this.selectedIds.size;
+    if (count === 0) {
+      actionsBar.style.display = 'none';
+      return;
+    }
+
+    actionsBar.style.display = 'flex';
+    actionsBar.innerHTML = `
+      <span class="${styles.videoSelectionCount}">${count} selected</span>
+      <button class="${styles.actionButton} ${styles.actionButtonValid}" id="videoMarkValidButton">
+        <i class="fas fa-check-circle"></i> Mark Valid
+      </button>
+      <button class="${styles.actionButton} ${styles.actionButtonInvalid}" id="videoMarkInvalidButton">
+        <i class="fas fa-times-circle"></i> Mark Invalid
+      </button>
+    `;
+
+    document.getElementById('videoMarkValidButton')?.addEventListener('click', () => this.bulkUpdateValidFromModal(true));
+    document.getElementById('videoMarkInvalidButton')?.addEventListener('click', () => this.bulkUpdateValidFromModal(false));
+  }
+
   private renderVideoModalContent(): string {
     if (this.videoModalIndex === null || !this.recordings[this.videoModalIndex]) return '';
 
     const recording = this.recordings[this.videoModalIndex];
     const isSelected = this.selectedIds.has(recording.id);
-    const position = this.videoModalIndex + 1;
-    const total = this.recordings.length;
-    const isFirst = this.videoModalIndex === 0;
-    const isLast = this.videoModalIndex === this.recordings.length - 1;
+    const globalPosition = this.pagination
+      ? (this.pagination.page - 1) * this.pagination.limit + this.videoModalIndex + 1
+      : this.videoModalIndex + 1;
+    const globalTotal = this.pagination?.total ?? this.recordings.length;
+    const pageInfo = this.pagination && this.pagination.totalPages > 1
+      ? ` (Page ${this.pagination.page}/${this.pagination.totalPages})`
+      : '';
+    const isFirst = this.videoModalIndex === 0 && !this.pagination?.hasPrev;
+    const isLast = this.videoModalIndex === this.recordings.length - 1 && !this.pagination?.hasNext;
 
     return `
       <div class="${styles.videoModalHeader}">
-        <span class="${styles.videoNavInfo}">${position} / ${total}</span>
+        <span class="${styles.videoNavInfo}">${globalPosition} / ${globalTotal}${pageInfo}</span>
         <span class="${styles.videoSelectionBadge} ${isSelected ? styles.videoSelectionBadgeActive : ''}" id="videoSelectionBadge">
           ${isSelected ? 'Selected' : 'Not Selected'}
         </span>
@@ -1439,11 +1476,10 @@ export class LabelPage {
     }
   };
 
-  private navigateVideo(direction: -1 | 1): void {
-    if (this.videoModalIndex === null) return;
+  private async navigateVideo(direction: -1 | 1): Promise<void> {
+    if (this.videoModalIndex === null || this.isLoading) return;
 
     const newIndex = this.videoModalIndex + direction;
-    if (newIndex < 0 || newIndex >= this.recordings.length) return;
 
     // Pause current video
     const overlay = document.getElementById('videoModalOverlay');
@@ -1452,7 +1488,21 @@ export class LabelPage {
       if (video) video.pause();
     }
 
-    this.videoModalIndex = newIndex;
+    if (newIndex < 0) {
+      if (!this.pagination?.hasPrev) return;
+      this.filters.page = this.pagination.page - 1;
+      await this.searchRecordings();
+      if (this.videoModalIndex === null) return; // Modal was closed during loading
+      this.videoModalIndex = this.recordings.length - 1;
+    } else if (newIndex >= this.recordings.length) {
+      if (!this.pagination?.hasNext) return;
+      this.filters.page = this.pagination.page + 1;
+      await this.searchRecordings();
+      if (this.videoModalIndex === null) return; // Modal was closed during loading
+      this.videoModalIndex = 0;
+    } else {
+      this.videoModalIndex = newIndex;
+    }
 
     const contentContainer = document.getElementById('videoModalContent');
     if (contentContainer) {
@@ -1484,6 +1534,27 @@ export class LabelPage {
     // Update grid card behind the modal
     this.updateRecordingsGrid();
     this.updateActionBar();
+    this.updateVideoSelectionActions();
+  }
+
+  private async bulkUpdateValidFromModal(valid: boolean): Promise<void> {
+    await this.bulkUpdateValid(valid);
+    // After bulk update, recordings may have changed - adjust index if needed
+    if (this.videoModalIndex !== null) {
+      if (this.recordings.length === 0) {
+        this.closeVideoModal();
+        return;
+      }
+      if (this.videoModalIndex >= this.recordings.length) {
+        this.videoModalIndex = this.recordings.length - 1;
+      }
+      const contentContainer = document.getElementById('videoModalContent');
+      if (contentContainer) {
+        contentContainer.innerHTML = this.renderVideoModalContent();
+        this.attachVideoModalListeners();
+      }
+      this.updateVideoSelectionActions();
+    }
   }
 
   private seeAllUserRecordingsFromModal(): void {
