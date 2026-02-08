@@ -4,10 +4,11 @@ import { mount } from './ui/App';
 import { UpdatePage } from './ui/pages/UpdatePage';
 import { DebugPage } from './ui/pages/DebugPage';
 import { DeleteRequestPage } from './ui/pages/DeleteRequestPage';
+import { LabelPage } from './ui/pages/LabelPage';
 
 window.addEventListener('DOMContentLoaded', () => {
   const root = document.getElementById('root')!;
-  
+
   // Simple routing check
   const path = window.location.pathname;
   if (path === '/update' || path === '/app/update') {
@@ -19,6 +20,9 @@ window.addEventListener('DOMContentLoaded', () => {
   } else if (path === '/delete' || path === '/app/delete') {
     const deleteRequestPage = new DeleteRequestPage();
     deleteRequestPage.mount(root);
+  } else if (path === '/label' || path === '/app/label') {
+    const labelPage = new LabelPage();
+    labelPage.mount(root);
   } else {
     mount(root);
   }

@@ -26,6 +26,7 @@ export interface Recording {
   taskType: TaskType | null;   // Task type enum (optional)
   completed: boolean;          // Completion status (default: false)
   videoOnly: boolean;          // True if this is a video-only recording (no sensor data)
+  valid: boolean;              // False if marked invalid by admin (default: true)
 }
 
 export interface RecordingWithUrls extends Recording {

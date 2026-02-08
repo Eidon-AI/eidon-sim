@@ -180,6 +180,10 @@ export class Controls {
         <i class="fas fa-shield-alt"></i>
         <span>System Recordings</span>
       </button>
+      <button id="navLabelRecordings" class="${styles.navButton}" title="Label Recordings (Admin)" style="display: none;">
+        <i class="fas fa-tags"></i>
+        <span>Label</span>
+      </button>
       <div id="navSeparator" class="${styles.navSeparator}" style="display: none;"></div>
       <button id="navLogin" class="${styles.navButton} ${styles.navLogin}" title="Login">
         <i class="fas fa-sign-in-alt"></i>
@@ -218,6 +222,11 @@ export class Controls {
 
     adminRecordingsBtn?.addEventListener('click', () => {
       this.toggleAdminRecordingsModal();
+    });
+
+    const labelBtn = this.toolbar.querySelector('#navLabelRecordings') as HTMLButtonElement;
+    labelBtn?.addEventListener('click', () => {
+      window.location.href = '/label';
     });
 
     userInfoBtn.addEventListener('click', () => {
@@ -594,6 +603,7 @@ export class Controls {
     const updateBtn = this.toolbar.querySelector('#navUpdate') as HTMLButtonElement;
     const recordingsBtn = this.toolbar.querySelector('#navRecordings') as HTMLButtonElement;
     const adminRecordingsBtn = this.toolbar.querySelector('#navAdminRecordings') as HTMLButtonElement;
+    const labelBtn = this.toolbar.querySelector('#navLabelRecordings') as HTMLButtonElement;
     const userInfo = this.toolbar.querySelector('#userInfo') as HTMLButtonElement;
     const userAvatar = this.toolbar.querySelector('#userAvatar') as HTMLImageElement;
     const userName = this.toolbar.querySelector('#userName') as HTMLSpanElement;
@@ -625,15 +635,17 @@ export class Controls {
       recordingsText.textContent = `Recordings (${recordingsCount})`;
       recordingsBtn.title = 'Recordings';
       
-      // Show admin recordings button if user is admin
+      // Show admin buttons if user is admin
       if (state.profile?.isAdmin) {
         adminRecordingsBtn.style.display = 'flex';
         const systemRecordingsCount = state.profile?.systemTotalRecordings || 0;
         const adminRecordingsText = adminRecordingsBtn.querySelector('span') as HTMLSpanElement;
         adminRecordingsText.textContent = `System Recordings (${systemRecordingsCount})`;
         adminRecordingsBtn.title = 'System Recordings (Admin)';
+        labelBtn.style.display = 'flex';
       } else {
         adminRecordingsBtn.style.display = 'none';
+        labelBtn.style.display = 'none';
       }
       
       // Show user info if profile is available
@@ -679,6 +691,7 @@ export class Controls {
       updateBtn.style.display = 'none';
       recordingsBtn.style.display = 'none';
       adminRecordingsBtn.style.display = 'none';
+      labelBtn.style.display = 'none';
       userInfo.style.display = 'none';
       
       // Reset devices button text
