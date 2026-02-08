@@ -75,6 +75,13 @@ export class LabelPage {
     this.content = document.createElement('div');
     this.content.className = styles.contentWrapper;
     this.container.appendChild(this.content);
+
+    // Pre-populate filters from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const userEmail = urlParams.get('userEmail');
+    if (userEmail) {
+      this.filters.userEmail = userEmail;
+    }
   }
 
   public async mount(parent: HTMLElement): Promise<void> {

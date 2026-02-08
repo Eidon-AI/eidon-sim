@@ -65,6 +65,12 @@ export class PlaybackView {
             <i class="fas fa-link"></i>
             <span>Copy Link</span>
           </button>
+          ${this.apiRecording.userEmail ? `
+          <button class="${styles.labelButton}" data-label-user title="Label this user's recordings">
+            <i class="fas fa-tag"></i>
+            <span>Label User</span>
+          </button>
+          ` : ''}
         </div>
         ` : ''}
       </div>
@@ -178,6 +184,12 @@ export class PlaybackView {
     const copyBtn = this.container.querySelector('[data-copy-link]') as HTMLButtonElement;
     if (copyBtn) {
       copyBtn.addEventListener('click', () => this.copyRecordingLink());
+    }
+
+    // Label user button (admin only)
+    const labelBtn = this.container.querySelector('[data-label-user]') as HTMLButtonElement;
+    if (labelBtn) {
+      labelBtn.addEventListener('click', () => this.navigateToLabelUser());
     }
 
     // Keyboard shortcuts
@@ -456,6 +468,11 @@ export class PlaybackView {
       console.error('Failed to copy link:', error);
       alert('Failed to copy link. Please try again.');
     });
+  }
+
+  private navigateToLabelUser(): void {
+    if (!('userEmail' in this.apiRecording) || !this.apiRecording.userEmail) return;
+    window.location.href = `/label?userEmail=${encodeURIComponent(this.apiRecording.userEmail)}`;
   }
 
   public destroy(): void {
