@@ -524,7 +524,12 @@ export class AdminRecordingsModal {
       <div class="${styles.recordingsContainer}">
         <div class="${styles.recordingsHeader} ${styles.adminHeader}">
           <div class="${styles.headerLeft}">
-            <h3>${headerTitle} (${totalRecordings})</h3>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <h3>${headerTitle} (${totalRecordings})</h3>
+              <a href="/label" class="${styles.filterButton}" style="text-decoration: none; font-size: 13px; background: #e91e63; color: white;">
+                <i class="fas fa-tags"></i> Label Recordings
+              </a>
+            </div>
             ${totalSecondsFormatted ? `<p class="${styles.recordingsSubtext}">Total recording time: ${totalSecondsFormatted}</p>` : ''}
             ${filterButtons}
             <button class="${styles.recordingDetailsButton}">
