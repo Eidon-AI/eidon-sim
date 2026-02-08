@@ -943,6 +943,28 @@
   cursor: pointer;
 }
 
+/* Video Modal Selection Actions */
+.videoSelectionActions {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: rgba(0, 0, 0, 0.85);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.videoSelectionCount {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+  font-family: var(--font-primary);
+  margin-right: 0.25rem;
+}
+
 .actionButtonUserFilter {
   background: rgba(59, 130, 246, 0.2);
   border-color: rgba(59, 130, 246, 0.4);
