@@ -20,6 +20,7 @@ export const DEVICE_INFO_CHAR_UUID = 'e1d00005-8b5a-3e5b-9e23-4f9b5c91bbde';
 // These are available on right-side hub devices (right_hand, right_forearm, right_shoulder)
 export const LEFT_QUATERNION_CHAR_UUID = 'e1d00008-8b5a-3e5b-9e23-4f9b5c91bbde';
 export const LEFT_RAW_DATA_CHAR_UUID = 'e1d0000c-8b5a-3e5b-9e23-4f9b5c91bbde';
+export const LEFT_BATTERY_CHAR_UUID = 'e1d0000d-8b5a-3e5b-9e23-4f9b5c91bbde';
 
 // Raw data characteristics (for device's own data - MAIN characteristics)
 export const HUB_RAW_DATA_CHAR_UUID = 'e1d0000b-8b5a-3e5b-9e23-4f9b5c91bbde';
