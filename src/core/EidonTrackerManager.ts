@@ -9,6 +9,7 @@ import {
   ROLE_CONFIG_CHAR_UUID,
   HUB_RAW_DATA_CHAR_UUID,
   LEFT_RAW_DATA_CHAR_UUID,
+  LEFT_BATTERY_CHAR_UUID,
   DeviceRole,
   DEVICE_ROLE_NAMES
 } from './constants';
@@ -66,6 +67,7 @@ export class EidonTrackerManager extends EventTarget {
   // Stream controllers for raw data
   private hubRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
   private leftRawDataControllers = new Map<DeviceId, ReadableStreamDefaultController<RawMotionData>>();
+  private leftBatteryPollTimers = new Map<DeviceId, ReturnType<typeof setInterval>>();
   private scanAbortController?: AbortController;
 
   constructor() {
@@ -567,6 +569,12 @@ export class EidonTrackerManager extends EventTarget {
    * Disconnect from a specific device
    */
   async disconnectDevice(deviceId: DeviceId): Promise<void> {
+    // Clean up left battery poll timer
+    const pollTimer = this.leftBatteryPollTimers.get(deviceId);
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      this.leftBatteryPollTimers.delete(deviceId);
+    }
     // Clean up raw data streams
     this.cleanupRawDataStreams(deviceId);
     const connectionState = this.connectionStates.get(deviceId);
@@ -1550,6 +1558,36 @@ export class EidonTrackerManager extends EventTarget {
     // Subscribe to LEFT quaternion characteristic
     await this.subscribeToLeftQuaternion(hubId, childId, childRole);
 
+    // Read left child battery level and start polling
+    await this.readLeftBatteryLevel(hubId, childId);
+    const pollTimer = setInterval(() => this.readLeftBatteryLevel(hubId, childId), 30000);
+    this.leftBatteryPollTimers.set(hubId, pollTimer);
+  }
+
+  /**
+   * Read left child battery level from hub and update child device
+   */
+  private async readLeftBatteryLevel(hubId: DeviceId, childId: ChildDeviceId): Promise<void> {
+    const connectionState = this.connectionStates.get(hubId);
+    if (!connectionState?.gattServer?.connected) return;
+
+    const leftBatteryChar = connectionState.characteristics.get(LEFT_BATTERY_CHAR_UUID);
+    if (!leftBatteryChar) return;
+
+    try {
+      const data = await leftBatteryChar.readValue();
+      if (data.byteLength >= 1) {
+        const batteryLevel = data.getUint8(0);
+        const childDevice = this.devices.get(childId);
+        if (childDevice && batteryLevel > 0) {
+          childDevice.batteryLevel = batteryLevel;
+          this.devices.set(childId, childDevice);
+          this.dispatchEvent(new CustomEvent('deviceInfoUpdated', { detail: { deviceId: childId, device: childDevice } }));
+        }
+      }
+    } catch (error) {
+      // Silently ignore read failures (device may have disconnected)
+    }
   }
 
   /**
