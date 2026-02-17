@@ -439,10 +439,11 @@ export class AdminRecordingsModal {
 
     const recordingsGrid = recordings.map(recording => {
       const isVideoOnly = recording.videoOnly;
+      const isValid = recording.valid !== false;
       return `
-        <div class="${styles.recordingCard} ${styles.adminRecordingCard}" data-recording-id="${recording.id}">
+        <div class="${styles.recordingCard} ${styles.adminRecordingCard} ${!isValid ? styles.invalidRecordingCard : ''}" data-recording-id="${recording.id}">
           <div class="${styles.recordingThumbnail}">
-            ${recording.thumbnailReadUrl ? 
+            ${recording.thumbnailReadUrl ?
               `<img src="${recording.thumbnailReadUrl}" alt="Recording thumbnail" />` :
               `<div class="${styles.thumbnailPlaceholder}">No thumbnail</div>`
             }
@@ -452,6 +453,9 @@ export class AdminRecordingsModal {
             <div class="${styles.recordingTypeBadge} ${isVideoOnly ? styles.videoOnlyBadge : styles.completeBadge}">
               <i class="fas ${isVideoOnly ? 'fa-video' : 'fa-wave-square'}"></i>
               <span>${isVideoOnly ? 'Video Only' : 'Full Data'}</span>
+            </div>
+            <div class="${styles.validBadge} ${isValid ? styles.validBadgeValid : styles.validBadgeInvalid}">
+              ${isValid ? 'Valid' : 'Invalid'}
             </div>
           </div>
           <div class="${styles.recordingInfo}">
@@ -469,6 +473,20 @@ export class AdminRecordingsModal {
                 <span>Playback Data</span>
               </button>
             `}
+            <div class="${styles.cardActions}">
+              <button class="${styles.cardActionButton} toggle-valid-button" data-recording-id="${recording.id}" data-current-valid="${isValid}" title="${isValid ? 'Mark Invalid' : 'Mark Valid'}">
+                <i class="fas ${isValid ? 'fa-times-circle' : 'fa-check-circle'}"></i>
+                ${isValid ? 'Invalidate' : 'Validate'}
+              </button>
+              <button class="${styles.cardActionButton} label-user-button" data-user-email="${recording.userEmail || ''}" title="Label this user's recordings" ${!recording.userEmail ? 'disabled' : ''}>
+                <i class="fas fa-user-tag"></i>
+                Label
+              </button>
+              <button class="${styles.cardActionButton} copy-link-button" data-recording-id="${recording.id}" title="Copy recording link">
+                <i class="fas fa-link"></i>
+                Copy
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -669,6 +687,58 @@ export class AdminRecordingsModal {
       });
     }
 
+    // Toggle valid buttons
+    const toggleValidButtons = this.modal.querySelectorAll('.toggle-valid-button');
+    toggleValidButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = e.currentTarget as HTMLElement;
+        const recordingId = target.getAttribute('data-recording-id');
+        const currentValid = target.getAttribute('data-current-valid') === 'true';
+        if (recordingId) {
+          this.toggleRecordingValid(recordingId, !currentValid);
+        }
+      });
+    });
+
+    // Label user buttons
+    const labelUserButtons = this.modal.querySelectorAll('.label-user-button');
+    labelUserButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = e.currentTarget as HTMLElement;
+        const userEmail = target.getAttribute('data-user-email');
+        if (userEmail) {
+          window.open(`/label?email=${encodeURIComponent(userEmail)}`, '_blank');
+        }
+      });
+    });
+
+    // Copy link buttons
+    const copyLinkButtons = this.modal.querySelectorAll('.copy-link-button');
+    copyLinkButtons.forEach(button => {
+      button.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const target = e.currentTarget as HTMLElement;
+        const recordingId = target.getAttribute('data-recording-id');
+        if (recordingId) {
+          const url = `${window.location.origin}?recordingId=${recordingId}`;
+          try {
+            await navigator.clipboard.writeText(url);
+            const icon = target.querySelector('i');
+            if (icon) {
+              icon.className = 'fas fa-check';
+              setTimeout(() => {
+                icon.className = 'fas fa-link';
+              }, 1500);
+            }
+          } catch (err) {
+            console.error('Failed to copy link:', err);
+          }
+        }
+      });
+    });
+
     // Filter toggle buttons
     const filterButtons = this.modal.querySelectorAll(`.${styles.filterButton}`);
     filterButtons.forEach(button => {
@@ -692,6 +762,82 @@ export class AdminRecordingsModal {
       this.updateModal(recordings);
     } catch (error) {
       console.error('Failed to load admin recordings page:', error);
+    }
+  }
+
+  private async toggleRecordingValid(recordingId: string, valid: boolean): Promise<void> {
+    const state = this.loginStateManager.getState();
+    const tokens = state.tokens;
+    if (!tokens?.token) return;
+
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl) return;
+
+    try {
+      const response = await fetch(`${apiUrl}/admin/recordings/bulk-valid`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${tokens.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recordingIds: [recordingId],
+          valid,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          this.loginStateManager.logout();
+        }
+        throw new Error(`Update failed: ${response.status}`);
+      }
+
+      // Update local state
+      const recording = this.currentRecordings.find(r => r.id === recordingId);
+      if (recording) {
+        recording.valid = valid;
+      }
+
+      // Re-render just the card
+      this.updateRecordingCard(recordingId);
+    } catch (error) {
+      console.error('Failed to toggle recording validity:', error);
+    }
+  }
+
+  private updateRecordingCard(recordingId: string): void {
+    if (!this.modal) return;
+
+    const card = this.modal.querySelector(`[data-recording-id="${recordingId}"]`) as HTMLElement;
+    const recording = this.currentRecordings.find(r => r.id === recordingId);
+    if (!card || !recording) return;
+
+    const isValid = recording.valid !== false;
+
+    // Update card border class
+    if (isValid) {
+      card.classList.remove(styles.invalidRecordingCard);
+    } else {
+      card.classList.add(styles.invalidRecordingCard);
+    }
+
+    // Update valid badge
+    const badge = card.querySelector(`.${styles.validBadge}`) as HTMLElement;
+    if (badge) {
+      badge.className = `${styles.validBadge} ${isValid ? styles.validBadgeValid : styles.validBadgeInvalid}`;
+      badge.textContent = isValid ? 'Valid' : 'Invalid';
+    }
+
+    // Update toggle button
+    const toggleBtn = card.querySelector('.toggle-valid-button') as HTMLElement;
+    if (toggleBtn) {
+      toggleBtn.setAttribute('data-current-valid', String(isValid));
+      toggleBtn.title = isValid ? 'Mark Invalid' : 'Mark Valid';
+      toggleBtn.innerHTML = `
+        <i class="fas ${isValid ? 'fa-times-circle' : 'fa-check-circle'}"></i>
+        ${isValid ? 'Invalidate' : 'Validate'}
+      `;
     }
   }
 

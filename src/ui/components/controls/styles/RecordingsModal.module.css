@@ -455,6 +455,74 @@
   border: 1px solid rgba(129, 199, 132, 0.5);
 }
 
+/* Valid/Invalid Badge on Thumbnail */
+.validBadge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  backdrop-filter: blur(4px);
+}
+
+.validBadgeValid {
+  background: rgba(76, 175, 80, 0.85);
+  color: white;
+  border: 1px solid rgba(129, 199, 132, 0.5);
+}
+
+.validBadgeInvalid {
+  background: rgba(244, 67, 54, 0.85);
+  color: white;
+  border: 1px solid rgba(239, 154, 154, 0.5);
+}
+
+/* Invalid Recording Card */
+.invalidRecordingCard {
+  border-color: rgba(244, 67, 54, 0.4) !important;
+}
+
+.invalidRecordingCard:hover {
+  border-color: rgba(244, 67, 54, 0.6) !important;
+}
+
+/* Card Actions Row */
+.cardActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cardActionButton {
+  flex: 1;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.cardActionButton:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.cardActionButton i {
+  font-size: 11px;
+}
+
 /* Video Only Playback Button */
 .videoOnlyPlaybackButton {
   background: linear-gradient(135deg, rgba(156, 39, 176, 0.8) 0%, rgba(123, 31, 162, 0.8) 100%);
