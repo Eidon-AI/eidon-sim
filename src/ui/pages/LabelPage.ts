@@ -78,7 +78,7 @@ export class LabelPage {
 
     // Pre-populate filters from URL params
     const urlParams = new URLSearchParams(window.location.search);
-    const userEmail = urlParams.get('userEmail');
+    const userEmail = urlParams.get('userEmail') || urlParams.get('email');
     if (userEmail) {
       this.filters.userEmail = userEmail;
     }
