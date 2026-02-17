@@ -180,13 +180,10 @@ export class PlaybackManager extends EventTarget {
 
   private applySnapshot(snapshot: SensorSnapshot): void {
     // Apply device data using the new playback method
-    // Recordings are stored as [w, x, y, z] format from backend
-    // We must reorder to [x, y, z, w] (gl-matrix format) for consistency with live data
+    // Recordings are stored as [x, y, z, w] (gl-matrix format) by the Flutter app
+    // No reordering needed — the Flutter app already converts from BLE [w,x,y,z] to [x,y,z,w]
     for (const [deviceId, quatArray] of Object.entries(snapshot.deviceData)) {
-      // Reorder quaternion: recordings stored as [w, x, y, z], but we need [x, y, z, w]
-      // Bytes 0-3: w, Bytes 4-7: x, Bytes 8-11: y, Bytes 12-15: z (same as live Bluetooth data)
-      // This matches the same reordering we do in App.ts for live Bluetooth data
-      const q: quat = [quatArray[1], quatArray[2], quatArray[3], quatArray[0]]; // [x, y, z, w]
+      const q: quat = [quatArray[0], quatArray[1], quatArray[2], quatArray[3]]; // already [x, y, z, w]
       
       // Prepare the updates object with quaternion
       const updates: any = {

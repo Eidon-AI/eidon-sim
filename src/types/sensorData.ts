@@ -12,7 +12,7 @@ export interface DeviceSimple {
 
 export interface SensorSnapshot {
   time: number;  // relative ms from start
-  deviceData: Record<string, [number, number, number, number]>;  // DeviceSimple.id -> quaternion [w,x,y,z]
+  deviceData: Record<string, [number, number, number, number]>;  // DeviceSimple.id -> quaternion [x,y,z,w]
   fingerData?: Record<string, number[]>;  // Optional: DeviceSimple.id -> 16 finger sensor values (0.0-1.0)
 }
 
