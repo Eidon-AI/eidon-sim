@@ -9,6 +9,13 @@ export enum TaskType {
   DOING_THE_DISHES = 'doing_the_dishes',
 }
 
+export enum QcStatus {
+  UNREVIEWED = 'unreviewed',
+  VALID = 'valid',
+  FLAGGED = 'flagged',
+  INVALID = 'invalid',
+}
+
 export interface Recording {
   // From BaseEntity
   id: string;           // UUID
@@ -27,6 +34,8 @@ export interface Recording {
   completed: boolean;          // Completion status (default: false)
   videoOnly: boolean;          // True if this is a video-only recording (no sensor data)
   valid: boolean;              // False if marked invalid by admin (default: true)
+  qcStatus: QcStatus;          // QC pipeline status (default: unreviewed)
+  qcMetadata: Record<string, unknown> | null; // QC pipeline scores and reasons
 }
 
 export interface RecordingWithUrls extends Recording {
