@@ -60,6 +60,10 @@ export class LabelPage {
   private videoModalIndex: number | null = null;
   private useBracketKeys: boolean = false;
   private warningModalUserId: string | null = null;
+  private pendingRecordingId: string | null = null;
+  private qcPanelStatus: string = 'unreviewed';
+  private qcPanelIsDirty: boolean = false;
+  private qcPanelSaving: boolean = false;
   private toastContainer: HTMLElement | null = null;
   private activeTab: 'recordings' | 'alerts' = 'recordings';
   private warnings: AdminWarning[] = [];
@@ -81,6 +85,10 @@ export class LabelPage {
     const userEmail = urlParams.get('userEmail') || urlParams.get('email');
     if (userEmail) {
       this.filters.userEmail = userEmail;
+    }
+    const recordingId = urlParams.get('recordingId');
+    if (recordingId) {
+      this.pendingRecordingId = recordingId;
     }
   }
 
@@ -440,7 +448,11 @@ export class LabelPage {
     container.appendChild(recordingsSection);
 
     this.attachEventListeners();
-    this.searchRecordings();
+    if (this.pendingRecordingId) {
+      this.initFromDeepLink();
+    } else {
+      this.searchRecordings();
+    }
   }
 
   private renderAlertsTab(container: HTMLElement): void {
@@ -1325,12 +1337,19 @@ export class LabelPage {
   private showVideoModal(index: number): void {
     this.videoModalIndex = index;
 
+    const recording = this.recordings[index];
+    if (recording) {
+      this.qcPanelStatus = recording.qcStatus ?? 'unreviewed';
+      this.qcPanelIsDirty = false;
+      this.qcPanelSaving = false;
+    }
+
     const overlay = document.createElement('div');
     overlay.className = styles.videoModalOverlay;
     overlay.id = 'videoModalOverlay';
 
     const modal = document.createElement('div');
-    modal.className = styles.videoModal;
+    modal.className = `${styles.videoModal} ${styles.videoModalWide}`;
     modal.innerHTML = `
       <button class="${styles.videoCloseButton}" id="videoCloseButton">&times;</button>
       <div id="videoModalContent">${this.renderVideoModalContent()}</div>
@@ -1397,33 +1416,40 @@ export class LabelPage {
     const isLast = this.videoModalIndex === this.recordings.length - 1 && !this.pagination?.hasNext;
 
     return `
-      <div class="${styles.videoModalHeader}">
-        <span class="${styles.videoNavInfo}">${globalPosition} / ${globalTotal}${pageInfo}</span>
-        <span class="${styles.videoSelectionBadge} ${isSelected ? styles.videoSelectionBadgeActive : ''}" id="videoSelectionBadge">
-          ${isSelected ? 'Selected' : 'Not Selected'}
-        </span>
-        <span class="${styles.videoUserInfo}" title="${recording.userEmail || ''}">${recording.userFullName}${recording.userEmail ? ` (${recording.userEmail})` : ''}</span>
-      </div>
-      <video class="${styles.videoElement}" controls autoplay>
-        <source src="${recording.videoReadUrl}" type="video/mp4">
-        Your browser does not support the video tag.
-      </video>
-      <div class="${styles.videoModalFooter}">
-        <div class="${styles.videoModalControls}">
-          <button class="${styles.videoNavButton}" id="videoPrevButton" ${isFirst ? 'disabled' : ''}>
-            <i class="fas fa-chevron-left"></i> Prev
-          </button>
-          <button class="${styles.videoNavButton}" id="videoNextButton" ${isLast ? 'disabled' : ''}>
-            Next <i class="fas fa-chevron-right"></i>
-          </button>
+      <div class="${styles.videoModalLayout}">
+        <div class="${styles.videoModalLeft}">
+          <div class="${styles.videoModalHeader}">
+            <span class="${styles.videoNavInfo}">${globalPosition} / ${globalTotal}${pageInfo}</span>
+            <span class="${styles.videoSelectionBadge} ${isSelected ? styles.videoSelectionBadgeActive : ''}" id="videoSelectionBadge">
+              ${isSelected ? 'Selected' : 'Not Selected'}
+            </span>
+            <span class="${styles.videoUserInfo}" title="${recording.userEmail || ''}">${recording.userFullName}${recording.userEmail ? ` (${recording.userEmail})` : ''}</span>
+          </div>
+          <video class="${styles.videoElement}" controls autoplay>
+            <source src="${recording.videoReadUrl}" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+          <div class="${styles.videoModalFooter}">
+            <div class="${styles.videoModalControls}">
+              <button class="${styles.videoNavButton}" id="videoPrevButton" ${isFirst ? 'disabled' : ''}>
+                <i class="fas fa-chevron-left"></i> Prev
+              </button>
+              <button class="${styles.videoNavButton}" id="videoNextButton" ${isLast ? 'disabled' : ''}>
+                Next <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+            <button class="${styles.videoUserButton}" id="videoSeeAllUserButton" ${!recording.userEmail ? 'disabled' : ''}>
+              <i class="fas fa-user"></i> See All User Recordings
+            </button>
+            <label class="${styles.keySchemeToggle}">
+              <input type="checkbox" id="videoBracketToggle" ${this.useBracketKeys ? 'checked' : ''}>
+              [ ] keys
+            </label>
+          </div>
         </div>
-        <button class="${styles.videoUserButton}" id="videoSeeAllUserButton" ${!recording.userEmail ? 'disabled' : ''}>
-          <i class="fas fa-user"></i> See All User Recordings
-        </button>
-        <label class="${styles.keySchemeToggle}">
-          <input type="checkbox" id="videoBracketToggle" ${this.useBracketKeys ? 'checked' : ''}>
-          [ ] keys
-        </label>
+        <div class="${styles.videoModalRight}">
+          ${this.renderQcPanel(recording)}
+        </div>
       </div>
     `;
   }
@@ -1442,6 +1468,13 @@ export class LabelPage {
     bracketToggle?.addEventListener('change', () => {
       this.useBracketKeys = bracketToggle.checked;
     });
+
+    if (this.videoModalIndex !== null) {
+      const recording = this.recordings[this.videoModalIndex];
+      if (recording) {
+        this.attachQcPanelListeners(recording.id);
+      }
+    }
   }
 
   private handleVideoKeyDown = (e: KeyboardEvent): void => {
@@ -1509,6 +1542,13 @@ export class LabelPage {
       this.videoModalIndex = 0;
     } else {
       this.videoModalIndex = newIndex;
+    }
+
+    const newRecording = this.videoModalIndex !== null ? this.recordings[this.videoModalIndex] : null;
+    if (newRecording) {
+      this.qcPanelStatus = newRecording.qcStatus ?? 'unreviewed';
+      this.qcPanelIsDirty = false;
+      this.qcPanelSaving = false;
     }
 
     const contentContainer = document.getElementById('videoModalContent');
@@ -1595,5 +1635,360 @@ export class LabelPage {
     }
     this.videoModalIndex = null;
     document.removeEventListener('keydown', this.handleVideoKeyDown);
+  }
+
+  // ── Deep-link support ────────────────────────────────────────────────────
+
+  private async initFromDeepLink(): Promise<void> {
+    const id = this.pendingRecordingId!;
+    this.pendingRecordingId = null;
+
+    const recordingsSection = document.getElementById('recordingsSection');
+    if (recordingsSection) {
+      recordingsSection.innerHTML = `
+        <div class="${styles.loadingState}">
+          <i class="fas fa-spinner fa-spin"></i>
+          Loading recording…
+        </div>
+      `;
+    }
+
+    try {
+      const recording = await this.fetchRecordingById(id);
+
+      if (recording.userEmail) {
+        this.filters.userEmail = recording.userEmail;
+        const emailInput = document.getElementById('filterEmail') as HTMLInputElement;
+        if (emailInput) emailInput.value = recording.userEmail;
+        this.updateClearSearchButton();
+      }
+
+      await this.searchRecordings();
+
+      const idx = this.recordings.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        this.showVideoModal(idx);
+      } else {
+        // Not on the first page — inject at the front so we can open immediately
+        this.recordings.unshift(recording);
+        this.updateRecordingsGrid();
+        this.showVideoModal(0);
+      }
+    } catch (err) {
+      console.error('Deep-link init failed:', err);
+      if (recordingsSection) {
+        recordingsSection.innerHTML = `
+          <div class="${styles.emptyState}">
+            <i class="fas fa-exclamation-circle"></i>
+            <p>Recording not found or access denied.</p>
+          </div>
+        `;
+      }
+    }
+  }
+
+  private async fetchRecordingById(id: string): Promise<AdminRecording> {
+    const state = LoginStateManager.getInstance().getState();
+    const token = state.tokens?.token;
+    if (!token) throw new Error('Not authenticated');
+
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl) throw new Error('API URL not configured');
+
+    const response = await fetch(`${apiUrl}/admin/recordings/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) LoginStateManager.getInstance().logout();
+      throw new Error(`Failed to fetch recording: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  // ── QC Panel ─────────────────────────────────────────────────────────────
+
+  private renderQcPanel(recording: AdminRecording): string {
+    const qcStatus = this.qcPanelStatus || recording.qcStatus || 'unreviewed';
+    const isValid = qcStatus !== 'invalid';
+
+    const fmtTask = (t: string | null) =>
+      t ? t.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'None';
+
+    const fmtDuration = (s: number | null) => {
+      if (!s) return 'N/A';
+      if (s < 60) return `${Math.round(s)}s`;
+      if (s < 3600) return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+      return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+    };
+
+    const fmtDate = (d: Date | string) =>
+      new Date(d).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    const statusColors: Record<string, string> = {
+      unreviewed: '#888', valid: '#4ade80', flagged: '#fb923c', invalid: '#f87171',
+    };
+
+    // ── User section ─────────────────────────────────────────────────────
+    const userSection = `
+      <div class="${styles.qcSection}">
+        <div class="${styles.qcSectionTitle}"><i class="fas fa-user"></i> User</div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Name</span>
+          <span class="${styles.qcValue}">${recording.userFullName}</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Email</span>
+          <span class="${styles.qcValue}">${recording.userEmail || 'N/A'}</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">User ID</span>
+          <span class="${styles.qcValue} ${styles.qcMono}" title="${recording.userId}">${recording.userId.substring(0, 8)}…</span>
+        </div>
+      </div>
+    `;
+
+    // ── Recording section ─────────────────────────────────────────────────
+    const recordingSection = `
+      <div class="${styles.qcSection}">
+        <div class="${styles.qcSectionTitle}"><i class="fas fa-info-circle"></i> Recording</div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">ID</span>
+          <span class="${styles.qcValue} ${styles.qcMono}" title="${recording.id}">${recording.id.substring(0, 8)}…</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Type</span>
+          <span class="${styles.qcValue}">${recording.videoOnly ? 'Video Only' : 'Tracker'}</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Task</span>
+          <span class="${styles.qcValue}">${fmtTask(recording.taskType)}</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Duration</span>
+          <span class="${styles.qcValue}">${fmtDuration(recording.duration)}</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Version</span>
+          <span class="${styles.qcValue}">${recording.recordingVersion || 'N/A'}</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Completed</span>
+          <span class="${styles.qcValue}">${recording.completed ? 'Yes' : 'No'}</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Created</span>
+          <span class="${styles.qcValue}">${fmtDate(recording.createdAt)}</span>
+        </div>
+        <div class="${styles.qcRow}">
+          <span class="${styles.qcLabel}">Updated</span>
+          <span class="${styles.qcValue}">${fmtDate(recording.updatedAt)}</span>
+        </div>
+      </div>
+    `;
+
+    // ── QC metadata section ───────────────────────────────────────────────
+    const meta = recording.qcMetadata;
+    let metaSection = '';
+    if (meta) {
+      const brightness = typeof meta.average_brightness === 'number' ? Math.round(meta.average_brightness) : null;
+      const handRatio  = typeof meta.hand_presence_ratio === 'number' ? Math.round((meta.hand_presence_ratio as number) * 100) : null;
+      const flow       = typeof meta.average_optical_flow === 'number' ? (meta.average_optical_flow as number).toFixed(2) : null;
+      const rejectReasons = Array.isArray(meta.reject_reasons) ? meta.reject_reasons as string[] : [];
+      const flagReasons   = Array.isArray(meta.flag_reasons)   ? meta.flag_reasons   as string[] : [];
+
+      const scoreRows: string[] = [];
+      if (brightness !== null) scoreRows.push(`
+        <div class="${styles.qcScoreLine}">
+          <span class="${styles.qcLabel}">Brightness</span>
+          <div class="${styles.qcScoreBar}"><div class="${styles.qcScoreBarFill}" style="width:${Math.min(brightness, 100)}%"></div></div>
+          <span class="${styles.qcScoreNum}">${brightness}</span>
+        </div>
+      `);
+      if (handRatio !== null) scoreRows.push(`
+        <div class="${styles.qcScoreLine}">
+          <span class="${styles.qcLabel}">Hands</span>
+          <div class="${styles.qcScoreBar}"><div class="${styles.qcScoreBarFill}" style="width:${handRatio}%"></div></div>
+          <span class="${styles.qcScoreNum}">${handRatio}%</span>
+        </div>
+      `);
+      if (flow !== null) scoreRows.push(`
+        <div class="${styles.qcScoreLine}">
+          <span class="${styles.qcLabel}">Opt. Flow</span>
+          <span class="${styles.qcScoreNum}">${flow}</span>
+        </div>
+      `);
+
+      const reasonTags = [
+        ...rejectReasons.map(r => `<span class="${styles.qcReasonTag} ${styles.qcReasonReject}">${r}</span>`),
+        ...flagReasons.map(r   => `<span class="${styles.qcReasonTag} ${styles.qcReasonFlag}">${r}</span>`),
+      ];
+
+      if (scoreRows.length > 0 || reasonTags.length > 0) {
+        metaSection = `
+          <div class="${styles.qcSection}">
+            <div class="${styles.qcSectionTitle}"><i class="fas fa-chart-bar"></i> QC Scores</div>
+            ${scoreRows.join('')}
+            ${reasonTags.length > 0 ? `<div class="${styles.qcReasonsRow}">${reasonTags.join('')}</div>` : ''}
+          </div>
+        `;
+      } else {
+        metaSection = `
+          <div class="${styles.qcSection}">
+            <div class="${styles.qcSectionTitle}"><i class="fas fa-chart-bar"></i> QC Metadata</div>
+            <pre class="${styles.qcMetaRaw}">${JSON.stringify(meta, null, 2)}</pre>
+          </div>
+        `;
+      }
+    }
+
+    // ── Controls section ──────────────────────────────────────────────────
+    const statusColor = statusColors[qcStatus] || '#888';
+    const controlsSection = `
+      <div class="${styles.qcSection} ${styles.qcControlsSection}">
+        <div class="${styles.qcSectionTitle}"><i class="fas fa-tag"></i> Label</div>
+        <div class="${styles.qcControlRow}">
+          <label class="${styles.qcLabel}" for="qcStatusDropdown">QC Status</label>
+          <select class="${styles.qcStatusSelect}" id="qcStatusDropdown" style="border-color:${statusColor}">
+            <option value="unreviewed" ${qcStatus === 'unreviewed' ? 'selected' : ''}>Unreviewed</option>
+            <option value="valid"      ${qcStatus === 'valid'      ? 'selected' : ''}>Valid</option>
+            <option value="flagged"    ${qcStatus === 'flagged'    ? 'selected' : ''}>Flagged</option>
+            <option value="invalid"    ${qcStatus === 'invalid'    ? 'selected' : ''}>Invalid</option>
+          </select>
+        </div>
+        <div class="${styles.qcControlRow}">
+          <span class="${styles.qcLabel}">Valid</span>
+          <label class="${styles.qcToggleLabel}">
+            <input type="checkbox" id="qcValidCheckbox" ${isValid ? 'checked' : ''}>
+            <span class="${styles.qcToggleText}">${isValid ? 'Yes' : 'No'}</span>
+          </label>
+        </div>
+        <button class="${styles.qcSaveButton}" id="qcSaveButton" ${!this.qcPanelIsDirty || this.qcPanelSaving ? 'disabled' : ''}>
+          ${this.qcPanelSaving
+            ? '<i class="fas fa-spinner fa-spin"></i> Saving…'
+            : '<i class="fas fa-save"></i> Save Changes'}
+        </button>
+      </div>
+    `;
+
+    return `
+      <div class="${styles.qcPanel}">
+        ${userSection}
+        ${recordingSection}
+        ${metaSection}
+        ${controlsSection}
+      </div>
+    `;
+  }
+
+  private attachQcPanelListeners(recordingId: string): void {
+    const dropdown     = document.getElementById('qcStatusDropdown') as HTMLSelectElement;
+    const validCheckbox = document.getElementById('qcValidCheckbox') as HTMLInputElement;
+    const saveBtn      = document.getElementById('qcSaveButton') as HTMLButtonElement;
+
+    if (dropdown) {
+      dropdown.addEventListener('change', () => {
+        this.qcPanelStatus = dropdown.value;
+        this.qcPanelIsDirty = true;
+        // Sync valid toggle
+        if (validCheckbox) {
+          const newValid = this.qcPanelStatus !== 'invalid';
+          validCheckbox.checked = newValid;
+          const text = validCheckbox.nextElementSibling as HTMLElement;
+          if (text) text.textContent = newValid ? 'Yes' : 'No';
+        }
+        // Update dropdown border colour
+        const colors: Record<string, string> = {
+          unreviewed: '#888', valid: '#4ade80', flagged: '#fb923c', invalid: '#f87171',
+        };
+        dropdown.style.borderColor = colors[this.qcPanelStatus] || '#888';
+        if (saveBtn) saveBtn.disabled = false;
+      });
+    }
+
+    if (validCheckbox) {
+      validCheckbox.addEventListener('change', () => {
+        const nowValid = validCheckbox.checked;
+        this.qcPanelStatus = nowValid ? 'valid' : 'invalid';
+        this.qcPanelIsDirty = true;
+        if (dropdown) {
+          dropdown.value = this.qcPanelStatus;
+          const colors: Record<string, string> = {
+            unreviewed: '#888', valid: '#4ade80', flagged: '#fb923c', invalid: '#f87171',
+          };
+          dropdown.style.borderColor = colors[this.qcPanelStatus] || '#888';
+        }
+        const text = validCheckbox.nextElementSibling as HTMLElement;
+        if (text) text.textContent = nowValid ? 'Yes' : 'No';
+        if (saveBtn) saveBtn.disabled = false;
+      });
+    }
+
+    if (saveBtn) {
+      saveBtn.addEventListener('click', () => this.saveQcStatus(recordingId));
+    }
+  }
+
+  private async saveQcStatus(recordingId: string): Promise<void> {
+    if (this.qcPanelSaving) return;
+    this.qcPanelSaving = true;
+
+    const saveBtn = document.getElementById('qcSaveButton') as HTMLButtonElement;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+    }
+
+    try {
+      const state = LoginStateManager.getInstance().getState();
+      const token = state.tokens?.token;
+      if (!token) throw new Error('Not authenticated');
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+      if (!apiUrl) throw new Error('API URL not configured');
+
+      const response = await fetch(`${apiUrl}/admin/recordings/${recordingId}/qc-status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ qcStatus: this.qcPanelStatus }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) LoginStateManager.getInstance().logout();
+        throw new Error(`Save failed: ${response.status}`);
+      }
+
+      // Update local recording state
+      const recording = this.recordings.find(r => r.id === recordingId);
+      if (recording) {
+        recording.qcStatus = this.qcPanelStatus as any;
+        recording.valid = this.qcPanelStatus !== 'invalid';
+      }
+
+      this.qcPanelIsDirty = false;
+      this.updateRecordingsGrid();
+      this.showNotification('QC status saved.', 'success');
+
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-check"></i> Saved';
+      }
+    } catch (err) {
+      console.error('Save failed:', err);
+      this.showNotification('Failed to save. Please try again.', 'error');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+      }
+    } finally {
+      this.qcPanelSaving = false;
+    }
   }
 }
