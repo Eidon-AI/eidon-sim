@@ -8,7 +8,7 @@ export interface AdminRecordingsModalCallbacks {
   onClose: () => void;
 }
 
-type RecordingTypeFilter = 'all' | 'complete' | 'video_only';
+type RecordingTypeFilter = 'all' | 'complete' | 'video_only' | 'flagged';
 
 export class AdminRecordingsModal {
   private modal: HTMLElement | null = null;
@@ -109,11 +109,16 @@ export class AdminRecordingsModal {
     }
 
     // Build URL with filter parameter
-    let url = `${apiUrl}/recordings/admin/all-recordings?page=${page}&limit=${limit}`;
-    if (this.currentFilter === 'video_only') {
-      url += '&videoOnly=true';
-    } else if (this.currentFilter === 'complete') {
-      url += '&videoOnly=false';
+    let url: string;
+    if (this.currentFilter === 'flagged') {
+      url = `${apiUrl}/admin/recordings/search?qcStatus=flagged&page=${page}&limit=${limit}`;
+    } else {
+      url = `${apiUrl}/recordings/admin/all-recordings?page=${page}&limit=${limit}`;
+      if (this.currentFilter === 'video_only') {
+        url += '&videoOnly=true';
+      } else if (this.currentFilter === 'complete') {
+        url += '&videoOnly=false';
+      }
     }
 
     const response = await fetch(url, {
@@ -142,6 +147,9 @@ export class AdminRecordingsModal {
     // Handle both array and object responses
     if (Array.isArray(data)) {
       return data;
+    } else if (data.items && Array.isArray(data.items)) {
+      // search endpoint returns { items, pagination } — normalise
+      return { recordings: data.items, pagination: data.pagination };
     } else if (data.recordings && Array.isArray(data.recordings)) {
       return data;
     } else {
@@ -439,9 +447,10 @@ export class AdminRecordingsModal {
 
     const recordingsGrid = recordings.map(recording => {
       const isVideoOnly = recording.videoOnly;
-      const isValid = recording.valid !== false;
+      const qcStatus = recording.qcStatus ?? 'unreviewed';
+      const isCurrentlyValid = qcStatus !== 'invalid';
       return `
-        <div class="${styles.recordingCard} ${styles.adminRecordingCard} ${!isValid ? styles.invalidRecordingCard : ''}" data-recording-id="${recording.id}">
+        <div class="${styles.recordingCard} ${styles.adminRecordingCard} ${qcStatus === 'invalid' ? styles.invalidRecordingCard : ''}" data-recording-id="${recording.id}">
           <div class="${styles.recordingThumbnail}">
             ${recording.thumbnailReadUrl ?
               `<img src="${recording.thumbnailReadUrl}" alt="Recording thumbnail" />` :
@@ -454,14 +463,13 @@ export class AdminRecordingsModal {
               <i class="fas ${isVideoOnly ? 'fa-video' : 'fa-wave-square'}"></i>
               <span>${isVideoOnly ? 'Video Only' : 'Full Data'}</span>
             </div>
-            <div class="${styles.validBadge} ${isValid ? styles.validBadgeValid : styles.validBadgeInvalid}">
-              ${isValid ? 'Valid' : 'Invalid'}
-            </div>
+            ${this.renderQcBadge(qcStatus)}
           </div>
           <div class="${styles.recordingInfo}">
             <p class="${styles.adminRecordingUser}">${recording.userFullName}${recording.userEmail ? ` (${recording.userEmail})` : ''}</p>
             <h4 class="${styles.recordingTask}">${formatTaskType(recording.taskType)}</h4>
             <p class="${styles.recordingDate}">${formatDate(recording.createdAt.toString())}</p>
+            ${this.renderQcMetadata(recording.qcMetadata)}
             ${isVideoOnly ? `
               <button class="${styles.playbackButton} ${styles.videoOnlyPlaybackButton}" title="Play video">
                 <i class="fas fa-play"></i>
@@ -474,9 +482,9 @@ export class AdminRecordingsModal {
               </button>
             `}
             <div class="${styles.cardActions}">
-              <button class="${styles.cardActionButton} toggle-valid-button" data-recording-id="${recording.id}" data-current-valid="${isValid}" title="${isValid ? 'Mark Invalid' : 'Mark Valid'}">
-                <i class="fas ${isValid ? 'fa-times-circle' : 'fa-check-circle'}"></i>
-                ${isValid ? 'Invalidate' : 'Validate'}
+              <button class="${styles.cardActionButton} toggle-valid-button" data-recording-id="${recording.id}" data-qc-status="${qcStatus}" title="${isCurrentlyValid ? 'Mark Invalid' : 'Mark Valid'}">
+                <i class="fas ${isCurrentlyValid ? 'fa-times-circle' : 'fa-check-circle'}"></i>
+                ${isCurrentlyValid ? 'Invalidate' : 'Validate'}
               </button>
               <button class="${styles.cardActionButton} label-user-button" data-user-email="${recording.userEmail || ''}" title="Label this user's recordings" ${!recording.userEmail ? 'disabled' : ''}>
                 <i class="fas fa-user-tag"></i>
@@ -513,6 +521,10 @@ export class AdminRecordingsModal {
       totalRecordings = pagination?.total ?? (systemTotal - videoOnlyTotal);
       totalSeconds = systemSeconds - videoOnlySeconds;
       headerTitle = 'Complete Recordings';
+    } else if (this.currentFilter === 'flagged') {
+      totalRecordings = pagination?.total ?? recordings.length;
+      totalSeconds = null;
+      headerTitle = 'Flagged Recordings';
     } else {
       totalRecordings = pagination?.total ?? profile?.systemTotalRecordings ?? recordings.length;
       totalSeconds = profile?.systemTotalSeconds ?? null;
@@ -534,6 +546,9 @@ export class AdminRecordingsModal {
         </button>
         <button class="${styles.filterButton} ${this.currentFilter === 'video_only' ? styles.filterButtonActive : ''}" data-filter="video_only">
           <i class="fas fa-video"></i> Video Only
+        </button>
+        <button class="${styles.filterButton} ${this.currentFilter === 'flagged' ? styles.filterButtonActive : ''}" data-filter="flagged" style="${this.currentFilter !== 'flagged' ? 'color:#e65100' : ''}">
+          <i class="fas fa-flag"></i> Flagged
         </button>
       </div>
     `;
@@ -694,9 +709,10 @@ export class AdminRecordingsModal {
         e.stopPropagation();
         const target = e.currentTarget as HTMLElement;
         const recordingId = target.getAttribute('data-recording-id');
-        const currentValid = target.getAttribute('data-current-valid') === 'true';
+        const currentQcStatus = target.getAttribute('data-qc-status') ?? 'unreviewed';
+        const newQcStatus = currentQcStatus === 'invalid' ? 'valid' : 'invalid';
         if (recordingId) {
-          this.toggleRecordingValid(recordingId, !currentValid);
+          this.toggleRecordingQcStatus(recordingId, newQcStatus);
         }
       });
     });
@@ -765,7 +781,7 @@ export class AdminRecordingsModal {
     }
   }
 
-  private async toggleRecordingValid(recordingId: string, valid: boolean): Promise<void> {
+  private async toggleRecordingQcStatus(recordingId: string, newQcStatus: string): Promise<void> {
     const state = this.loginStateManager.getState();
     const tokens = state.tokens;
     if (!tokens?.token) return;
@@ -774,16 +790,13 @@ export class AdminRecordingsModal {
     if (!apiUrl) return;
 
     try {
-      const response = await fetch(`${apiUrl}/admin/recordings/bulk-valid`, {
+      const response = await fetch(`${apiUrl}/admin/recordings/${recordingId}/qc-status`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${tokens.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          recordingIds: [recordingId],
-          valid,
-        }),
+        body: JSON.stringify({ qcStatus: newQcStatus }),
       });
 
       if (!response.ok) {
@@ -796,13 +809,14 @@ export class AdminRecordingsModal {
       // Update local state
       const recording = this.currentRecordings.find(r => r.id === recordingId);
       if (recording) {
-        recording.valid = valid;
+        recording.qcStatus = newQcStatus as any;
+        recording.valid = newQcStatus !== 'invalid';
       }
 
       // Re-render just the card
       this.updateRecordingCard(recordingId);
     } catch (error) {
-      console.error('Failed to toggle recording validity:', error);
+      console.error('Failed to toggle recording QC status:', error);
     }
   }
 
@@ -813,32 +827,72 @@ export class AdminRecordingsModal {
     const recording = this.currentRecordings.find(r => r.id === recordingId);
     if (!card || !recording) return;
 
-    const isValid = recording.valid !== false;
+    const qcStatus = recording.qcStatus ?? 'unreviewed';
+    const isCurrentlyValid = qcStatus !== 'invalid';
 
     // Update card border class
-    if (isValid) {
+    if (isCurrentlyValid) {
       card.classList.remove(styles.invalidRecordingCard);
     } else {
       card.classList.add(styles.invalidRecordingCard);
     }
 
-    // Update valid badge
+    // Update qc badge
     const badge = card.querySelector(`.${styles.validBadge}`) as HTMLElement;
     if (badge) {
-      badge.className = `${styles.validBadge} ${isValid ? styles.validBadgeValid : styles.validBadgeInvalid}`;
-      badge.textContent = isValid ? 'Valid' : 'Invalid';
+      badge.outerHTML = this.renderQcBadge(qcStatus);
     }
 
     // Update toggle button
     const toggleBtn = card.querySelector('.toggle-valid-button') as HTMLElement;
     if (toggleBtn) {
-      toggleBtn.setAttribute('data-current-valid', String(isValid));
-      toggleBtn.title = isValid ? 'Mark Invalid' : 'Mark Valid';
+      toggleBtn.setAttribute('data-qc-status', qcStatus);
+      toggleBtn.title = isCurrentlyValid ? 'Mark Invalid' : 'Mark Valid';
       toggleBtn.innerHTML = `
-        <i class="fas ${isValid ? 'fa-times-circle' : 'fa-check-circle'}"></i>
-        ${isValid ? 'Invalidate' : 'Validate'}
+        <i class="fas ${isCurrentlyValid ? 'fa-times-circle' : 'fa-check-circle'}"></i>
+        ${isCurrentlyValid ? 'Invalidate' : 'Validate'}
       `;
     }
+  }
+
+  private renderQcBadge(qcStatus: string): string {
+    const config: Record<string, { label: string; extraStyle: string; extraClass: string }> = {
+      unreviewed: { label: 'Unreviewed', extraStyle: 'background:#666',    extraClass: '' },
+      valid:      { label: 'Valid',      extraStyle: '',                    extraClass: styles.validBadgeValid },
+      flagged:    { label: 'Flagged',    extraStyle: 'background:#e65100',  extraClass: '' },
+      invalid:    { label: 'Invalid',    extraStyle: '',                    extraClass: styles.validBadgeInvalid },
+    };
+    const c = config[qcStatus] ?? config['unreviewed'];
+    const style = c.extraStyle ? ` style="${c.extraStyle}"` : '';
+    return `<div class="${styles.validBadge} ${c.extraClass}"${style}>${c.label}</div>`;
+  }
+
+  private renderQcMetadata(qcMetadata: Record<string, unknown> | null | undefined): string {
+    if (!qcMetadata) return '';
+
+    const brightness = typeof qcMetadata.average_brightness === 'number'
+      ? Math.round(qcMetadata.average_brightness) : null;
+    const handRatio = typeof qcMetadata.hand_presence_ratio === 'number'
+      ? Math.round((qcMetadata.hand_presence_ratio as number) * 100) : null;
+    const flow = typeof qcMetadata.average_optical_flow === 'number'
+      ? (qcMetadata.average_optical_flow as number).toFixed(1) : null;
+    const rejectReasons = Array.isArray(qcMetadata.reject_reasons) ? qcMetadata.reject_reasons as string[] : [];
+    const flagReasons   = Array.isArray(qcMetadata.flag_reasons)   ? qcMetadata.flag_reasons   as string[] : [];
+
+    const scores = [
+      brightness !== null ? `Brightness: ${brightness}` : '',
+      handRatio  !== null ? `Hands: ${handRatio}%`       : '',
+      flow       !== null ? `Flow: ${flow}`               : '',
+    ].filter(Boolean).join('  ·  ');
+
+    const reasons = [...rejectReasons, ...flagReasons];
+    if (!scores && reasons.length === 0) return '';
+
+    return `
+      <div style="font-size:11px;color:#999;margin-top:4px;border-top:1px solid rgba(255,255,255,0.1);padding-top:4px;line-height:1.5;">
+        ${scores ? `<div>${scores}</div>` : ''}
+        ${reasons.length > 0 ? `<div style="color:#e88">↳ ${reasons.join(', ')}</div>` : ''}
+      </div>`;
   }
 
   private findRecordingById(recordingId: string): AdminRecording | null {
