@@ -11,6 +11,7 @@ interface SearchFilters {
   videoOnly: string;
   valid: string;
   taskType: string;
+  qcStatus: string;
   page: number;
   limit: number;
 }
@@ -53,6 +54,7 @@ export class LabelPage {
     videoOnly: '',
     valid: '',
     taskType: '',
+    qcStatus: '',
     page: 1,
     limit: 20,
   };
@@ -411,6 +413,16 @@ export class LabelPage {
             <option value="making_the_bed">Making the Bed</option>
             <option value="watering_plants">Watering Plants</option>
             <option value="doing_the_dishes">Doing the Dishes</option>
+          </select>
+        </div>
+        <div class="${styles.filterGroup}">
+          <label class="${styles.filterLabel}">QC Status</label>
+          <select class="${styles.filterSelect}" id="filterQcStatus">
+            <option value="">All</option>
+            <option value="unreviewed" ${this.filters.qcStatus === 'unreviewed' ? 'selected' : ''}>Unreviewed</option>
+            <option value="valid"      ${this.filters.qcStatus === 'valid'      ? 'selected' : ''}>Valid</option>
+            <option value="flagged"    ${this.filters.qcStatus === 'flagged'    ? 'selected' : ''}>Flagged</option>
+            <option value="invalid"    ${this.filters.qcStatus === 'invalid'    ? 'selected' : ''}>Invalid</option>
           </select>
         </div>
         <div class="${styles.filterGroup}">
@@ -794,7 +806,8 @@ export class LabelPage {
       this.filters.endDate ||
       this.filters.videoOnly ||
       this.filters.valid ||
-      this.filters.taskType
+      this.filters.taskType ||
+      this.filters.qcStatus
     );
   }
 
@@ -807,6 +820,7 @@ export class LabelPage {
       videoOnly: '',
       valid: '',
       taskType: '',
+      qcStatus: '',
       page: 1,
       limit: this.filters.limit,
     };
@@ -819,6 +833,7 @@ export class LabelPage {
     const videoOnly = document.getElementById('filterVideoOnly') as HTMLSelectElement;
     const valid = document.getElementById('filterValid') as HTMLSelectElement;
     const taskType = document.getElementById('filterTaskType') as HTMLSelectElement;
+    const qcStatus = document.getElementById('filterQcStatus') as HTMLSelectElement;
 
     if (email) email.value = '';
     if (startDate) startDate.value = '';
@@ -826,6 +841,7 @@ export class LabelPage {
     if (videoOnly) videoOnly.value = '';
     if (valid) valid.value = '';
     if (taskType) taskType.value = '';
+    if (qcStatus) qcStatus.value = '';
 
     this.searchRecordings();
   }
@@ -852,6 +868,8 @@ export class LabelPage {
     this.filters.videoOnly = videoOnly?.value || '';
     this.filters.valid = valid?.value || '';
     this.filters.taskType = taskType?.value || '';
+    const qcStatusEl = document.getElementById('filterQcStatus') as HTMLSelectElement;
+    this.filters.qcStatus = qcStatusEl?.value || '';
   }
 
   private async searchRecordings(): Promise<void> {
@@ -889,6 +907,7 @@ export class LabelPage {
       if (this.filters.videoOnly) params.set('videoOnly', this.filters.videoOnly);
       if (this.filters.valid) params.set('valid', this.filters.valid);
       if (this.filters.taskType) params.set('taskType', this.filters.taskType);
+      if (this.filters.qcStatus) params.set('qcStatus', this.filters.qcStatus);
 
       const response = await fetch(`${apiUrl}/admin/recordings/search?${params.toString()}`, {
         method: 'GET',
@@ -1441,6 +1460,9 @@ export class LabelPage {
             <button class="${styles.videoUserButton}" id="videoSeeAllUserButton" ${!recording.userEmail ? 'disabled' : ''}>
               <i class="fas fa-user"></i> See All User Recordings
             </button>
+            <button class="${styles.videoUserButton}" id="videoCopyLinkButton" title="Copy link to this recording">
+              <i class="fas fa-link"></i> Copy Link
+            </button>
             <label class="${styles.keySchemeToggle}">
               <input type="checkbox" id="videoBracketToggle" ${this.useBracketKeys ? 'checked' : ''}>
               [ ] keys
@@ -1465,6 +1487,19 @@ export class LabelPage {
     nextButton?.addEventListener('click', () => this.navigateVideo(1));
     selectionBadge?.addEventListener('click', () => this.toggleCurrentRecordingSelection());
     seeAllUserButton?.addEventListener('click', () => this.seeAllUserRecordingsFromModal());
+
+    const copyLinkButton = document.getElementById('videoCopyLinkButton');
+    copyLinkButton?.addEventListener('click', () => {
+      if (this.videoModalIndex === null) return;
+      const recording = this.recordings[this.videoModalIndex];
+      if (!recording) return;
+      const url = `${window.location.origin}/label?recordingId=${recording.id}`;
+      navigator.clipboard.writeText(url).then(() => {
+        this.showNotification('Link copied to clipboard!', 'success');
+      }).catch(() => {
+        this.showNotification('Failed to copy link.', 'error');
+      });
+    });
     bracketToggle?.addEventListener('change', () => {
       this.useBracketKeys = bracketToggle.checked;
     });
