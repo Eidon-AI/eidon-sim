@@ -738,7 +738,7 @@ export class AdminRecordingsModal {
         const target = e.currentTarget as HTMLElement;
         const recordingId = target.getAttribute('data-recording-id');
         if (recordingId) {
-          const url = `${window.location.origin}?recordingId=${recordingId}`;
+          const url = `${window.location.origin}/label?recordingId=${recordingId}`;
           try {
             await navigator.clipboard.writeText(url);
             const icon = target.querySelector('i');
