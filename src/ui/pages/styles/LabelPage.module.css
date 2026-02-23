@@ -525,8 +525,18 @@
   z-index: 2;
 }
 
+.validBadgeUnreviewed {
+  background: rgba(156, 163, 175, 0.9);
+  color: white;
+}
+
 .validBadgeValid {
   background: rgba(34, 197, 94, 0.9);
+  color: white;
+}
+
+.validBadgeFlagged {
+  background: rgba(251, 146, 60, 0.9);
   color: white;
 }
 
