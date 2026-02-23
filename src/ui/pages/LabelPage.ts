@@ -603,10 +603,33 @@ export class LabelPage {
 
     const grid = this.recordings.map(recording => {
       const isSelected = this.selectedIds.has(recording.id);
-      const isValid = recording.valid !== false;
+      const qcStatus = recording.qcStatus || 'unreviewed';
+
+      // Map qcStatus to badge style and display text
+      const getBadgeClass = (status: string) => {
+        switch(status) {
+          case 'valid': return styles.validBadgeValid;
+          case 'invalid': return styles.validBadgeInvalid;
+          case 'flagged': return styles.validBadgeFlagged;
+          case 'unreviewed':
+          default: return styles.validBadgeUnreviewed;
+        }
+      };
+
+      const getBadgeText = (status: string) => {
+        switch(status) {
+          case 'valid': return 'Valid';
+          case 'invalid': return 'Invalid';
+          case 'flagged': return 'Flagged';
+          case 'unreviewed':
+          default: return 'Unreviewed';
+        }
+      };
+
+      const isInvalid = qcStatus === 'invalid';
 
       return `
-        <div class="${styles.recordingCard} ${isSelected ? styles.recordingCardSelected : ''} ${!isValid ? styles.recordingCardInvalid : ''}"
+        <div class="${styles.recordingCard} ${isSelected ? styles.recordingCardSelected : ''} ${isInvalid ? styles.recordingCardInvalid : ''}"
              data-recording-id="${recording.id}">
           <div class="${styles.recordingThumbnail}">
             ${recording.thumbnailReadUrl ?
@@ -619,8 +642,8 @@ export class LabelPage {
             <div class="${styles.selectionCheckbox}">
               ${isSelected ? '<i class="fas fa-check"></i>' : ''}
             </div>
-            <div class="${styles.validBadge} ${isValid ? styles.validBadgeValid : styles.validBadgeInvalid}">
-              ${isValid ? 'Valid' : 'Invalid'}
+            <div class="${styles.validBadge} ${getBadgeClass(qcStatus)}">
+              ${getBadgeText(qcStatus)}
             </div>
             <div class="${styles.typeBadge} ${recording.videoOnly ? styles.typeBadgeVideoOnly : styles.typeBadgeTracker}">
               <i class="fas ${recording.videoOnly ? 'fa-video' : 'fa-wave-square'}"></i> ${recording.videoOnly ? 'Video Only' : 'Tracker Data'}
