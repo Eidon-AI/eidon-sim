@@ -1858,6 +1858,8 @@ export class LabelPage {
       const flow       = typeof meta.average_optical_flow === 'number' ? (meta.average_optical_flow as number).toFixed(2) : null;
       const rejectReasons = Array.isArray(meta.reject_reasons) ? meta.reject_reasons as string[] : [];
       const flagReasons   = Array.isArray(meta.flag_reasons)   ? meta.flag_reasons   as string[] : [];
+      const objectsDetected = Array.isArray(meta.objects_detected) ? meta.objects_detected as string[] : [];
+      const validReasons  = Array.isArray(meta.valid_reasons)  ? meta.valid_reasons  as string[] : [];
 
       const scoreRows: string[] = [];
       if (brightness !== null) scoreRows.push(`
@@ -1881,15 +1883,29 @@ export class LabelPage {
         </div>
       `);
 
+      // Objects section (most valuable for valid recordings)
+      const objectTags = objectsDetected.map(obj =>
+        `<span class="${styles.qcObjectTag}">${obj}</span>`
+      );
+
       const reasonTags = [
+        ...validReasons.map(r  => `<span class="${styles.qcReasonTag} ${styles.qcReasonValid}">${r}</span>`),
         ...rejectReasons.map(r => `<span class="${styles.qcReasonTag} ${styles.qcReasonReject}">${r}</span>`),
         ...flagReasons.map(r   => `<span class="${styles.qcReasonTag} ${styles.qcReasonFlag}">${r}</span>`),
       ];
 
-      if (scoreRows.length > 0 || reasonTags.length > 0) {
-        metaSection = `
+      if (scoreRows.length > 0 || reasonTags.length > 0 || objectTags.length > 0) {
+        const objectSection = objectTags.length > 0 ? `
           <div class="${styles.qcSection}">
-            <div class="${styles.qcSectionTitle}"><i class="fas fa-chart-bar"></i> QC Scores</div>
+            <div class="${styles.qcSectionTitle}"><i class="fas fa-cube"></i> Objects Detected</div>
+            <div class="${styles.qcObjectsRow}">${objectTags.join('')}</div>
+          </div>
+        ` : '';
+
+        metaSection = `
+          ${objectSection}
+          <div class="${styles.qcSection}">
+            <div class="${styles.qcSectionTitle}"><i class="fas fa-chart-bar"></i> QC Analysis</div>
             ${scoreRows.join('')}
             ${reasonTags.length > 0 ? `<div class="${styles.qcReasonsRow}">${reasonTags.join('')}</div>` : ''}
           </div>

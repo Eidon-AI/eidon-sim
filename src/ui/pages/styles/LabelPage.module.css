@@ -1460,6 +1460,29 @@
   border: 1px solid rgba(251, 146, 60, 0.3);
 }
 
+.qcReasonValid {
+  background: rgba(74, 222, 128, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.qcObjectsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.qcObjectTag {
+  font-size: 0.65rem;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-weight: 500;
+  background: rgba(147, 197, 253, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(147, 197, 253, 0.25);
+}
+
 .qcMetaRaw {
   font-size: 0.65rem;
   color: rgba(255, 255, 255, 0.5);
