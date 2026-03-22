@@ -191,8 +191,10 @@ export class GloveManager extends EventTarget {
     const y = dv.getFloat32(8,  true);
     const z = dv.getFloat32(12, true);
 
-    // gl-matrix stores as [x, y, z, w]; negate X to match firmware axis convention
-    const q: quat = [-x, y, z, w];
+    // gl-matrix stores as [x, y, z, w].
+    // Negate x and y: without both negations the forward vector renders on the opposite side
+    // and pitch is inverted. z and w are kept as-is. Empirically verified correct mapping.
+    const q: quat = [-x, -y, z, w];
     dev.quat = q;
 
     const { up, fwd } = quaternionToVectors(q);
