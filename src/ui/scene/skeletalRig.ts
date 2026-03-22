@@ -234,19 +234,14 @@ export class SkeletalRig {
     // Prevent updates after destruction
     if (this.isDestroyed) return;
 
-    const gloveRole    = side === 'left' ? DeviceRole.ROLE_LEFT_GLOVE : DeviceRole.ROLE_RIGHT_GLOVE;
-    const glovePresent = !!this.store.getByPosition(gloveRole);
+    const gloveRole = side === 'left' ? DeviceRole.ROLE_LEFT_GLOVE : DeviceRole.ROLE_RIGHT_GLOVE;
 
     if (this.isolatedHandMode) {
       if (side !== this.isolatedHandSide) return; // skip non-isolated side entirely
       this.applySideQuaternion(side);
-    } else if (glovePresent) {
-      // Glove present: quaternion path
-      // - With arm trackers: shoulder/elbow follow trackers, wrist follows glove
-      // - Without arm trackers: shoulder/elbow stay at initialPoseQuat (arms forward),
-      //   wrist follows glove IMU
-      this.applySideQuaternion(side);
     } else {
+      // Glove is treated as a regular hand IMU — ArmSolver already falls back to
+      // gloveRole when no hand tracker is present, so the actuator path handles it.
       this.applySideActuatorAngles(side);
     }
 
