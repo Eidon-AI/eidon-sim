@@ -6,6 +6,8 @@ import { SensorRecording } from '../../../types/sensorData';
 import { fetchSensorData } from '../../../utils/sensorDataFetch';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
 import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
+import { GloveManager } from '../../../core/GloveManager';
+import { DeviceStore } from '../../../core/DeviceStore';
 import { DeviceModal } from '../device-modal/DeviceModal';
 import { AuthManager } from '../../../core/AuthManager';
 import { UserApiManager } from '../../../core/UserApiManager';
@@ -25,6 +27,8 @@ export class Controls {
   private loginStateManager: LoginStateManager;
   private trackerManager: EidonTrackerManager;
   private deviceConnectionStateManager: DeviceConnectionStateManager;
+  private gloveManager: GloveManager | null = null;
+  private store: DeviceStore | null = null;
   private authModal: AuthModal | null = null;
   private deviceModal: DeviceModal | null = null;
   private recordingsModal: RecordingsModal | null = null;
@@ -37,10 +41,12 @@ export class Controls {
   private latestVersionUnsubscribe: (() => void) | null = null;
   private latestVersionManager: LatestVersionManager;
   
-  constructor(playbackManager: PlaybackManager, trackerManager: EidonTrackerManager, deviceConnectionStateManager: DeviceConnectionStateManager) {
+  constructor(playbackManager: PlaybackManager, trackerManager: EidonTrackerManager, deviceConnectionStateManager: DeviceConnectionStateManager, gloveManager?: GloveManager, store?: DeviceStore) {
     this.playbackManager = playbackManager;
     this.trackerManager = trackerManager;
     this.deviceConnectionStateManager = deviceConnectionStateManager;
+    this.gloveManager = gloveManager ?? null;
+    this.store = store ?? null;
     this.loginStateManager = LoginStateManager.getInstance();
     this.latestVersionManager = LatestVersionManager.getInstance();
     this.container = this.createContainer();
@@ -294,7 +300,7 @@ export class Controls {
   private constructDeviceModal(): void {
     if (this.deviceModal) return; // Already constructed
     
-    this.deviceModal = new DeviceModal(this.trackerManager, this.deviceConnectionStateManager);
+    this.deviceModal = new DeviceModal(this.trackerManager, this.deviceConnectionStateManager, this.gloveManager ?? undefined, this.store ?? undefined);
     this.deviceModal.mount(this.container.parentElement!);
     // Modal starts in closed state by default
   }

@@ -184,27 +184,34 @@ export class PlaybackManager extends EventTarget {
     // No reordering needed — the Flutter app already converts from BLE [w,x,y,z] to [x,y,z,w]
     for (const [deviceId, quatArray] of Object.entries(snapshot.deviceData)) {
       const q: quat = [quatArray[0], quatArray[1], quatArray[2], quatArray[3]]; // already [x, y, z, w]
-      
-      // Prepare the updates object with quaternion
-      const updates: any = {
-        quat: q
-      };
 
-      // Recalculate derived vectors from quaternion (all devices are trackers)
+      const updates: any = { quat: q };
       const deviceState = this.store['map'].get(deviceId);
-      
+
       if (deviceState) {
-        // Transform quaternion to up/fwd vectors using centralized function
         const { up, fwd } = quaternionToVectors(q);
         updates.up = up;
         updates.fwd = fwd;
-        
-        // Ensure userId is set to 'playback' during playback
-        // This ensures devices remain marked as playback devices even if they were updated
         updates.userId = 'playback';
-
-        // Apply updates using the playback method
         this.store.updateDeviceForPlayback(deviceId, updates);
+      }
+    }
+
+    // Apply finger data for glove devices
+    if (snapshot.fingerData) {
+      for (const [deviceId, fingerValues] of Object.entries(snapshot.fingerData)) {
+        const dev = this.store['map'].get(deviceId);
+        if (!dev) continue;
+
+        // Normalize: flutter recordings store raw uint16 (0-65535)
+        // If all values are <= 1 they're already normalized
+        const norm = fingerValues.map((v: number) => v > 1 ? v / 65535 : v);
+
+        // Apply EMA smoothing
+        const alpha = 0.3;
+        const prev  = dev.fingerSmooth ?? Array(16).fill(0);
+        dev.fingerSmooth = prev.map((p, i) => p + (norm[i] - p) * alpha);
+        dev.fingerNorm   = norm;
       }
     }
   }

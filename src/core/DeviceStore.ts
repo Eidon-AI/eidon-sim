@@ -84,6 +84,18 @@ export class DeviceStore extends EventTarget {
     );
   }
 
+  /** Add or replace a device (used by GloveManager) */
+  upsertDevice(device: Device): void {
+    this.map.set(device.id, device);
+    this.dispatchEvent(new CustomEvent('update', { detail: device }));
+  }
+
+  /** Remove a device by id (used by GloveManager on disconnect) */
+  removeDevice(id: string): void {
+    this.map.delete(id);
+    document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id } }));
+  }
+
   destroy(): void {
     // Clean up document event listener
     document.removeEventListener('deviceColor', this.boundHandleDeviceColor);

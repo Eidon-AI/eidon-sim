@@ -2,8 +2,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { DeviceStore } from '../../core/DeviceStore';
+import { DeviceRole } from '../../types/device';
 import { ArmSolver } from '../../core/ArmSolver';
 import { VectorArm } from './vectorArm';
+import { VectorHand } from './VectorHand';
+import { ProceduralHand } from './ProceduralHand';
 import { ChestVector } from './chestVector';
 import { SkeletalRig } from './skeletalRig';
 import { CameraControl } from '../components/CameraControl';
@@ -320,9 +323,13 @@ export function initScene(
   }
   
   /* ------------ scene objects ------------------- */
-  const leftArm = new VectorArm(scene, store, 'left');
-  const rightArm = new VectorArm(scene, store, 'right');
-  const chestVector = new ChestVector(scene, store);
+  const leftArm       = new VectorArm(scene, store, 'left');
+  const rightArm      = new VectorArm(scene, store, 'right');
+  const leftHand      = new VectorHand(scene, store, 'left');
+  const rightHand     = new VectorHand(scene, store, 'right');
+  const leftProcHand  = new ProceduralHand(scene, store, 'left');
+  const rightProcHand = new ProceduralHand(scene, store, 'right');
+  const chestVector   = new ChestVector(scene, store);
 
   // Model arrays - we'll populate these based on toggle state
   let rigs: SkeletalRig[] = [];
@@ -426,6 +433,8 @@ export function initScene(
       case 'vectorArms':
         leftArm.setVisible(enabled);
         rightArm.setVisible(enabled);
+        leftHand.setVisible(enabled);
+        rightHand.setVisible(enabled);
         break;
       case 'chestVector':
         chestVector.setVisible(enabled);
@@ -439,6 +448,33 @@ export function initScene(
           switchModelMode(enabled, currentRiggedModelState);
         }
         break;
+      case 'gloveHand': {
+        if (enabled) {
+          // Hide body and vector overlays
+          rigs.forEach(rig => rig.setVisible(false));
+          leftArm.setVisible(false);
+          rightArm.setVisible(false);
+          leftHand.setVisible(false);
+          rightHand.setVisible(false);
+          chestVector.setVisible(false);
+          // Show procedural hand(s) for any connected glove
+          leftProcHand.setVisible(true);
+          rightProcHand.setVisible(true);
+        } else {
+          // Hide procedural hands
+          leftProcHand.setVisible(false);
+          rightProcHand.setVisible(false);
+          // Restore previous toggle states
+          const { riggedModel, vectorArms, chestVector: chestVec } = viewControls.getState();
+          rigs.forEach(rig => rig.setVisible(riggedModel));
+          leftArm.setVisible(vectorArms);
+          rightArm.setVisible(vectorArms);
+          leftHand.setVisible(vectorArms);
+          rightHand.setVisible(vectorArms);
+          chestVector.setVisible(chestVec);
+        }
+        break;
+      }
     }
   });
 
@@ -508,6 +544,10 @@ export function initScene(
       // Clean up components
       leftArm.destroy();
       rightArm.destroy();
+      leftHand.destroy();
+      rightHand.destroy();
+      leftProcHand.destroy();
+      rightProcHand.destroy();
       chestVector.destroy();
       cleanupModels(); // Use our new cleanup function
       cameraControl.unmount();

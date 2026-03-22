@@ -100,8 +100,9 @@ export class ArmSolver extends EventTarget {
     const up   = this.store.getByPosition(upRole);
     const low  = this.store.getByPosition(lowRole);
     if(!up || !low) return null;
-  
-    const handDev = this.store.getByPosition(handRole);         // glove optional
+
+    const gloveRole = side === 'left' ? DeviceRole.ROLE_LEFT_GLOVE : DeviceRole.ROLE_RIGHT_GLOVE;
+    const handDev = this.store.getByPosition(handRole) ?? this.store.getByPosition(gloveRole);
   
     const Q_TU = up.quat;
     const Q_TF = low.quat;

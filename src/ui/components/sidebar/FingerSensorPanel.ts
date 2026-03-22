@@ -1,119 +1,118 @@
-// Finger sensor visualization panel for glove devices
-// Shows 16 real-time bars representing finger sensor values (0.0-1.0)
+/**
+ * FingerSensorPanel – compact canvas finger visualization for glove cards.
+ *
+ * Channel layout (matches JOINT_MAP in ProceduralHand):
+ *   0  Thumb  CMC_ABD     4  Index  MCP_ABD     7  Middle MCP_ABD
+ *   1  Thumb  CMC_FLEX    5  Index  MCP_FLEX     8  Middle MCP_FLEX
+ *   2  Thumb  MCP_FLEX    6  Index  PIP_FLEX     9  Middle PIP_FLEX
+ *   3  Thumb  IP_FLEX    10  Ring   MCP_ABD    13  Pinky  MCP_ABD
+ *                        11  Ring   MCP_FLEX   14  Pinky  MCP_FLEX
+ *                        12  Ring   PIP_FLEX   15  Pinky  PIP_FLEX
+ */
 
-import styles from './styles/FingerSensorPanel.module.css';
+const LABELS   = ['T', 'I', 'M', 'R', 'P'];
+const BAR_W    = 14;
+const BAR_H    = 48;
+const GAP      = 5;
+const PAD_X    = 6;
+const PAD_TOP  = 4;
+const LABEL_H  = 12;
+const SEG_GAP  = 2;   // gap between proximal / distal segments
+const CANVAS_W = PAD_X * 2 + 5 * BAR_W + 4 * GAP;
+const CANVAS_H = PAD_TOP + BAR_H + LABEL_H;
 
-// Finger sensor names matching firmware (16 sensors)
-const FINGER_NAMES = [
-  'Thumb CMC', 'Thumb MCP', 'Thumb IP', 'Thumb Flex',
-  'Index MCP', 'Index PIP', 'Index DIP', 'Index Flex',
-  'Middle MCP', 'Middle PIP', 'Middle DIP', 'Middle Flex',
-  'Ring MCP', 'Ring PIP', 'Ring DIP', 'Ring Flex'
+/** Per-finger channel indices: [proximal-flex, distal-flex] */
+const FLEX_IDX: [number, number][] = [
+  [1, 3],   // Thumb:  CMC_FLEX, IP_FLEX
+  [5, 6],   // Index:  MCP_FLEX, PIP_FLEX
+  [8, 9],   // Middle: MCP_FLEX, PIP_FLEX
+  [11, 12], // Ring:   MCP_FLEX, PIP_FLEX
+  [14, 15], // Pinky:  MCP_FLEX, PIP_FLEX
 ];
 
+function flexColor(v: number): string {
+  // cyan (extended) → orange (flexed)
+  const r = Math.round(20  + 235 * v);
+  const g = Math.round(200 - 110 * v);
+  const b = Math.round(220 - 190 * v);
+  return `rgb(${r},${g},${b})`;
+}
+
 export class FingerSensorPanel {
-  private root: HTMLElement;
-  private deviceId: string;
-  private bars: HTMLElement[] = [];
-  private valueLabels: HTMLElement[] = [];
-  private eventHandler: ((e: Event) => void) | null = null;
+  private root:          HTMLElement;
+  private canvas:        HTMLCanvasElement;
+  private ctx:           CanvasRenderingContext2D;
+  private deviceId:      string;
+  private eventHandler:  ((e: Event) => void) | null = null;
 
   constructor(deviceId: string) {
     this.deviceId = deviceId;
+
     this.root = document.createElement('div');
-    this.root.className = styles.fingerPanel;
-    this.createUI();
-    this.setupEventListener();
+    this.root.style.cssText = 'display:flex;flex-direction:column;align-items:center;margin:4px 0 6px;gap:2px';
+
+    const title = document.createElement('span');
+    title.textContent = 'Fingers';
+    title.style.cssText = 'font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.05em';
+    this.root.appendChild(title);
+
+    this.canvas = document.createElement('canvas');
+    this.canvas.width  = CANVAS_W;
+    this.canvas.height = CANVAS_H;
+    this.canvas.style.cssText = 'display:block;image-rendering:pixelated';
+    this.root.appendChild(this.canvas);
+
+    this.ctx = this.canvas.getContext('2d')!;
+    this._draw(new Array(16).fill(0));
+    this._listen();
   }
 
-  private createUI(): void {
-    // Create header
-    const header = document.createElement('div');
-    header.className = styles.header;
-    header.textContent = 'Finger Sensors';
-    this.root.appendChild(header);
+  private _draw(src: number[]): void {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
-    // Create sensor grid
-    const grid = document.createElement('div');
-    grid.className = styles.sensorGrid;
+    for (let f = 0; f < 5; f++) {
+      const x   = PAD_X + f * (BAR_W + GAP);
+      const [pi, di] = FLEX_IDX[f];
+      const prox = src[pi] ?? 0;
+      const dist = src[di] ?? 0;
 
-    for (let i = 0; i < 16; i++) {
-      const sensorItem = document.createElement('div');
-      sensorItem.className = styles.sensorItem;
+      // Each bar split into 2 equal segments with a small gap
+      const segH = (BAR_H - SEG_GAP) / 2;
 
-      // Sensor label
-      const label = document.createElement('div');
-      label.className = styles.sensorLabel;
-      label.textContent = FINGER_NAMES[i];
-      sensorItem.appendChild(label);
+      // Bottom segment = distal (DIP/IP)
+      const y2 = PAD_TOP + segH + SEG_GAP;
+      ctx.fillStyle = '#1e2a2a';
+      ctx.fillRect(x, y2, BAR_W, segH);
+      const fill2 = Math.round(dist * segH);
+      ctx.fillStyle = flexColor(dist);
+      ctx.fillRect(x, y2 + segH - fill2, BAR_W, fill2);
 
-      // Bar container
-      const barContainer = document.createElement('div');
-      barContainer.className = styles.barContainer;
+      // Top segment = proximal (MCP/CMC)
+      const y1 = PAD_TOP;
+      ctx.fillStyle = '#1e2a2a';
+      ctx.fillRect(x, y1, BAR_W, segH);
+      const fill1 = Math.round(prox * segH);
+      ctx.fillStyle = flexColor(prox);
+      ctx.fillRect(x, y1 + segH - fill1, BAR_W, fill1);
 
-      // Bar fill
-      const bar = document.createElement('div');
-      bar.className = styles.bar;
-      bar.style.width = '0%';
-      barContainer.appendChild(bar);
-
-      sensorItem.appendChild(barContainer);
-
-      // Value label
-      const valueLabel = document.createElement('div');
-      valueLabel.className = styles.valueLabel;
-      valueLabel.textContent = '0.00';
-      sensorItem.appendChild(valueLabel);
-
-      grid.appendChild(sensorItem);
-
-      this.bars.push(bar);
-      this.valueLabels.push(valueLabel);
+      // Letter label
+      ctx.fillStyle = '#777';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(LABELS[f], x + BAR_W / 2, PAD_TOP + BAR_H + LABEL_H - 2);
     }
-
-    this.root.appendChild(grid);
   }
 
-  private setupEventListener(): void {
-    this.eventHandler = ((e: Event) => {
-      const event = e as CustomEvent<{ deviceId: string; fingerValues: number[] }>;
-      const { deviceId, fingerValues } = event.detail;
-
-      // Only update if this is our device
-      if (deviceId === this.deviceId) {
-        this.updateValues(fingerValues);
-      }
-    }) as EventListener;
-
+  private _listen(): void {
+    this.eventHandler = (e: Event) => {
+      const { deviceId, fingerValues } = (e as CustomEvent).detail;
+      if (deviceId === this.deviceId) this._draw(fingerValues);
+    };
     document.addEventListener('fingerDataUpdate', this.eventHandler);
   }
 
-  private updateValues(values: number[]): void {
-    for (let i = 0; i < Math.min(16, values.length); i++) {
-      const value = values[i];
-
-      // Update bar width (0.0-1.0 -> 0%-100%)
-      this.bars[i].style.width = `${value * 100}%`;
-
-      // Color gradient: green (0.0) -> yellow (0.5) -> red (1.0)
-      if (value < 0.5) {
-        const g = 255;
-        const r = Math.round(255 * (value * 2)); // 0 -> 255
-        this.bars[i].style.backgroundColor = `rgb(${r}, ${g}, 0)`;
-      } else {
-        const r = 255;
-        const g = Math.round(255 * (2 - value * 2)); // 255 -> 0
-        this.bars[i].style.backgroundColor = `rgb(${r}, ${g}, 0)`;
-      }
-
-      // Update value label
-      this.valueLabels[i].textContent = value.toFixed(2);
-    }
-  }
-
-  public mount(parent: HTMLElement): void {
-    parent.appendChild(this.root);
-  }
+  public mount(parent: HTMLElement): void { parent.appendChild(this.root); }
 
   public unmount(): void {
     if (this.eventHandler) {
@@ -123,7 +122,5 @@ export class FingerSensorPanel {
     this.root.remove();
   }
 
-  public getElement(): HTMLElement {
-    return this.root;
-  }
+  public getElement(): HTMLElement { return this.root; }
 }

@@ -29,6 +29,13 @@ export class SkeletalRig {
   private pendingScale: number = 1.0;
   private rigId: string;
   private isDestroyed: boolean = false; // Flag to prevent updates after destruction
+  private isolatedHandMode = false;
+  private isolatedHandSide: Side = 'right';
+  // Wrist offset from root in default pose, computed once after GLTF loads
+  private wristLocalFromRoot: Record<Side, THREE.Vector3> = {
+    left:  new THREE.Vector3(),
+    right: new THREE.Vector3(),
+  };
   
   // Store initial pose quaternions for left and right shoulders
   private initialPoseQuat: Record<Side, THREE.Quaternion> = {
@@ -186,6 +193,18 @@ export class SkeletalRig {
       });
     }
 
+    // Compute wrist-from-root offsets in the default pose for isolated hand centering
+    root.updateMatrixWorld(true);
+    const wpos = new THREE.Vector3();
+    if (this.armBones.left.wrist) {
+      this.armBones.left.wrist.getWorldPosition(wpos);
+      this.wristLocalFromRoot.left.copy(wpos).sub(root.position);
+    }
+    if (this.armBones.right.wrist) {
+      this.armBones.right.wrist.getWorldPosition(wpos);
+      this.wristLocalFromRoot.right.copy(wpos).sub(root.position);
+    }
+
     this.solver.addEventListener('angles', this.anglesHandler);
 
     ['left','right'].forEach(s=>{
@@ -214,55 +233,75 @@ export class SkeletalRig {
   private applySide(side: Side) {
     // Prevent updates after destruction
     if (this.isDestroyed) return;
-    
-    // Always use actuator angles for the physical device
-    this.applySideActuatorAngles(side);
 
-    /* ----- Fingers mapping (disabled - finger data removed from Device interface) ----- */
-    // const handRole = side === 'left' ? DeviceRole.ROLE_LEFT_HAND : DeviceRole.ROLE_RIGHT_HAND;
-    // const glove = this.store.getByPosition(handRole);
-    // const src = glove?.fingerSmooth ?? glove?.fingerNorm;
+    const gloveRole    = side === 'left' ? DeviceRole.ROLE_LEFT_GLOVE : DeviceRole.ROLE_RIGHT_GLOVE;
+    const glovePresent = !!this.store.getByPosition(gloveRole);
 
-    // if (src) {
-    //   const bones = this.fingerMap[side];
-    //   const sgnYaw = side === 'left' ? 1 : -1;   // outward fan
+    if (this.isolatedHandMode) {
+      if (side !== this.isolatedHandSide) return; // skip non-isolated side entirely
+      this.applySideQuaternion(side);
+    } else if (glovePresent) {
+      // Glove present: quaternion path
+      // - With arm trackers: shoulder/elbow follow trackers, wrist follows glove
+      // - Without arm trackers: shoulder/elbow stay at initialPoseQuat (arms forward),
+      //   wrist follows glove IMU
+      this.applySideQuaternion(side);
+    } else {
+      this.applySideActuatorAngles(side);
+    }
 
-    //   src.forEach((v: number, idx: number) => {
-    //     const bend = v * 90 * d2r;
+    /* ----- Fingers mapping from glove device (eidon-glove kinematics) ----- */
+    const glove = this.store.getByPosition(gloveRole);
+    const src = glove?.fingerSmooth ?? glove?.fingerNorm;
 
-    //     switch (idx) {
-    //       /* Thumb first joint */
-    //       case 0:  
-    //         bones[0].rotation.y = -bend;
-    //         break;                // flex
-    //       case 1:  
-    //         bones[1].rotation.z = (v - 45) * 90 * d2r;
-    //         break;       // yaw
-    //       case 2:  
-    //         bones[2].rotation.z = bend;
-    //         break;                // Thumb2
-    //       case 3:  
-    //         bones[3].rotation.z = bend;
-    //         break;                // Thumb3
-    //       default: {
-    //         const f = Math.floor((idx-4) / 3);   // digit 0..3 (Index..Pinky)
-    //         const base = 4 + f*3;                // start idx for that digit
-    //         const bFlex = bones[4 + f*3];        // MCP flex
-    //         const bYaw  = bones[4 + f*3 + 1];    // MCP yaw
-    //         const bPIP  = bones[4 + f*3 + 2];    // PIP
+    if (src && src.length >= 16) {
+      const bones   = this.fingerMap[side];
+      const sgnFlex = side === 'right' ? 1 : -1;  // flexion axis direction in YBot rig
 
-    //         if (idx === base)        bFlex.rotation.z = bend - 25*d2r;
-    //         else if (idx === base+1) bYaw.rotation.x  =  sgnYaw * -bend;
-    //         else if (idx === base+2) {
-    //           bPIP.rotation.x = bend;           // PIP
-    //           /* estimate DIP (third) as half PIP bend */
-    //           const dipBone = this.mapFinger(side,['Index','Middle','Ring','Pinky'][f],3);
-    //           dipBone.rotation.x = bend * 0.5;
-    //         }
-    //       }
-    //     }
-    //   });
-    // }
+      // ── Thumb ──────────────────────────────────────────────────────────
+      // idx 0 – CMC_ABDUCTION: two-axis eidon-glove formula
+      if (bones[0]) {
+        const norm  = src[0] * 2 - 1;               // -1..1 centered at neutral
+        const angle = norm * (Math.PI / 2);
+        bones[0].rotation.z = (Math.PI / 4) - angle * 0.75;
+        bones[0].rotation.y = -(Math.PI / 2) - angle * 0.25;
+      }
+      // idx 1 – CMC_FLEXION (same Thumb1 bone, X axis doesn't conflict with z/y above)
+      if (bones[1]) bones[1].rotation.x = sgnFlex * src[1] * (Math.PI / 2);
+      // idx 2 – MCP_FLEXION (Thumb2)
+      if (bones[2]) bones[2].rotation.x = sgnFlex * src[2] * (Math.PI / 2);
+      // idx 3 – IP_FLEXION  (Thumb3)
+      if (bones[3]) bones[3].rotation.x = sgnFlex * src[3] * (Math.PI / 2);
+
+      // ── Index / Middle / Ring / Pinky ──────────────────────────────────
+      const digitNames = ['Index', 'Middle', 'Ring', 'Pinky'] as const;
+      for (let f = 0; f < 4; f++) {
+        const base = 4 + f * 3;
+        const bAbd = bones[base];
+        const bMCP = bones[base + 1];
+        const bPIP = bones[base + 2];
+
+        // MCP_ABDUCTION – centered spread with eidon-glove per-digit scale factors
+        if (bAbd) {
+          const norm = src[base] * 2 - 1;
+          let a = norm * (Math.PI / 4);
+          if (f === 0 || f === 3) a *= 0.5;  // Index / Pinky
+          if (f === 1 || f === 2) a *= 0.3;  // Middle / Ring
+          bAbd.rotation.z = a;
+        }
+
+        // MCP_FLEXION
+        if (bMCP) bMCP.rotation.x = sgnFlex * src[base + 1] * (Math.PI / 2);
+
+        // PIP_FLEXION + DIP driven at 0.6 × PIP (eidon-glove coupling)
+        if (bPIP) {
+          const angle = src[base + 2] * (Math.PI / 2);
+          bPIP.rotation.x = sgnFlex * angle;
+          const dip = this.mapFinger(side, digitNames[f], 3);
+          if (dip) dip.rotation.x = sgnFlex * angle * 0.6;
+        }
+      }
+    }
   }
 
   /* ------------ Update model yaw based on chest UP vector (negated) ----- */
@@ -397,7 +436,7 @@ export class SkeletalRig {
       // Map eulerXYZ output [yaw, roll, pitch] to bone rotations
       const correctedRoll = -rollRad;   // roll (negated)
       const correctedPitch = pitchRad;  // pitch (no negation)
-      const correctedYaw = yawRad;      // yaw (no negation)
+      const correctedYaw = -yawRad;     // yaw (negated)
       
       // Convert to THREE.js Euler angles (XYZ order) and apply directly
       const correctedEuler = new THREE.Euler(correctedRoll, correctedPitch, correctedYaw, 'XYZ');
@@ -407,9 +446,9 @@ export class SkeletalRig {
       arm.shoulder.rotation.set(0, 0, 0);
       arm.shoulder.quaternion.copy(correctedQuat);
     } else {
-      // Fallback: when no device, use initial pose
+      // No tracker: restore default forward pose
       arm.shoulder.quaternion.copy(this.initialPoseQuat[side]);
-      arm.shoulder.rotation.set(0, 0, 0);
+      // NOTE: do NOT call rotation.set() here — that would overwrite the quaternion with identity
     }
 
     /* Elbow: Use quaternion-based calculation when devices available */
@@ -466,29 +505,27 @@ export class SkeletalRig {
       // Convert to THREE.js Euler angles (XYZ order)
       const correctedEuler = new THREE.Euler(correctedPitch, 0, correctedYaw, 'XYZ');
       const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
-      
+
+      // Post-multiply by 180° around wrist local Y to flip palm from Z- to Z+
+      // (IMU forward = Z+, but wrist bone neutral has palm facing Z-)
+      const palmFlip = new THREE.Quaternion(0, 1, 0, 0);
+
       // Reset Euler rotation and use quaternion
       arm.wrist.rotation.set(0, 0, 0);
-      arm.wrist.quaternion.copy(correctedQuat);
+      arm.wrist.quaternion.multiplyQuaternions(correctedQuat, palmFlip);
     } else if (handDevice) {
-      // Fallback to absolute hand orientation if forearm device not available
-      const deviceQuat = handDevice.quat;
-      
-      // Use eulerXYZ() for consistency - returns [yaw, roll, pitch] in radians
-      const [yawRad, rollRad, pitchRad] = eulerXYZ(deviceQuat);
-      
-      // Apply same coordinate corrections as actuator mode for wrist:
-      // arm.wrist.rotation.set(-a.wrPitch*d2r, 0, -a.wrYaw*d2r);
-      const correctedPitch = -pitchRad;      // pitch (negated)
-      const correctedYaw = -yawRad + 120*d2r; // yaw (negated + 120° offset)
-      
-      // Convert to THREE.js Euler angles (XYZ order)
-      const correctedEuler = new THREE.Euler(correctedPitch, 0, correctedYaw, 'XYZ');
-      const correctedQuat = new THREE.Quaternion().setFromEuler(correctedEuler);
-      
-      // Reset Euler rotation and use quaternion
+      // Glove only: map world-space IMU quaternion directly into wrist local space.
+      // wrist_local = parent_world^-1 × glove_world
+      const gq = handDevice.quat;
+      const gloveWorld = new THREE.Quaternion(gq[0], gq[1], gq[2], gq[3]);
+
+      const parentBone = arm.wrist.parent as THREE.Object3D;
+      parentBone?.updateWorldMatrix(true, false);
+      const parentWorldQ = new THREE.Quaternion();
+      parentBone?.getWorldQuaternion(parentWorldQ);
+
       arm.wrist.rotation.set(0, 0, 0);
-      arm.wrist.quaternion.copy(correctedQuat);
+      arm.wrist.quaternion.multiplyQuaternions(parentWorldQ.clone().invert(), gloveWorld);
     } else {
       // Fallback to Euler angles
       arm.wrist.quaternion.set(0, 0, 0, 1); // Reset quaternion
@@ -517,8 +554,8 @@ export class SkeletalRig {
       right: { roll: 180, pitch: 0, yaw: 90 }
     };
     const offsets = forwardPoseOffsets[side];
-    
-    // Since we flipped X in the vector math, positive Yaw input now creates 
+
+    // Since we flipped X in the vector math, positive Yaw input now creates
     // negative rotation in the scene. We must subtract the yaw angle.
     arm.shoulder.rotation.set(
       -(offsets.roll + a.shRoll) * d2r,
@@ -528,13 +565,12 @@ export class SkeletalRig {
 
     /* Elbow: Use calculated actuator angle */
     arm.elbow.quaternion.set(0, 0, 0, 1); // Reset quaternion
-    
+
     // FIX: Negate the flexion due to Handedness flip (Right-Hand Rule vs Left-Hand Rule)
-    // Was: const elbowFlex = sgn * a.elFlex * d2r;
-    const elbowFlex = -sgn * a.elFlex * d2r;    
-    
+    const elbowFlex = -sgn * a.elFlex * d2r;
+
     // Invert forearm roll by π radians to flip default from hand up to hand down
-    const forearmRoll = (-1) * a.faRoll * d2r + Math.PI;       
+    const forearmRoll = (-1) * a.faRoll * d2r + Math.PI;
     
     const flexQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), elbowFlex);
     const rollQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), forearmRoll);
@@ -593,6 +629,23 @@ export class SkeletalRig {
       // Force material to update
       const surfaceMaterial = this.extraMeshes.surface.material as THREE.MeshStandardMaterial;
       surfaceMaterial.needsUpdate = true;
+    }
+  }
+
+  /** Center the YBot on the wrist bone so the hand fills the view, driven by glove IMU. */
+  public setIsolatedHandMode(enabled: boolean, side: Side): void {
+    if (this.isDestroyed || !this.root) return;
+
+    this.isolatedHandMode = enabled;
+    this.isolatedHandSide = side;
+
+    if (enabled) {
+      // Move root so the wrist bone sits at world origin
+      const offset = this.wristLocalFromRoot[side];
+      this.root.position.set(-offset.x, -offset.y, -offset.z);
+    } else {
+      // Restore root position
+      this.root.position.set(this.pendingPosition.x, -1, this.pendingPosition.z);
     }
   }
 
