@@ -9,9 +9,11 @@ const POSITION_ORDER: Record<DeviceRole, number> = {
   [DeviceRole.ROLE_LEFT_SHOULDER]: 0,
   [DeviceRole.ROLE_LEFT_FOREARM]: 1,
   [DeviceRole.ROLE_LEFT_HAND]: 2,
+  [DeviceRole.ROLE_LEFT_GLOVE]: 2,
   [DeviceRole.ROLE_RIGHT_SHOULDER]: 3,
   [DeviceRole.ROLE_RIGHT_FOREARM]: 4,
   [DeviceRole.ROLE_RIGHT_HAND]: 5,
+  [DeviceRole.ROLE_RIGHT_GLOVE]: 5,
   [DeviceRole.ROLE_CHEST]: 6,
 };
 

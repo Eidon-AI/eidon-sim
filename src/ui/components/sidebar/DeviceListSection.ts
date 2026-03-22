@@ -1,6 +1,7 @@
 // src/ui/components/sidebar/DeviceListSection.ts
 import { DeviceStore } from '../../../core/DeviceStore';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
+import { GloveManager } from '../../../core/GloveManager';
 import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
 import { renderCard } from './DeviceCard';
 import { Device, DeviceRole } from '../../../types/device';
@@ -11,9 +12,11 @@ const POSITION_ORDER: Record<DeviceRole, number> = {
   [DeviceRole.ROLE_LEFT_SHOULDER]: 0,
   [DeviceRole.ROLE_LEFT_FOREARM]: 1,
   [DeviceRole.ROLE_LEFT_HAND]: 2,
+  [DeviceRole.ROLE_LEFT_GLOVE]: 2,
   [DeviceRole.ROLE_RIGHT_SHOULDER]: 3,
   [DeviceRole.ROLE_RIGHT_FOREARM]: 4,
   [DeviceRole.ROLE_RIGHT_HAND]: 5,
+  [DeviceRole.ROLE_RIGHT_GLOVE]: 5,
   [DeviceRole.ROLE_CHEST]: 6,
 };
 
@@ -29,13 +32,15 @@ export class DeviceListSection {
   private isExpanded: boolean = true; // Default expanded
   private store: DeviceStore;
   private trackerManager?: EidonTrackerManager;
+  private gloveManager?: GloveManager;
   private deviceConnectionStateManager: DeviceConnectionStateManager;
   private renderedDeviceIds = new Set<string>();
   private connectionCountIndicator: HTMLElement | null = null;
 
-  constructor(store: DeviceStore, trackerManager: EidonTrackerManager | undefined, deviceConnectionStateManager: DeviceConnectionStateManager) {
+  constructor(store: DeviceStore, trackerManager: EidonTrackerManager | undefined, deviceConnectionStateManager: DeviceConnectionStateManager, gloveManager?: GloveManager) {
     this.store = store;
     this.trackerManager = trackerManager;
+    this.gloveManager = gloveManager;
     this.deviceConnectionStateManager = deviceConnectionStateManager;
     
     this.section = document.createElement('div');
@@ -140,7 +145,7 @@ export class DeviceListSection {
       
       // Render devices in sorted order
       sortedDevices.forEach(device => {
-        const card = renderCard(device, this.store, this.trackerManager);
+        const card = renderCard(device, this.store, this.trackerManager, this.gloveManager);
         card.setAttribute('data-id', device.id);
         this.content.appendChild(card);
         this.renderedDeviceIds.add(device.id);

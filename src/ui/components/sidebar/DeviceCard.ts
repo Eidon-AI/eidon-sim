@@ -1,6 +1,7 @@
 import { Device, DeviceColor, DeviceRole } from '../../../types/device';
 import { DeviceStore } from '../../../core/DeviceStore';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
+import { GloveManager } from '../../../core/GloveManager';
 import { eulerXYZ } from '../../../core/mathUtils';
 import { setSelected } from '../../App';
 import { vec3, quat } from 'gl-matrix';
@@ -434,7 +435,7 @@ function draw3DPrismIndicator(
   });
 }
 
-export function renderCard(state: Device, store: DeviceStore, trackerManager?: EidonTrackerManager) {
+export function renderCard(state: Device, store: DeviceStore, trackerManager?: EidonTrackerManager, gloveManager?: GloveManager) {
 
   const el = document.createElement('div');
   el.className = styles.card;
@@ -472,7 +473,8 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
   
   const versionChip = document.createElement('span');
   versionChip.className = styles.versionChip;
-  versionChip.textContent = state.firmwareVersion ? `v${state.firmwareVersion}` : 'v?';
+  const isGlove = state.position === DeviceRole.ROLE_LEFT_GLOVE || state.position === DeviceRole.ROLE_RIGHT_GLOVE;
+  versionChip.textContent = state.firmwareVersion ? `v${state.firmwareVersion}` : isGlove ? 'BLE' : 'v?';
   
   const warningIcon = document.createElement('button');
   warningIcon.className = styles.warningIcon;
@@ -500,7 +502,7 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
         warningIcon.style.display = 'none';
       }
     } else {
-      versionChip.textContent = 'v?';
+      versionChip.textContent = isGlove ? 'BLE' : 'v?';
       warningIcon.style.display = 'none';
     }
   };
@@ -523,21 +525,14 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
   };
 
   btnX.onclick = async () => {
-    // Unmount finger panel if it exists
-    if (fingerPanel) {
-      fingerPanel.unmount();
-    }
+    if (fingerPanel) fingerPanel.unmount();
 
-    // Disconnect from Bluetooth if trackerManager is available
-    if (trackerManager) {
-      try {
-        await trackerManager.disconnectDevice(state.id);
-      } catch (error) {
-        console.error('Failed to disconnect device:', error);
-        // Continue with removal even if disconnect fails
-      }
+    if (isGlove && gloveManager) {
+      const side = state.position === DeviceRole.ROLE_LEFT_GLOVE ? 'left' : 'right';
+      try { await gloveManager.disconnect(side); } catch (e) { console.error(e); }
+    } else if (trackerManager) {
+      try { await trackerManager.disconnectDevice(state.id); } catch (e) { console.error(e); }
     }
-    // Remove from store and UI
     store['map'].delete(state.id);
     document.dispatchEvent(new CustomEvent('deviceRemoved', { detail: { id: state.id } }));
     el.remove();
@@ -572,9 +567,27 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
       el.remove();
     }
   });
-  if (state.position === DeviceRole.ROLE_LEFT_GLOVE || state.position === DeviceRole.ROLE_RIGHT_GLOVE) {
+  if (isGlove) {
     fingerPanel = new FingerSensorPanel(state.id);
     fingerPanel.mount(el);
+
+    if (gloveManager) {
+      const calibBtn = document.createElement('button');
+      calibBtn.className = styles.calibrateBtn;
+      calibBtn.innerHTML = '<i class="fas fa-compass"></i> Calibrate';
+      calibBtn.onclick = async () => {
+        const side = state.position === DeviceRole.ROLE_LEFT_GLOVE ? 'left' : 'right';
+        calibBtn.disabled = true;
+        calibBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        await gloveManager.calibrateGlove(side);
+        calibBtn.innerHTML = '<i class="fas fa-check"></i> Calibrated';
+        setTimeout(() => {
+          calibBtn.innerHTML = '<i class="fas fa-compass"></i> Calibrate';
+          calibBtn.disabled = false;
+        }, 2000);
+      };
+      el.appendChild(calibBtn);
+    }
   }
 
   /* ----- Euler dials ----- */
@@ -606,6 +619,7 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
     // eulerXYZ returns [yaw, pitch, roll] in radians with all swaps and calibration correction applied
     const [yaw, pitch, roll] = eulerXYZ(s.quat);
     const [yawDeg, pitchDeg, rollDeg] = [yaw, pitch, roll].map(rad => rad * 180 / Math.PI);
+    const fwdVec = Array.from(s.fwd);
     draw3DPrismIndicator(
       prism.canvas.getContext('2d')!,
       s.quat,       // pass the **quaternion**
@@ -614,7 +628,7 @@ export function renderCard(state: Device, store: DeviceStore, trackerManager?: E
     drawDial(dYaw.canvas.getContext('2d')!, yawDeg, s.color);
     drawDial(dPit.canvas.getContext('2d')!, pitchDeg, s.color);
     drawDial(dRol.canvas.getContext('2d')!, rollDeg, s.color);
-    drawForwardVector(fVec.canvas.getContext('2d')!, Array.from(s.fwd), s.color);
+    drawForwardVector(fVec.canvas.getContext('2d')!, fwdVec, s.color);
     drawUpVector(uVec.canvas.getContext('2d')!, Array.from(s.up), s.color);
   };
   

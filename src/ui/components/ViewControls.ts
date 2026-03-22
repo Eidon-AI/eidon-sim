@@ -9,6 +9,7 @@ export interface ViewToggleState {
   vectorArms: boolean;
   chestVector: boolean;
   multipleModels: boolean;
+  gloveHand: boolean;  // ephemeral — not persisted, only active when a glove is connected
 }
 
 export interface ViewControlsState extends ViewToggleState {
@@ -33,7 +34,7 @@ function normalizeHexColor(color: string): string {
 // Load saved view state from localStorage, with defaults
 function loadViewState(): ViewToggleState {
   const saved = localStorage.getItem('viewControlsState');
-  
+
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
@@ -42,33 +43,37 @@ function loadViewState(): ViewToggleState {
         riggedModel: parsed.riggedModel !== undefined ? parsed.riggedModel : true,
         vectorArms: parsed.vectorArms !== undefined ? parsed.vectorArms : true,
         chestVector: parsed.chestVector !== undefined ? parsed.chestVector : true,
-        multipleModels: parsed.multipleModels !== undefined ? parsed.multipleModels : false
+        multipleModels: parsed.multipleModels !== undefined ? parsed.multipleModels : false,
+        gloveHand: false, // never persisted
       };
       return result;
     } catch (e) {
       console.warn('Failed to parse saved view state, using defaults');
     }
   }
-  
+
   // Default values
-  const defaults = {
+  const defaults: ViewToggleState = {
     grid: true,
     riggedModel: true,
     vectorArms: true,
     chestVector: true,
-    multipleModels: false
+    multipleModels: false,
+    gloveHand: false,
   };
   return defaults;
 }
 
-// Save view state to localStorage
+// Save view state to localStorage (gloveHand is ephemeral, not saved)
 function saveViewState(state: ViewToggleState): void {
-  localStorage.setItem('viewControlsState', JSON.stringify(state));
+  const { gloveHand: _, ...persisted } = state;
+  localStorage.setItem('viewControlsState', JSON.stringify(persisted));
 }
 
 export class ViewControls extends EventTarget {
   private container: HTMLElement;
   private state: ViewControlsState;
+  private gloveConnected = false;
 
   constructor() {
     super();
@@ -81,11 +86,30 @@ export class ViewControls extends EventTarget {
 
     this.state = {
       ...savedToggleState,
+      gloveHand: false, // always starts off
       symColor: symColor
     };
 
     this.container = this.createContainer();
     this.render();
+
+    // Listen for glove connection changes to show/hide the hand toggle
+    document.addEventListener('gloveConnectionChanged', (e: Event) => {
+      const { anyConnected } = (e as CustomEvent).detail;
+      if (this.gloveConnected !== anyConnected) {
+        this.gloveConnected = anyConnected;
+        if (!anyConnected) {
+          // Auto-disable isolated mode when glove disconnects
+          if (this.state.gloveHand) {
+            this.state.gloveHand = false;
+            this.dispatchEvent(new CustomEvent('viewToggle', {
+              detail: { type: 'gloveHand', enabled: false }
+            }));
+          }
+        }
+        this.render();
+      }
+    });
   }
 
   private createContainer(): HTMLElement {
@@ -115,15 +139,9 @@ export class ViewControls extends EventTarget {
   private toggleState(key: keyof ViewToggleState): void {
     this.state[key] = !this.state[key];
     this.render();
-    
-    // Save the toggle state to localStorage
-    saveViewState({
-      grid: this.state.grid,
-      riggedModel: this.state.riggedModel,
-      vectorArms: this.state.vectorArms,
-      chestVector: this.state.chestVector,
-      multipleModels: this.state.multipleModels
-    });
+
+    // Save persistent state (gloveHand excluded by saveViewState)
+    saveViewState(this.state);
     
     // Dispatch event for scene manager to handle
     this.dispatchEvent(new CustomEvent('viewToggle', {
@@ -238,8 +256,13 @@ export class ViewControls extends EventTarget {
       this.createToggleButton('Toggle Skeleton', 'riggedModel', '🦴'),
       this.createToggleButton('Toggle Vectors', 'vectorArms', '↑'),
       this.createToggleButton('Toggle Chest Vector', 'chestVector', '🫀'),
-      this.createToggleButton('Toggle Multiple Models', 'multipleModels', '👥')
+      this.createToggleButton('Toggle Multiple Models', 'multipleModels', '👥'),
     ];
+
+    // Only show hand isolation toggle when a glove is connected
+    if (this.gloveConnected) {
+      buttons.push(this.createToggleButton('Isolated Hand View', 'gloveHand', '🖐'));
+    }
 
     buttons.forEach(button => {
       this.container.appendChild(button);
@@ -254,7 +277,8 @@ export class ViewControls extends EventTarget {
   }
 
   public applyInitialState(): void {
-    // Dispatch events for each toggle state so scene manager applies them
+    // Dispatch events for each persistent toggle state so scene manager applies them
+    // gloveHand is excluded — it defaults to false and is only enabled by user action
     (['grid', 'riggedModel', 'vectorArms', 'chestVector', 'multipleModels'] as const).forEach(key => {
       this.dispatchEvent(new CustomEvent('viewToggle', {
         detail: { type: key, enabled: this.state[key] }

@@ -109,17 +109,17 @@ export function quaternionToVectors(q: quat): { up: vec3; fwd: vec3 } {
   // === UP VECTOR ===
   // Transform Device Z [0,0,1]
   const upZ = vec3.transformQuat(vec3.create(), [0, 0, 1], q);
-  
+
   // Mapping:
   // Device X -> Scene -X (Negate to fix handedness/yaw)
   // Device Z -> Scene Y  (Up)
   // Device Y -> Scene Z  (Forward)
-  const up = [-upZ[0], upZ[2], upZ[1]] as vec3; 
+  const up = [-upZ[0], upZ[2], upZ[1]] as vec3;
 
   // === FORWARD VECTOR ===
   // Transform Device Y [0,1,0]
   const fwdY = vec3.transformQuat(vec3.create(), [0, 1, 0], q);
-  
+
   // Apply same mapping
   const fwd = [-fwdY[0], fwdY[2], fwdY[1]] as vec3;
 

@@ -2,6 +2,9 @@ import { EidonTrackerManager, EidonDevice, RawMotionData } from '../../../core/E
 import { DeviceRole } from '../../../core/constants';
 import { LoginStateManager } from '../../../core/LoginStateManager';
 import { DeviceConnectionStateManager } from '../../../core/DeviceConnectionStateManager';
+import { GloveManager } from '../../../core/GloveManager';
+import { DeviceStore } from '../../../core/DeviceStore';
+import { renderCard } from '../sidebar/DeviceCard';
 import { LatestVersionManager } from '../../../core/LatestVersionManager';
 import { checkAndSyncVersion } from '../../../core/DeviceVersionSync';
 import { createDeviceConnectionCard as createNewDeviceCard, setDeviceCardStyles as setNewDeviceCardStyles, cardStyles as newCardStyles } from './NewDeviceConnectionCard';
@@ -29,10 +32,14 @@ export class DeviceModal {
   private connectionCountIndicator: HTMLElement | null = null;
   private calibrateAllBtn: HTMLButtonElement | null = null;
   private versionWarningUnsubscribe: (() => void) | null = null;
+  private gloveManager: GloveManager | null = null;
+  private store: DeviceStore | null = null;
 
-  constructor(trackerManager: EidonTrackerManager, deviceConnectionStateManager: DeviceConnectionStateManager) {
+  constructor(trackerManager: EidonTrackerManager, deviceConnectionStateManager: DeviceConnectionStateManager, gloveManager?: GloveManager, store?: DeviceStore) {
     this.trackerManager = trackerManager;
     this.deviceConnectionStateManager = deviceConnectionStateManager;
+    this.gloveManager = gloveManager ?? null;
+    this.store = store ?? null;
     this.loginStateManager = LoginStateManager.getInstance();
     this.container = this.createContainer();
     this.modal = this.createModal();
@@ -122,6 +129,43 @@ export class DeviceModal {
               <div class="${styles.noDevices}">Click "Scan" to find nearby devices</div>
             </div>
           </div>
+
+          <!-- Gloves Section -->
+          <div class="${styles.divider} glove-section">
+            <div class="${styles.sectionHeader}">
+              <h3 class="${styles.title}">Gloves</h3>
+            </div>
+            <div style="display:flex;gap:8px;flex-direction:column;padding:0 4px 8px">
+              <div class="glove-connect-row" data-side="left" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span class="glove-left-label" style="font-size:13px;color:#ccc">Left Glove</span>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <button class="glove-calibrate-btn" data-side="left"
+                    style="display:none;padding:5px 10px;border-radius:6px;border:1px solid #3a6a3a;background:#1a2a1a;color:#8f8;cursor:pointer;font-size:12px">
+                    <i class="fas fa-compass"></i> Calibrate
+                  </button>
+                  <button class="glove-connect-btn" data-side="left"
+                    style="padding:5px 12px;border-radius:6px;border:1px solid #555;background:#222;color:#fff;cursor:pointer;font-size:12px">
+                    Connect
+                  </button>
+                </div>
+              </div>
+              <div class="glove-card-slot" data-side="left"></div>
+              <div class="glove-connect-row" data-side="right" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span class="glove-right-label" style="font-size:13px;color:#ccc">Right Glove</span>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <button class="glove-calibrate-btn" data-side="right"
+                    style="display:none;padding:5px 10px;border-radius:6px;border:1px solid #3a6a3a;background:#1a2a1a;color:#8f8;cursor:pointer;font-size:12px">
+                    <i class="fas fa-compass"></i> Calibrate
+                  </button>
+                  <button class="glove-connect-btn" data-side="right"
+                    style="padding:5px 12px;border-radius:6px;border:1px solid #555;background:#222;color:#fff;cursor:pointer;font-size:12px">
+                    Connect
+                  </button>
+                </div>
+              </div>
+              <div class="glove-card-slot" data-side="right"></div>
+            </div>
+          </div>
         </div>
         
         <!-- Mobile close button at bottom -->
@@ -156,6 +200,9 @@ export class DeviceModal {
     // Scan button
     const scanBtn = this.modal.querySelector(`.${styles.scanBtn}`) as HTMLButtonElement;
     scanBtn.addEventListener('click', () => this.handleScan());
+
+    // Glove connect/disconnect buttons
+    this.setupGloveButtons();
 
       // Tracker manager events
       this.trackerManager.addEventListener('deviceConnected', (e: any) => {
@@ -1255,7 +1302,8 @@ export class DeviceModal {
         name: nameToSave,
         type: 'tracker', // TODO: Check if this should be an enum value
         position: positionToSave,
-        color: colorToSave
+        color: colorToSave,
+        version: device.firmwareVersion || '0.0.0'
       };
 
       // Only include connectionId for new devices (POST), not for updates (PUT)
@@ -1338,6 +1386,90 @@ export class DeviceModal {
       saveBtn.disabled = false;
       saveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
     }
+  }
+
+  private setupGloveButtons(): void {
+    if (!this.gloveManager) return;
+
+    const gm = this.gloveManager;
+
+    const updateBtn = (side: 'left' | 'right') => {
+      const btn      = this.modal.querySelector(`.glove-connect-btn[data-side="${side}"]`) as HTMLButtonElement | null;
+      const calibBtn = this.modal.querySelector(`.glove-calibrate-btn[data-side="${side}"]`) as HTMLButtonElement | null;
+      const label    = this.modal.querySelector(`.glove-${side}-label`) as HTMLElement | null;
+      const row      = this.modal.querySelector(`.glove-connect-row[data-side="${side}"]`) as HTMLElement | null;
+      const slot     = this.modal.querySelector(`.glove-card-slot[data-side="${side}"]`) as HTMLElement | null;
+      if (!btn || !label) return;
+
+      const connected = gm.isConnected(side);
+      const name      = gm.getDeviceName(side);
+
+      if (connected && name) {
+        label.textContent = name;
+        label.style.color = '#7cf';
+        btn.textContent   = 'Disconnect';
+        btn.style.background  = '#3a1a1a';
+        btn.style.borderColor = '#a33';
+        if (calibBtn) calibBtn.style.display = 'inline-flex';
+        // Hide the simple row, show the full device card
+        if (row) row.style.display = 'none';
+        if (slot && !slot.hasChildNodes() && this.store) {
+          const device = this.store['map'].get(`glove-${side}`);
+          if (device) {
+            slot.appendChild(renderCard(device, this.store, undefined, gm));
+          }
+        }
+      } else {
+        label.textContent = `${side.charAt(0).toUpperCase() + side.slice(1)} Glove`;
+        label.style.color = '#ccc';
+        btn.textContent   = 'Connect';
+        btn.style.background  = '#222';
+        btn.style.borderColor = '#555';
+        if (calibBtn) calibBtn.style.display = 'none';
+        // Show the simple row, clear any card
+        if (row) row.style.display = 'flex';
+        if (slot) slot.innerHTML = '';
+      }
+
+      this.updateCalibrateAllButtonState();
+    };
+
+    // Wire calibrate buttons
+    (this.modal.querySelectorAll('.glove-calibrate-btn') as NodeListOf<HTMLButtonElement>).forEach(calibBtn => {
+      const side = calibBtn.dataset.side as 'left' | 'right';
+      calibBtn.addEventListener('click', async () => {
+        calibBtn.disabled = true;
+        calibBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        await gm.calibrateGlove(side);
+        calibBtn.innerHTML = '<i class="fas fa-check"></i> Calibrated';
+        setTimeout(() => {
+          calibBtn.innerHTML = '<i class="fas fa-compass"></i> Calibrate';
+          calibBtn.disabled = false;
+        }, 2000);
+      });
+    });
+
+    const buttons = this.modal.querySelectorAll('.glove-connect-btn') as NodeListOf<HTMLButtonElement>;
+    buttons.forEach(btn => {
+      const side = btn.dataset.side as 'left' | 'right';
+      btn.addEventListener('click', async () => {
+        if (gm.isConnected(side)) {
+          await gm.disconnect(side);
+        } else {
+          btn.disabled    = true;
+          btn.textContent = 'Connecting…';
+          await gm.connect(side);  // user-chosen side is authoritative
+          btn.disabled = false;
+        }
+        updateBtn('left');
+        updateBtn('right');
+      });
+    });
+
+    gm.addEventListener('connectionChanged', () => {
+      updateBtn('left');
+      updateBtn('right');
+    });
   }
 
   private async handleScan(): Promise<void> {
@@ -2164,27 +2296,25 @@ export class DeviceModal {
 
   private updateCalibrateAllButtonState(): void {
     if (!this.calibrateAllBtn) return;
-    
-    const count = this.deviceConnectionStateManager.totalConnectedDevices;
-    this.calibrateAllBtn.disabled = count === 0;
+
+    const trackerCount = this.deviceConnectionStateManager.totalConnectedDevices;
+    const gloveConnected = this.gloveManager?.isConnected('left') || this.gloveManager?.isConnected('right');
+    this.calibrateAllBtn.disabled = trackerCount === 0 && !gloveConnected;
   }
 
   private async handleCalibrateAll(): Promise<void> {
     if (!this.calibrateAllBtn) return;
-    
-    // Get all connected devices from trackerManager
+
     const connectedDevices = this.trackerManager.getConnectedDevices();
-    
-    if (connectedDevices.length === 0) {
-      return;
-    }
+    const gloveConnected = this.gloveManager?.isConnected('left') || this.gloveManager?.isConnected('right');
+
+    if (connectedDevices.length === 0 && !gloveConnected) return;
 
     try {
       this.calibrateAllBtn.disabled = true;
       this.calibrateAllBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Calibrating...</span>';
 
-      // Calibrate all connected devices
-      const calibrationPromises = connectedDevices.map(device => {
+      const calibrationPromises: Promise<void>[] = connectedDevices.map(device => {
         const connectionId = device.connectionId || device.macAddress;
         if (!connectionId) {
           console.warn(`No connectionId found for device ${device.id}`);
@@ -2192,6 +2322,15 @@ export class DeviceModal {
         }
         return this.trackerManager.calibrateDevice(connectionId);
       });
+
+      // Also calibrate any connected gloves
+      if (this.gloveManager) {
+        for (const side of ['left', 'right'] as const) {
+          if (this.gloveManager.isConnected(side)) {
+            calibrationPromises.push(this.gloveManager.calibrateGlove(side));
+          }
+        }
+      }
 
       await Promise.allSettled(calibrationPromises);
       

@@ -5,6 +5,7 @@ import { DeviceStore }  from '../core/DeviceStore';
 import { ArmSolver }    from '../core/ArmSolver';
 import { PlaybackManager } from '../core/PlaybackManager';
 import { DeviceConnectionStateManager } from '../core/DeviceConnectionStateManager';
+import { GloveManager } from '../core/GloveManager';
 import { mountPrefs } from './components/PreferencesModal';
 import { initScene }    from './scene/sceneManager';
 import { prefs } from '../core/preferences';
@@ -27,6 +28,7 @@ let sceneDestroy: (() => void) | null = null;
 let trackerManager: EidonTrackerManager | null = null;
 let deviceStore: DeviceStore | null = null;
 let deviceConnectionStateManager: DeviceConnectionStateManager | null = null;
+let gloveManager: GloveManager | null = null;
 let authModal: AuthModal | null = null;
 let authManager: AuthManager | null = null;
 let loginStateManager: LoginStateManager | null = null;
@@ -291,7 +293,11 @@ function initializeApp(root: HTMLElement) {
   // Create device connection state manager
   const connectionStateManager = new DeviceConnectionStateManager();
   deviceConnectionStateManager = connectionStateManager;
-  
+
+  // Create glove manager
+  const gloveMgr = new GloveManager(store);
+  gloveManager = gloveMgr;
+
   // Expose to window for Sidebar access (temporary until we refactor to pass it properly)
   (window as any).deviceConnectionStateManager = connectionStateManager;
 
@@ -299,7 +305,7 @@ function initializeApp(root: HTMLElement) {
   sceneDestroy = destroy;
 
   playbackManager = new PlaybackManager(store, solver);
-  controls = new Controls(playbackManager, tracker, connectionStateManager);
+  controls = new Controls(playbackManager, tracker, connectionStateManager, gloveMgr, store);
   controls.mount(root);
 
   storeRef = store;
@@ -440,7 +446,7 @@ function initializeApp(root: HTMLElement) {
 
   /* ------------ Sidebar ------------ */
   sidebar = new Sidebar();
-  sidebar.mount(root, solver, store, tracker);
+  sidebar.mount(root, solver, store, tracker, gloveMgr);
 
   /* ------------ Icon Overlay ------------ */
   const iconOverlay = new IconOverlay();

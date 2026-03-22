@@ -2,6 +2,7 @@
 import { ArmSolver } from '../../../core/ArmSolver';
 import { DeviceStore } from '../../../core/DeviceStore';
 import { EidonTrackerManager } from '../../../core/EidonTrackerManager';
+import { GloveManager } from '../../../core/GloveManager';
 import { ActuatorAnglesSection } from './ActuatorAnglesSection';
 import { DeviceListSection } from './DeviceListSection';
 import { prefs, savePrefs } from '../../../core/preferences';
@@ -105,20 +106,19 @@ export class Sidebar {
     this.updateExpandedState();
   }
 
-  public mount(parent: HTMLElement, solver: ArmSolver, store: DeviceStore, trackerManager?: EidonTrackerManager): void {
+  public mount(parent: HTMLElement, solver: ArmSolver, store: DeviceStore, trackerManager?: EidonTrackerManager, gloveManager?: GloveManager): void {
     parent.appendChild(this.container);
-    
+
     // Mount actuator angles section
     this.actuatorSection = new ActuatorAnglesSection();
     this.actuatorSection.mount(this.content, solver);
-    
-    // Mount device list section - need DeviceConnectionStateManager
-    // Get it from global scope (created in App.ts)
+
+    // Mount device list section
     const deviceConnectionStateManager = (window as any).deviceConnectionStateManager as any;
     if (!deviceConnectionStateManager) {
       console.warn('[Sidebar] DeviceConnectionStateManager not found, connection count will not be shown');
     }
-    this.deviceListSection = new DeviceListSection(store, trackerManager, deviceConnectionStateManager);
+    this.deviceListSection = new DeviceListSection(store, trackerManager, deviceConnectionStateManager, gloveManager);
     this.deviceListSection.mount(this.content);
   }
 

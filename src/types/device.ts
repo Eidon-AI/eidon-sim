@@ -6,6 +6,8 @@ export interface DeviceData {
   up: vec3;   fwd: vec3;      // derived directions
   chainStart: vec3; chainEnd: vec3;
   lastSeen: number;           // ms since page load
+  fingerNorm?:   number[];    // 16 values, 0-1 normalized (glove only)
+  fingerSmooth?: number[];    // EMA-smoothed 0-1 (glove only)
 }
 
 export interface Device extends DeviceData {
