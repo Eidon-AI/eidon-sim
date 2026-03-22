@@ -26,7 +26,6 @@ export class DeviceStore extends EventTarget {
   /** Enable/disable playback mode */
   setPlaybackMode(enabled: boolean) {
     this.playbackMode = enabled;
-    console.log('DeviceStore playback mode:', enabled ? 'ON' : 'OFF');
   }
 
   /** Check if playback mode is enabled */

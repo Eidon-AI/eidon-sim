@@ -197,7 +197,6 @@ export class PlaybackView {
 
     // Video events
     this.videoElement.addEventListener('loadedmetadata', () => {
-      console.log('Video loaded, duration:', this.videoElement?.duration);
       this.updateTimeDisplay();
       // Set initial volume
       this.videoElement!.volume = 0.7;
@@ -240,7 +239,6 @@ export class PlaybackView {
     this.videoElement.play().then(() => {
       this.isPlaying = true;
       this.updatePlayPauseButton();
-      console.log(this.isVideoOnly ? 'Playback started (video only)' : 'Playback started (video + sensor data)');
     }).catch(error => {
       console.error('Failed to autoplay video:', error);
       // If autoplay fails, pause the sensor playback too (if not video-only)
