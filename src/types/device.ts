@@ -74,6 +74,8 @@ export interface DeviceConnectionState {
       'right_forearm': DeviceRole.ROLE_RIGHT_FOREARM,
       'left_shoulder': DeviceRole.ROLE_LEFT_SHOULDER,
       'right_shoulder': DeviceRole.ROLE_RIGHT_SHOULDER,
+      'left_hub': DeviceRole.ROLE_LEFT_SHOULDER,
+      'right_hub': DeviceRole.ROLE_RIGHT_SHOULDER,
       'chest': DeviceRole.ROLE_CHEST,
       'left_glove': DeviceRole.ROLE_LEFT_GLOVE,
       'right_glove': DeviceRole.ROLE_RIGHT_GLOVE,

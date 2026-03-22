@@ -1,6 +1,6 @@
 import './globals.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
-import { mount } from './ui/App';
+import { mount, mountSampleData } from './ui/App';
 import { UpdatePage } from './ui/pages/UpdatePage';
 import { DebugPage } from './ui/pages/DebugPage';
 import { DeleteRequestPage } from './ui/pages/DeleteRequestPage';
@@ -23,6 +23,8 @@ window.addEventListener('DOMContentLoaded', () => {
   } else if (path === '/label' || path === '/app/label') {
     const labelPage = new LabelPage();
     labelPage.mount(root);
+  } else if (path === '/sample-data' || path === '/app/sample-data') {
+    mountSampleData(root);
   } else {
     mount(root);
   }

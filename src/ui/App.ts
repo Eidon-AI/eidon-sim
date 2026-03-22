@@ -13,6 +13,7 @@ import { IconOverlay } from './components/IconOverlay';
 import { Controls } from './components/controls/Controls';
 import { AuthModal } from './components/AuthModal';
 import { AuthManager } from '../core/AuthManager';
+import { SampleDataPanel } from './components/SampleDataPanel';
 import { LoginStateManager } from '../core/LoginStateManager';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { Device, DeviceRole, DeviceColor } from '../types/device';
@@ -457,6 +458,27 @@ function initializeApp(root: HTMLElement) {
   document.dispatchEvent(new CustomEvent('angleModeChanged', {
     detail: { useActuatorAngles: prefs.useActuatorAngles || false }
   }));
+}
+
+export function mountSampleData(root: HTMLElement) {
+  initializeApp(root);
+  const panel = new SampleDataPanel(playbackManager);
+  panel.mount(root);
+
+  // Inject "Browse Samples" button into the Controls toolbar
+  const existingBtn = document.querySelector('#navDebug') as HTMLButtonElement | null;
+  if (existingBtn) {
+    const toolbar = existingBtn.parentElement;
+    if (toolbar) {
+      const btn = document.createElement('button');
+      btn.id = 'navSampleData';
+      btn.className = existingBtn.className;
+      btn.title = 'Browse Sample Recordings';
+      btn.innerHTML = '<i class="fas fa-film"></i><span>Samples</span>';
+      btn.addEventListener('click', () => panel.show());
+      toolbar.insertBefore(btn, existingBtn.nextSibling);
+    }
+  }
 }
 
 // Cleanup function for proper resource management
