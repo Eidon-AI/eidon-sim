@@ -18,8 +18,8 @@ export interface CurrentUser {
   isAdmin: boolean;  // True if user email ends with @eidon.ai
   systemTotalRecordings: number | null;  // Total recordings across all users (admin only)
   systemTotalSeconds: number | null;  // Total seconds across all users (admin only)
-  systemTotalVideoOnlyRecordings: number | null;  // Total video-only recordings (admin only)
-  systemTotalVideoOnlySeconds: number | null;  // Total seconds of video-only recordings (admin only)
+  systemRecordingModeCounts: Record<string, number> | null;  // Recording counts by mode (admin only)
+  systemRecordingModeSeconds: Record<string, number> | null;  // Recording seconds by mode (admin only)
 
   // Migration flags
   firstTime: boolean;  // True if this is a legacy user's first time in new system
