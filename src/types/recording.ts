@@ -32,7 +32,7 @@ export interface Recording {
   recordingVersion: string | null;    // Version string (null for video-only recordings)
   taskType: TaskType | null;   // Task type enum (optional)
   completed: boolean;          // Completion status (default: false)
-  videoOnly: boolean;          // True if this is a video-only recording (no sensor data)
+  recordingMode: 'video_only' | 'tracker' | 'glove' | 'glove_tracker';  // Recording mode
   valid: boolean;              // False if marked invalid by admin (default: true)
   qcStatus: QcStatus;          // QC pipeline status (default: unreviewed)
   qcMetadata: Record<string, unknown> | null; // QC pipeline scores and reasons

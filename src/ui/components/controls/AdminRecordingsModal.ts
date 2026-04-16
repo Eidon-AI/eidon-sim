@@ -115,9 +115,9 @@ export class AdminRecordingsModal {
     } else {
       url = `${apiUrl}/recordings/admin/all-recordings?page=${page}&limit=${limit}`;
       if (this.currentFilter === 'video_only') {
-        url += '&videoOnly=true';
+        url += '&recordingMode=video_only';
       } else if (this.currentFilter === 'complete') {
-        url += '&videoOnly=false';
+        url += '&recordingMode=tracker';
       }
     }
 
@@ -188,9 +188,9 @@ export class AdminRecordingsModal {
       // Build URL with filter parameter
       let url = `${apiUrl}/recordings/admin/recording-details`;
       if (this.currentFilter === 'video_only') {
-        url += '?videoOnly=true';
+        url += '?recordingMode=video_only';
       } else if (this.currentFilter === 'complete') {
-        url += '?videoOnly=false';
+        url += '?recordingMode=tracker';
       }
       // 'all' filter = no query param (returns combined stats)
 
@@ -446,7 +446,7 @@ export class AdminRecordingsModal {
     };
 
     const recordingsGrid = recordings.map(recording => {
-      const isVideoOnly = recording.videoOnly;
+      const isVideoOnly = recording.recordingMode === 'video_only';
       const qcStatus = recording.qcStatus ?? 'unreviewed';
       const isCurrentlyValid = qcStatus !== 'invalid';
       return `
@@ -508,17 +508,17 @@ export class AdminRecordingsModal {
     let totalSeconds: number | null;
     let headerTitle: string;
     
+    const videoOnlyCount = profile?.systemRecordingModeCounts?.['video_only'] ?? 0;
+    const videoOnlySeconds = profile?.systemRecordingModeSeconds?.['video_only'] ?? 0;
+
     if (this.currentFilter === 'video_only') {
-      totalRecordings = pagination?.total ?? profile?.systemTotalVideoOnlyRecordings ?? recordings.length;
-      totalSeconds = profile?.systemTotalVideoOnlySeconds ?? null;
+      totalRecordings = pagination?.total ?? videoOnlyCount;
+      totalSeconds = videoOnlySeconds || null;
       headerTitle = 'Video-Only Recordings';
     } else if (this.currentFilter === 'complete') {
-      // Complete = total - video-only
       const systemTotal = profile?.systemTotalRecordings ?? 0;
-      const videoOnlyTotal = profile?.systemTotalVideoOnlyRecordings ?? 0;
       const systemSeconds = profile?.systemTotalSeconds ?? 0;
-      const videoOnlySeconds = profile?.systemTotalVideoOnlySeconds ?? 0;
-      totalRecordings = pagination?.total ?? (systemTotal - videoOnlyTotal);
+      totalRecordings = pagination?.total ?? (systemTotal - videoOnlyCount);
       totalSeconds = systemSeconds - videoOnlySeconds;
       headerTitle = 'Complete Recordings';
     } else if (this.currentFilter === 'flagged') {
